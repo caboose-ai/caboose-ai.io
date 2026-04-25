@@ -200,6 +200,35 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     restart: unless-stopped
 
+  # SonarQube — code quality & security scanning
+  sonarqube:
+    image: sonarqube:community
+    container_name: sonarqube
+    ports:
+      - "127.0.0.1:9005:9000"
+    environment:
+      SONAR_JDBC_URL: jdbc:postgresql://sonarqube-db:5432/sonar
+      SONAR_JDBC_USERNAME: sonar
+      SONAR_JDBC_PASSWORD: ${SONAR_DB_PASS}
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_logs:/opt/sonarqube/logs
+      - sonarqube_extensions:/opt/sonarqube/extensions
+    depends_on:
+      - sonarqube-db
+    restart: unless-stopped
+
+  sonarqube-db:
+    image: postgres:15
+    container_name: sonarqube-db
+    environment:
+      POSTGRES_USER: sonar
+      POSTGRES_PASSWORD: ${SONAR_DB_PASS}
+      POSTGRES_DB: sonar
+    volumes:
+      - sonarqube_db:/var/lib/postgresql/data
+    restart: unless-stopped
+
 volumes:
   forgejo_data:
   portainer_data:
@@ -210,3 +239,7 @@ volumes:
   authentik_postgres_data:
   authentik_redis_data:
   homarr_data:
+  sonarqube_data:
+  sonarqube_logs:
+  sonarqube_extensions:
+  sonarqube_db:
