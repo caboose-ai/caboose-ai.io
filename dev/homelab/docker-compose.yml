@@ -1,0 +1,212 @@
+services:
+  forgejo:
+    image: gitea/gitea:latest
+    container_name: forgejo
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - forgejo_data:/data
+    restart: unless-stopped
+
+  woodpecker-server:
+    image: woodpeckerci/woodpecker-server:v3
+    container_name: woodpecker-server
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      WOODPECKER_OPEN: "true"
+      WOODPECKER_HOST: https://ci.caboose-ai.io
+      WOODPECKER_GITEA: "true"
+      WOODPECKER_GITEA_URL: https://git.caboose-ai.io
+      WOODPECKER_AGENT_SECRET: "${WOODPECKER_AGENT_SECRET:-changeme-set-in-env}"
+    restart: unless-stopped
+
+  woodpecker-agent:
+    image: woodpeckerci/woodpecker-agent:v3
+    container_name: woodpecker-agent
+    depends_on:
+      - woodpecker-server
+    environment:
+      WOODPECKER_SERVER: woodpecker-server:9000
+      WOODPECKER_AGENT_SECRET: "${WOODPECKER_AGENT_SECRET:-changeme-set-in-env}"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer
+    ports:
+      - "127.0.0.1:9000:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    restart: unless-stopped
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      ENABLE_OAUTH_SIGNUP: "true"
+      OAUTH_PROVIDER_NAME: "Authentik"
+      OPENID_PROVIDER_URL: "https://auth.caboose-ai.io/application/o/open-webui/.well-known/openid-configuration"
+      OAUTH_CLIENT_ID: "${OPEN_WEBUI_OAUTH_CLIENT_ID}"
+      OAUTH_CLIENT_SECRET: "${OPEN_WEBUI_OAUTH_CLIENT_SECRET}"
+      OAUTH_SCOPES: "openid email profile groups"
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    volumes:
+      - open_webui_data:/app/backend/data
+    restart: unless-stopped
+
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n
+    ports:
+      - "127.0.0.1:5678:5678"
+    environment:
+      N8N_HOST: n8n.caboose-ai.io
+      N8N_PROTOCOL: https
+      WEBHOOK_URL: https://n8n.caboose-ai.io
+      N8N_BASIC_AUTH_ACTIVE: "true"
+      N8N_BASIC_AUTH_USER: "${N8N_USER:-admin}"
+      N8N_BASIC_AUTH_PASSWORD: "${N8N_PASSWORD:-changeme}"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    network_mode: host
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.listen-address=0.0.0.0:9090'
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "127.0.0.1:3001:3000"
+    environment:
+      GF_SERVER_ROOT_URL: https://grafana.caboose-ai.io
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-admin}"
+      GF_AUTH_GENERIC_OAUTH_ENABLED: "true"
+      GF_AUTH_GENERIC_OAUTH_NAME: "authentik"
+      GF_AUTH_GENERIC_OAUTH_ALLOW_SIGN_UP: "true"
+      GF_AUTH_GENERIC_OAUTH_CLIENT_ID: "nkpZUxskUSOVpGx6WoIR53EMPyU9ibNMoZXn67eb"
+      GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET: "2hBRmdCdsioSns0A57AJmY8w6w11f2AB562Ld7pbaknQG2f2YBo7NbqI6x4uA2eLYoEkqEJkNWzMJg6Wa6VdAIdts4NNfCeFOciaX4jl2R0H2JWc62NMm6WipQVe4T3I"
+      GF_AUTH_GENERIC_OAUTH_SCOPES: "openid email profile groups"
+      GF_AUTH_GENERIC_OAUTH_AUTO_LOGIN: "true"
+      GF_AUTH_GENERIC_OAUTH_AUTH_URL: "https://auth.caboose-ai.io/application/o/authorize/"
+      GF_AUTH_GENERIC_OAUTH_TOKEN_URL: "https://auth.caboose-ai.io/application/o/token/"
+      GF_AUTH_GENERIC_OAUTH_API_URL: "https://auth.caboose-ai.io/application/o/userinfo/"
+      GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH: "contains(groups[*], 'homelab-admins') && 'Admin' || 'Viewer'"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    restart: unless-stopped
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    ports:
+      - "127.0.0.1:8181:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    privileged: true
+    devices:
+      - /dev/kmsg
+    restart: unless-stopped
+
+  authentik-postgres:
+    image: postgres:16
+    container_name: authentik-postgres
+    environment:
+      POSTGRES_PASSWORD: "${AUTHENTIK_PG_PASS}"
+      POSTGRES_USER: authentik
+      POSTGRES_DB: authentik
+    volumes:
+      - authentik_postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  authentik-redis:
+    image: redis:alpine
+    container_name: authentik-redis
+    volumes:
+      - authentik_redis_data:/data
+    restart: unless-stopped
+
+  authentik-server:
+    image: ghcr.io/goauthentik/server:latest
+    container_name: authentik-server
+    command: server
+    ports:
+      - "127.0.0.1:9002:9000"
+    environment:
+      AUTHENTIK_REDIS__HOST: authentik-redis
+      AUTHENTIK_POSTGRESQL__HOST: authentik-postgres
+      AUTHENTIK_POSTGRESQL__USER: authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD: "${AUTHENTIK_PG_PASS}"
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_SECRET_KEY: "${AUTHENTIK_SECRET_KEY}"
+      AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+      AUTHENTIK_HOST: "https://auth.caboose-ai.io"
+      AUTHENTIK_INSECURE: "false"
+    depends_on:
+      - authentik-postgres
+      - authentik-redis
+    restart: unless-stopped
+
+  authentik-worker:
+    image: ghcr.io/goauthentik/server:latest
+    container_name: authentik-worker
+    command: worker
+    environment:
+      AUTHENTIK_REDIS__HOST: authentik-redis
+      AUTHENTIK_POSTGRESQL__HOST: authentik-postgres
+      AUTHENTIK_POSTGRESQL__USER: authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD: "${AUTHENTIK_PG_PASS}"
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_SECRET_KEY: "${AUTHENTIK_SECRET_KEY}"
+      AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+      AUTHENTIK_HOST: "https://auth.caboose-ai.io"
+      AUTHENTIK_INSECURE: "false"
+    depends_on:
+      - authentik-postgres
+      - authentik-redis
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+
+  homarr:
+    image: ghcr.io/ajnart/homarr:latest
+    container_name: homarr
+    ports:
+      - "127.0.0.1:7575:7575"
+    volumes:
+      - homarr_data:/app/data/configs
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    restart: unless-stopped
+
+volumes:
+  forgejo_data:
+  portainer_data:
+  open_webui_data:
+  n8n_data:
+  prometheus_data:
+  grafana_data:
+  authentik_postgres_data:
+  authentik_redis_data:
+  homarr_data:
