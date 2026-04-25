@@ -18,6 +18,8 @@ services:
       WOODPECKER_HOST: https://ci.caboose-ai.io
       WOODPECKER_GITEA: "true"
       WOODPECKER_GITEA_URL: https://git.caboose-ai.io
+      WOODPECKER_GITEA_CLIENT: "${WOODPECKER_GITEA_CLIENT}"
+      WOODPECKER_GITEA_SECRET: "${WOODPECKER_GITEA_SECRET}"
       WOODPECKER_AGENT_SECRET: "${WOODPECKER_AGENT_SECRET:-changeme-set-in-env}"
     restart: unless-stopped
 
