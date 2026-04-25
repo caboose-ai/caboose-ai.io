@@ -151,7 +151,7 @@ step4_configure_portainer() {
         \"AuthorizationURI\":     \"$AUTHENTIK_URL/application/o/authorize/\",
         \"AccessTokenURI\":       \"$AUTHENTIK_URL/application/o/token/\",
         \"ResourceURI\":          \"$AUTHENTIK_URL/application/o/userinfo/\",
-        \"RedirectURI\":          \"$PORTAINER_URL/\",
+        \"RedirectURI\":          \"https://docker.caboose-ai.io/\",
         \"UserIdentifier\":       \"preferred_username\",
         \"Scopes\":               \"openid email profile\",
         \"OAuthAutoCreateUsers\": true
