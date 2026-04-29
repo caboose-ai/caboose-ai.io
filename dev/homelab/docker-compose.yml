@@ -171,7 +171,7 @@ services:
     restart: unless-stopped
 
   authentik-server:
-    image: ghcr.io/goauthentik/server:2025.2.4
+    image: ghcr.io/goauthentik/server:2026.2.2
     container_name: authentik-server
     command: server
     ports:
@@ -192,13 +192,16 @@ services:
     depends_on:
       - authentik-postgres
       - authentik-redis
+    volumes:
+      - ./patches/authentik/0010_remove_role_group_alter_role_name.py:/authentik/rbac/migrations/0010_remove_role_group_alter_role_name.py:ro
+      - ./patches/authentik/0056_user_roles.py:/authentik/core/migrations/0056_user_roles.py:ro
     networks:
       - authentik-internal
       - apps
     restart: unless-stopped
 
   authentik-worker:
-    image: ghcr.io/goauthentik/server:2025.2.4
+    image: ghcr.io/goauthentik/server:2026.2.2
     container_name: authentik-worker
     command: worker
     environment:
@@ -219,6 +222,8 @@ services:
       - authentik-redis
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - ./patches/authentik/0010_remove_role_group_alter_role_name.py:/authentik/rbac/migrations/0010_remove_role_group_alter_role_name.py:ro
+      - ./patches/authentik/0056_user_roles.py:/authentik/core/migrations/0056_user_roles.py:ro
     networks:
       - authentik-internal
       - apps
