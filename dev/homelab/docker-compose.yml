@@ -1,11 +1,13 @@
 services:
   forgejo:
-    image: gitea/gitea:latest
+    image: gitea/gitea:1.26.1
     container_name: forgejo
     ports:
       - "127.0.0.1:3000:3000"
     volumes:
       - forgejo_data:/data
+    networks:
+      - apps
     restart: unless-stopped
 
   woodpecker-server:
@@ -21,6 +23,8 @@ services:
       WOODPECKER_GITEA_CLIENT: "${WOODPECKER_GITEA_CLIENT}"
       WOODPECKER_GITEA_SECRET: "${WOODPECKER_GITEA_SECRET}"
       WOODPECKER_AGENT_SECRET: "${WOODPECKER_AGENT_SECRET:-changeme-set-in-env}"
+    networks:
+      - apps
     restart: unless-stopped
 
   woodpecker-agent:
@@ -33,20 +37,24 @@ services:
       WOODPECKER_AGENT_SECRET: "${WOODPECKER_AGENT_SECRET:-changeme-set-in-env}"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - apps
     restart: unless-stopped
 
   portainer:
-    image: portainer/portainer-ce:latest
+    image: portainer/portainer-ce:2.39.0
     container_name: portainer
     ports:
       - "127.0.0.1:9000:9000"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - portainer_data:/data
+    networks:
+      - apps
     restart: unless-stopped
 
   open-webui:
-    image: ghcr.io/open-webui/open-webui:main
+    image: ghcr.io/open-webui/open-webui:v0.9.0
     container_name: open-webui
     ports:
       - "127.0.0.1:8080:8080"
@@ -62,10 +70,12 @@ services:
       - host.docker.internal:host-gateway
     volumes:
       - open_webui_data:/app/backend/data
+    networks:
+      - apps
     restart: unless-stopped
 
   n8n:
-    image: n8nio/n8n:latest
+    image: n8nio/n8n:2.17.8
     container_name: n8n
     ports:
       - "127.0.0.1:5678:5678"
@@ -78,10 +88,12 @@ services:
       N8N_BASIC_AUTH_PASSWORD: "${N8N_PASSWORD:-changeme}"
     volumes:
       - n8n_data:/home/node/.n8n
+    networks:
+      - apps
     restart: unless-stopped
 
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v3.11.3
     container_name: prometheus
     network_mode: host
     volumes:
@@ -94,7 +106,7 @@ services:
     restart: unless-stopped
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:13.0.1
     container_name: grafana
     ports:
       - "127.0.0.1:3001:3000"
@@ -104,8 +116,8 @@ services:
       GF_AUTH_GENERIC_OAUTH_ENABLED: "true"
       GF_AUTH_GENERIC_OAUTH_NAME: "authentik"
       GF_AUTH_GENERIC_OAUTH_ALLOW_SIGN_UP: "true"
-      GF_AUTH_GENERIC_OAUTH_CLIENT_ID: "nkpZUxskUSOVpGx6WoIR53EMPyU9ibNMoZXn67eb"
-      GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET: "2hBRmdCdsioSns0A57AJmY8w6w11f2AB562Ld7pbaknQG2f2YBo7NbqI6x4uA2eLYoEkqEJkNWzMJg6Wa6VdAIdts4NNfCeFOciaX4jl2R0H2JWc62NMm6WipQVe4T3I"
+      GF_AUTH_GENERIC_OAUTH_CLIENT_ID: "${GF_AUTH_GENERIC_OAUTH_CLIENT_ID}"
+      GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET: "${GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET}"
       GF_AUTH_GENERIC_OAUTH_SCOPES: "openid email profile groups"
       GF_AUTH_GENERIC_OAUTH_AUTO_LOGIN: "true"
       GF_AUTH_GENERIC_OAUTH_AUTH_URL: "https://auth.caboose-ai.io/application/o/authorize/"
@@ -114,10 +126,12 @@ services:
       GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH: "contains(groups[*], 'homelab-admins') && 'Admin' || 'Viewer'"
     volumes:
       - grafana_data:/var/lib/grafana
+    networks:
+      - apps
     restart: unless-stopped
 
   cadvisor:
-    image: gcr.io/cadvisor/cadvisor:latest
+    image: ghcr.io/google/cadvisor:v0.55.1
     container_name: cadvisor
     ports:
       - "127.0.0.1:8181:8080"
@@ -130,10 +144,12 @@ services:
     privileged: true
     devices:
       - /dev/kmsg
+    networks:
+      - apps
     restart: unless-stopped
 
   authentik-postgres:
-    image: postgres:16
+    image: postgres:16.13
     container_name: authentik-postgres
     environment:
       POSTGRES_PASSWORD: "${AUTHENTIK_PG_PASS}"
@@ -141,17 +157,21 @@ services:
       POSTGRES_DB: authentik
     volumes:
       - authentik_postgres_data:/var/lib/postgresql/data
+    networks:
+      - authentik-internal
     restart: unless-stopped
 
   authentik-redis:
-    image: redis:alpine
+    image: redis:8.0-alpine
     container_name: authentik-redis
     volumes:
       - authentik_redis_data:/data
+    networks:
+      - authentik-internal
     restart: unless-stopped
 
   authentik-server:
-    image: ghcr.io/goauthentik/server:latest
+    image: ghcr.io/goauthentik/server:2026.2.0
     container_name: authentik-server
     command: server
     ports:
@@ -166,13 +186,19 @@ services:
       AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
       AUTHENTIK_HOST: "https://auth.caboose-ai.io"
       AUTHENTIK_INSECURE: "false"
+      AUTHENTIK_BOOTSTRAP_EMAIL: "${AUTHENTIK_BOOTSTRAP_EMAIL}"
+      AUTHENTIK_BOOTSTRAP_PASSWORD: "${AUTHENTIK_BOOTSTRAP_PASSWORD}"
+      AUTHENTIK_BOOTSTRAP_TOKEN: "${AUTHENTIK_BOOTSTRAP_TOKEN}"
     depends_on:
       - authentik-postgres
       - authentik-redis
+    networks:
+      - authentik-internal
+      - apps
     restart: unless-stopped
 
   authentik-worker:
-    image: ghcr.io/goauthentik/server:latest
+    image: ghcr.io/goauthentik/server:2026.2.0
     container_name: authentik-worker
     command: worker
     environment:
@@ -185,15 +211,21 @@ services:
       AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
       AUTHENTIK_HOST: "https://auth.caboose-ai.io"
       AUTHENTIK_INSECURE: "false"
+      AUTHENTIK_BOOTSTRAP_EMAIL: "${AUTHENTIK_BOOTSTRAP_EMAIL}"
+      AUTHENTIK_BOOTSTRAP_PASSWORD: "${AUTHENTIK_BOOTSTRAP_PASSWORD}"
+      AUTHENTIK_BOOTSTRAP_TOKEN: "${AUTHENTIK_BOOTSTRAP_TOKEN}"
     depends_on:
       - authentik-postgres
       - authentik-redis
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - authentik-internal
+      - apps
     restart: unless-stopped
 
   homarr:
-    image: ghcr.io/ajnart/homarr:latest
+    image: ghcr.io/ajnart/homarr:v0.16.0
     container_name: homarr
     ports:
       - "127.0.0.1:7575:7575"
@@ -202,6 +234,8 @@ services:
     volumes:
       - homarr_data:/app/data/configs
       - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - apps
     restart: unless-stopped
 
   # SonarQube — code quality & security scanning
@@ -220,10 +254,12 @@ services:
       - sonarqube_extensions:/opt/sonarqube/extensions
     depends_on:
       - sonarqube-db
+    networks:
+      - sonarqube-internal
     restart: unless-stopped
 
   sonarqube-db:
-    image: postgres:15
+    image: postgres:15.13
     container_name: sonarqube-db
     environment:
       POSTGRES_USER: sonar
@@ -231,6 +267,8 @@ services:
       POSTGRES_DB: sonar
     volumes:
       - sonarqube_db:/var/lib/postgresql/data
+    networks:
+      - sonarqube-internal
     restart: unless-stopped
 
 volumes:
@@ -247,3 +285,18 @@ volumes:
   sonarqube_logs:
   sonarqube_extensions:
   sonarqube_db:
+
+networks:
+  # Authentik DB tier — internal:true prevents outbound internet access and
+  # external reachability. Only authentik-server/worker bridge into this network.
+  authentik-internal:
+    driver: bridge
+    internal: true
+  # Main application network — all services that need OAuth token exchange
+  # with authentik-server live here.
+  apps:
+    driver: bridge
+  # SonarQube DB tier — isolated from all other services.
+  sonarqube-internal:
+    driver: bridge
+    internal: true
