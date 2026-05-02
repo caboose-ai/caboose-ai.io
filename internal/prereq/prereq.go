@@ -30,7 +30,6 @@ var required = []struct {
 	{"docker", "docker", "--version"},
 	{"docker compose", "docker", "compose version"},
 	{"op (1Password CLI)", "op", "--version"},
-	{"jq", "jq", "--version"},
 }
 
 func (c *Checker) CheckAll(ctx context.Context) []Result {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 )
 
 type OAuthSource struct {
@@ -19,7 +20,7 @@ type sourceList struct {
 }
 
 func (c *Client) GetSourcePK(ctx context.Context, slug string) (string, error) {
-	data, err := c.Get(ctx, fmt.Sprintf("/api/v3/sources/oauth/?slug=%s", slug))
+	data, err := c.Get(ctx, fmt.Sprintf("/api/v3/sources/oauth/?slug=%s", url.QueryEscape(slug)))
 	if err != nil {
 		return "", err
 	}

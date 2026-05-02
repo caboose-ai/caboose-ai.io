@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strings"
 )
 
@@ -20,7 +21,7 @@ type providerList struct {
 
 func (c *Client) GetProvider(ctx context.Context, name string) (*Provider, error) {
 	slug := strings.ToLower(strings.ReplaceAll(name, " ", "-"))
-	data, err := c.Get(ctx, fmt.Sprintf("/api/v3/providers/oauth2/?search=%s", slug))
+	data, err := c.Get(ctx, fmt.Sprintf("/api/v3/providers/oauth2/?search=%s", url.QueryEscape(slug)))
 	if err != nil {
 		return nil, err
 	}

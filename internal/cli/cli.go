@@ -62,8 +62,18 @@ func RunInstall(ctx context.Context, inst *install.Installer) int {
 		}
 	}
 
-	token, _ := inst.Secrets.Get(ctx, "AUTHENTIK_BOOTSTRAP_TOKEN")
+	token, err := inst.Secrets.Get(ctx, "AUTHENTIK_BOOTSTRAP_TOKEN")
+	if err != nil {
+		logger.Error("retrieving Authentik bootstrap token", "error", err)
+		return 3
+	}
 	inst.InitAK(token)
+
+	logger.Info("building service configurators")
+	if err := inst.BuildServices(ctx); err != nil {
+		logger.Error("failed to build service configurators", "error", err)
+		return 3
+	}
 
 	logger.Info("renaming admin user", "from", "akadmin", "to", "auth-admin")
 	if err := inst.RenameAdmin(ctx); err != nil {

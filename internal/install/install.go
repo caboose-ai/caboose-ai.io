@@ -13,6 +13,13 @@ import (
 	"github.com/caboose-ai/caboose-ai.io/internal/secrets"
 	"github.com/caboose-ai/caboose-ai.io/internal/services"
 	"github.com/caboose-ai/caboose-ai.io/internal/services/authentik"
+	"github.com/caboose-ai/caboose-ai.io/internal/services/forgejo"
+	"github.com/caboose-ai/caboose-ai.io/internal/services/grafana"
+	"github.com/caboose-ai/caboose-ai.io/internal/services/mattermost"
+	"github.com/caboose-ai/caboose-ai.io/internal/services/openwebui"
+	"github.com/caboose-ai/caboose-ai.io/internal/services/portainer"
+	"github.com/caboose-ai/caboose-ai.io/internal/services/social"
+	"github.com/caboose-ai/caboose-ai.io/internal/services/woodpecker"
 )
 
 type Installer struct {
@@ -30,7 +37,6 @@ type Installer struct {
 func New(cfg *config.Config, secretStore secrets.SecretStore, r runner.CommandRunner, httpClient runner.HTTPClient) *Installer {
 	compose := docker.NewComposeClient(r, cfg.ComposeDir)
 	dockerExec := docker.NewExecClient(r)
-	urls := cfg.URLs()
 
 	inst := &Installer{
 		Config:     cfg,
@@ -47,13 +53,43 @@ func New(cfg *config.Config, secretStore secrets.SecretStore, r runner.CommandRu
 	inst.State.Domain = cfg.Domain
 	inst.State.ComposeDir = cfg.ComposeDir
 
-	_ = urls
 	return inst
 }
 
 func (inst *Installer) InitAK(token string) {
 	urls := inst.Config.URLs()
 	inst.AK = authentik.NewClient(urls.Authentik, token, inst.HTTP)
+}
+
+// BuildServices constructs and registers all service configurators. It must be
+// called after InitAK because most configurators depend on the Authentik client.
+func (inst *Installer) BuildServices(ctx context.Context) error {
+	if inst.AK == nil {
+		return fmt.Errorf("BuildServices called before InitAK")
+	}
+	urls := inst.Config.URLs()
+
+	giteaAdminPass, err := inst.Secrets.Get(ctx, "GITEA_ADMIN_PASSWORD")
+	if err != nil {
+		return fmt.Errorf("reading GITEA_ADMIN_PASSWORD: %w", err)
+	}
+
+	// PORTAINER_ADMIN_PASSWORD is not a bootstrap secret; fall back to "admin".
+	portainerAdminPass, _ := inst.Secrets.Get(ctx, "PORTAINER_ADMIN_PASSWORD")
+	if portainerAdminPass == "" {
+		portainerAdminPass = "admin"
+	}
+
+	inst.Services = []services.ServiceConfigurator{
+		forgejo.New(inst.AK, inst.DockerExec, inst.Secrets, "forgejo", "auth-admin", urls.Authentik),
+		woodpecker.New(inst.DockerExec, inst.Secrets, "woodpecker-server", "auth-admin", giteaAdminPass, urls.Woodpecker+"/authorize"),
+		portainer.New(inst.AK, inst.HTTP, urls.Portainer, portainerAdminPass, urls.Authentik, urls.Portainer+"/"),
+		grafana.New(inst.AK, inst.Secrets),
+		openwebui.New(inst.AK, inst.Secrets),
+		mattermost.New(inst.AK, inst.DockerExec, "mattermost", urls.Authentik),
+		social.New(inst.AK, inst.Config.Social),
+	}
+	return nil
 }
 
 func (inst *Installer) CheckPrereqs(ctx context.Context) ([]prereq.Result, error) {
@@ -81,6 +117,9 @@ func (inst *Installer) GenerateSecrets(ctx context.Context, promptFn func(key st
 			val, err := promptFn(def.Key)
 			if err != nil {
 				return err
+			}
+			if val == "" {
+				return fmt.Errorf("required value for %s cannot be empty", def.Key)
 			}
 			if err := inst.Secrets.Put(ctx, def.Key, val); err != nil {
 				return err

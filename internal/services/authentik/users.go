@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 )
 
 type User struct {
@@ -16,7 +17,7 @@ type userList struct {
 }
 
 func (c *Client) FindUser(ctx context.Context, username string) (*User, error) {
-	data, err := c.Get(ctx, fmt.Sprintf("/api/v3/core/users/?search=%s", username))
+	data, err := c.Get(ctx, fmt.Sprintf("/api/v3/core/users/?search=%s", url.QueryEscape(username)))
 	if err != nil {
 		return nil, err
 	}

@@ -13,11 +13,24 @@ import (
 )
 
 type SecretsCompleteMsg struct{}
+
+// SecretGeneratedMsg is emitted by the app for each auto-generated secret.
 type SecretGeneratedMsg struct {
 	Key string
 	Err error
 }
+
+// SecretPromptNeededMsg is emitted by the app when a prompted secret has no config value.
 type SecretPromptNeededMsg struct{ Key string }
+
+// SecretValueEnteredMsg is emitted by SecretsModel when the user submits a prompt.
+type SecretValueEnteredMsg struct {
+	Key   string
+	Value string
+}
+
+// SecretsErrorMsg is emitted by the app when secret generation fails.
+type SecretsErrorMsg struct{ Err error }
 
 type SecretsModel struct {
 	defs      []secrets.SecretDef
@@ -27,6 +40,8 @@ type SecretsModel struct {
 	input     textinput.Model
 	prompting string
 	done      bool
+	hasError  bool
+	err       error
 }
 
 func NewSecrets() SecretsModel {
@@ -57,10 +72,6 @@ func (m SecretsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.statuses[msg.Key] = "done"
 		}
-		if m.allDone() {
-			m.done = true
-			return m, func() tea.Msg { return SecretsCompleteMsg{} }
-		}
 		return m, nil
 
 	case SecretPromptNeededMsg:
@@ -70,18 +81,23 @@ func (m SecretsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.input.Focus()
 		return m, textinput.Blink
 
+	case SecretsErrorMsg:
+		m.hasError = true
+		m.err = msg.Err
+		m.done = true
+		return m, nil
+
 	case tea.KeyMsg:
 		if m.prompting != "" && msg.String() == "enter" {
 			val := m.input.Value()
 			if val != "" {
-				m.statuses[m.prompting] = "done"
+				key := m.prompting
+				m.statuses[key] = "done"
 				m.prompting = ""
 				m.input.SetValue("")
 				m.input.Blur()
-				if m.allDone() {
-					m.done = true
-					return m, func() tea.Msg { return SecretsCompleteMsg{} }
-				}
+				// Notify the app so it can continue the secrets phase.
+				return m, func() tea.Msg { return SecretValueEnteredMsg{Key: key, Value: val} }
 			}
 			return m, nil
 		}
@@ -97,6 +113,14 @@ func (m SecretsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m SecretsModel) View() string {
+	if m.hasError {
+		return styles.ContentStyle.Render(
+			styles.FailStyle.Render("✗ Secret generation failed:\n\n  ") +
+				m.err.Error() + "\n\n" +
+				styles.DimStyle.Render("Press q to quit"),
+		)
+	}
+
 	var lines []string
 	for _, def := range m.defs {
 		status := m.statuses[def.Key]
@@ -120,13 +144,4 @@ func (m SecretsModel) View() string {
 		view += "\n\n  Enter " + m.prompting + ":\n  " + m.input.View()
 	}
 	return styles.ContentStyle.Render(view)
-}
-
-func (m SecretsModel) allDone() bool {
-	for _, def := range m.defs {
-		if m.statuses[def.Key] != "done" {
-			return false
-		}
-	}
-	return true
 }

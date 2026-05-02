@@ -76,11 +76,17 @@ func (c *Configurator) Configure(ctx context.Context, opts services.ConfigureOpt
 }
 
 func (c *Configurator) getJWT(ctx context.Context) (string, error) {
-	body, _ := json.Marshal(map[string]string{
+	body, err := json.Marshal(map[string]string{
 		"Username": "admin",
 		"Password": c.AdminPass,
 	})
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, c.PortainerURL+"/api/auth", bytes.NewReader(body))
+	if err != nil {
+		return "", fmt.Errorf("marshalling Portainer auth request: %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.PortainerURL+"/api/auth", bytes.NewReader(body))
+	if err != nil {
+		return "", fmt.Errorf("creating Portainer auth request: %w", err)
+	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.HTTP.Do(req)
@@ -89,20 +95,31 @@ func (c *Configurator) getJWT(ctx context.Context) (string, error) {
 	}
 	defer resp.Body.Close()
 
-	data, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != 200 {
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("reading Portainer auth response: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("Portainer auth returned HTTP %d", resp.StatusCode)
 	}
 
 	var result struct {
 		JWT string `json:"jwt"`
 	}
-	json.Unmarshal(data, &result)
+	if err := json.Unmarshal(data, &result); err != nil {
+		return "", fmt.Errorf("parsing Portainer auth response: %w", err)
+	}
+	if result.JWT == "" {
+		return "", fmt.Errorf("Portainer auth returned empty JWT")
+	}
 	return result.JWT, nil
 }
 
 func (c *Configurator) currentOAuthClient(ctx context.Context, jwt string) (string, error) {
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, c.PortainerURL+"/api/settings", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.PortainerURL+"/api/settings", nil)
+	if err != nil {
+		return "", fmt.Errorf("creating Portainer settings request: %w", err)
+	}
 	req.Header.Set("Authorization", "Bearer "+jwt)
 
 	resp, err := c.HTTP.Do(req)
@@ -111,13 +128,22 @@ func (c *Configurator) currentOAuthClient(ctx context.Context, jwt string) (stri
 	}
 	defer resp.Body.Close()
 
-	data, _ := io.ReadAll(resp.Body)
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("reading Portainer settings response: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("Portainer settings GET returned HTTP %d", resp.StatusCode)
+	}
+
 	var settings struct {
 		OAuthSettings struct {
 			ClientID string `json:"ClientID"`
 		} `json:"OAuthSettings"`
 	}
-	json.Unmarshal(data, &settings)
+	if err := json.Unmarshal(data, &settings); err != nil {
+		return "", fmt.Errorf("parsing Portainer settings response: %w", err)
+	}
 	return settings.OAuthSettings.ClientID, nil
 }
 

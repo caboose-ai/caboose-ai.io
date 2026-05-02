@@ -63,14 +63,24 @@ func (c *Configurator) Configure(ctx context.Context, opts services.ConfigureOpt
 		}
 	}
 
-	jqFilter := fmt.Sprintf(
-		`.GitLabSettings.Enable = true | .GitLabSettings.Id = "%s" | .GitLabSettings.Secret = "%s" | .GitLabSettings.AuthEndpoint = "%s/application/o/authorize/" | .GitLabSettings.TokenEndpoint = "%s/application/o/token/" | .GitLabSettings.UserAPIEndpoint = "%s/application/o/userinfo/" | .GitLabSettings.Scope = "openid email profile"`,
-		provider.ClientID, provider.ClientSecret,
-		c.AuthentikURL, c.AuthentikURL, c.AuthentikURL,
-	)
+	// Use positional parameters ($1/$2/$3) so values are never embedded in the shell
+	// command string, then pass them to jq via --arg to prevent injection.
+	// configPath is a package-level constant, so it is always safe to embed directly.
+	const jqScript = `jq --arg clientID "$1" --arg clientSecret "$2" --arg authentikURL "$3" \
+'.GitLabSettings.Enable = true
+| .GitLabSettings.Id = $clientID
+| .GitLabSettings.Secret = $clientSecret
+| .GitLabSettings.AuthEndpoint = ($authentikURL + "/application/o/authorize/")
+| .GitLabSettings.TokenEndpoint = ($authentikURL + "/application/o/token/")
+| .GitLabSettings.UserAPIEndpoint = ($authentikURL + "/application/o/userinfo/")
+| .GitLabSettings.Scope = "openid email profile"' ` + configPath + ` > ` + configPath + `.tmp && mv ` + configPath + `.tmp ` + configPath
 
-	_, err = c.Docker.Exec(ctx, c.Container, "sh", "-c",
-		fmt.Sprintf("jq '%s' %s > /tmp/mm-config.json && mv /tmp/mm-config.json %s", jqFilter, configPath, configPath),
+	_, err = c.Docker.Exec(ctx, c.Container,
+		"sh", "-c", jqScript,
+		"--",                 // positional $0
+		provider.ClientID,    // positional $1
+		provider.ClientSecret, // positional $2
+		c.AuthentikURL,       // positional $3
 	)
 	if err != nil {
 		return nil, fmt.Errorf("patching Mattermost config: %w", err)
