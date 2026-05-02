@@ -37,7 +37,20 @@ func (c *Checker) CheckAll(ctx context.Context) []Result {
 	for i, req := range required {
 		results[i] = c.check(ctx, req.name, req.cmd, req.versionArg)
 	}
+	results = append(results, c.checkOPLogin(ctx))
 	return results
+}
+
+func (c *Checker) checkOPLogin(ctx context.Context) Result {
+	name := "op signed in"
+	out, err := c.Runner.Run(ctx, "op", "account", "list", "--format=json")
+	if err != nil {
+		return Result{Name: name, Err: fmt.Errorf("not signed in to 1Password: run `op signin` first")}
+	}
+	if len(out) < 3 {
+		return Result{Name: name, Err: fmt.Errorf("no 1Password accounts configured: run `op account add`")}
+	}
+	return Result{Name: name, Found: true, Version: "authenticated"}
 }
 
 func (c *Checker) check(ctx context.Context, name, cmd, versionArg string) Result {

@@ -89,7 +89,7 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.OPVault != "Homelab" {
 		t.Errorf("default OPVault = %q, want Homelab", cfg.OPVault)
 	}
-	if cfg.ComposeDir != "." {
-		t.Errorf("default ComposeDir = %q, want .", cfg.ComposeDir)
+	if cfg.ComposeDir != "dev/homelab" {
+		t.Errorf("default ComposeDir = %q, want dev/homelab", cfg.ComposeDir)
 	}
 }
