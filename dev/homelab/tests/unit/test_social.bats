@@ -133,7 +133,7 @@ setup() {
   run setup_social
   [ "$status" -eq 0 ]
   [[ "$output" != *"Social login sources configured"* ]]
-  [[ "$output" == *"No social login"* ]] || [[ "$output" == *"SECRET not set"* ]]
+  [[ "$output" == *"GITHUB_OAUTH_CLIENT_SECRET not set"* ]]
 }
 
 # ── setup_social — dry-run ─────────────────────────────────────────────────
