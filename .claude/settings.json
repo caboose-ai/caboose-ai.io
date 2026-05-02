@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(journalctl *)",
+      "Bash(curl -s -o /dev/null *)",
+      "Bash(sonar auth status)",
+      "Bash(bats *)",
+      "Bash(fnox --help)",
+      "Bash(fnox --help *)",
+      "Bash(fnox --version *)",
+      "Bash(fnox check *)",
+      "Bash(fnox get *)",
+      "Bash(fnox list *)",
+      "Bash(fnox doctor *)",
+      "Bash(fnox provider *)",
+      "Bash(op account *)",
+      "Bash(op vault *)",
+      "Bash(op item get *)",
+      "Bash(op whoami *)",
+      "Bash(op --version *)",
+      "Bash(chezmoi diff *)",
+      "Bash(chezmoi status *)",
+      "Bash(chezmoi managed *)",
+      "Bash(chezmoi --version *)",
+      "Bash(chezmoi cat-config *)",
+      "Bash(docker compose ps *)",
+      "Bash(docker compose logs *)",
+      "Bash(docker compose config *)",
+      "Bash(docker compose version *)",
+      "Bash(docker --version *)",
+      "Bash(semgrep *)",
+      "Bash(gh release list *)"
+    ]
+  }
+}
