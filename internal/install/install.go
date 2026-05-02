@@ -71,7 +71,7 @@ func (inst *Installer) BuildServices(ctx context.Context) error {
 
 	giteaAdminPass, err := inst.Secrets.Get(ctx, "GITEA_ADMIN_PASSWORD")
 	if err != nil {
-		return fmt.Errorf("reading GITEA_ADMIN_PASSWORD: %w", err)
+		return fmt.Errorf("retrieving GITEA_ADMIN_PASSWORD: %w", err)
 	}
 
 	// PORTAINER_ADMIN_PASSWORD is not a bootstrap secret; fall back to "admin".

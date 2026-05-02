@@ -23,23 +23,25 @@ type akReadyMsg struct{}
 type restartCompleteMsg struct{}
 
 type AppModel struct {
-	installer    *install.Installer
-	stepper      components.StepperModel
-	activeView   tea.Model
-	width        int
-	height       int
-	quitting     bool
-	promptValues map[string]string
+	installer       *install.Installer
+	stepper         components.StepperModel
+	activeView      tea.Model
+	width           int
+	height          int
+	quitting        bool
+	promptValues    map[string]string
+	bootstrapDefs   []secrets.SecretDef // cached once to avoid repeated allocations
 }
 
 func NewApp(installer *install.Installer) AppModel {
 	stepper := components.NewStepper()
 	welcome := views.NewWelcome(installer.Config.Domain)
 	return AppModel{
-		installer:    installer,
-		stepper:      stepper,
-		activeView:   welcome,
-		promptValues: make(map[string]string),
+		installer:     installer,
+		stepper:       stepper,
+		activeView:    welcome,
+		promptValues:  make(map[string]string),
+		bootstrapDefs: secrets.BootstrapSecrets(),
 	}
 }
 
@@ -204,7 +206,7 @@ func (m AppModel) runEnsureVault() tea.Cmd {
 // value from the user. If so it emits SecretPromptNeededMsg for the first
 // missing one. Once all prompts are satisfied it runs the batch generation.
 func (m AppModel) continueSecretsPhase() tea.Cmd {
-	for _, def := range secrets.BootstrapSecrets() {
+	for _, def := range m.bootstrapDefs {
 		if !def.Prompt {
 			continue
 		}

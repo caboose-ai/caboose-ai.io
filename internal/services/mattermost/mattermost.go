@@ -63,9 +63,14 @@ func (c *Configurator) Configure(ctx context.Context, opts services.ConfigureOpt
 		}
 	}
 
-	// Use positional parameters ($1/$2/$3) so values are never embedded in the shell
-	// command string, then pass them to jq via --arg to prevent injection.
-	// configPath is a package-level constant, so it is always safe to embed directly.
+	// Use sh positional parameters to safely pass dynamic values into the shell
+	// without embedding them in the command string. With `sh -c 'script' -- $1 $2 $3`:
+	//   - '--' becomes $0 (the shell's argv[0], a conventional placeholder)
+	//   - ClientID   → $1
+	//   - ClientSecret → $2
+	//   - AuthentikURL → $3
+	// jq then receives each value via --arg, keeping it fully outside the filter.
+	// configPath is a package-level constant so it is always safe to embed directly.
 	const jqScript = `jq --arg clientID "$1" --arg clientSecret "$2" --arg authentikURL "$3" \
 '.GitLabSettings.Enable = true
 | .GitLabSettings.Id = $clientID
