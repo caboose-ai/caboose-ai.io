@@ -163,14 +163,21 @@ teardown() {
 
 @test "secret_put: writes to both .env and fnox when available" {
   HAS_FNOX="true"
-  local fnox_called=""
-  fnox() { fnox_called="$*"; cat > /dev/null; }
+  export FNOX_CALLS_FILE
+  FNOX_CALLS_FILE=$(mktemp)
+  fnox() { echo "$*" >> "$FNOX_CALLS_FILE"; cat > /dev/null; }
   export -f fnox
 
   secret_put "NEW_SECRET" "the-value"
 
   run grep "^NEW_SECRET=the-value" "$TEST_ENV"
   [ "$status" -eq 0 ]
+
+  # Verify fnox was actually called with "set NEW_SECRET"
+  run grep "set NEW_SECRET" "$FNOX_CALLS_FILE"
+  [ "$status" -eq 0 ]
+
+  rm -f "$FNOX_CALLS_FILE"
 }
 
 @test "secret_put: dry-run skips both stores" {

@@ -44,18 +44,22 @@ setup_social() {
 
   local any_configured=false
 
-  if [[ -n "$GITHUB_OAUTH_CLIENT_ID" ]]; then
+  if [[ -n "$GITHUB_OAUTH_CLIENT_ID" && -n "$GITHUB_OAUTH_CLIENT_SECRET" ]]; then
     upsert_oauth_source "github" "GitHub" "github" \
       "$GITHUB_OAUTH_CLIENT_ID" "$GITHUB_OAUTH_CLIENT_SECRET"
     any_configured=true
+  elif [[ -n "$GITHUB_OAUTH_CLIENT_ID" ]]; then
+    log_info "  [skip] GitHub — GITHUB_OAUTH_CLIENT_SECRET not set"
   else
     log_info "  [skip] GitHub — GITHUB_OAUTH_CLIENT_ID not set"
   fi
 
-  if [[ -n "$GOOGLE_OAUTH_CLIENT_ID" ]]; then
+  if [[ -n "$GOOGLE_OAUTH_CLIENT_ID" && -n "$GOOGLE_OAUTH_CLIENT_SECRET" ]]; then
     upsert_oauth_source "google" "Google" "google" \
       "$GOOGLE_OAUTH_CLIENT_ID" "$GOOGLE_OAUTH_CLIENT_SECRET"
     any_configured=true
+  elif [[ -n "$GOOGLE_OAUTH_CLIENT_ID" ]]; then
+    log_info "  [skip] Google — GOOGLE_OAUTH_CLIENT_SECRET not set"
   else
     log_info "  [skip] Google — GOOGLE_OAUTH_CLIENT_ID not set"
   fi

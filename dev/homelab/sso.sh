@@ -89,7 +89,6 @@ fi
 
 require_cmd curl
 require_cmd jq
-require_cmd docker
 
 if [[ "$DRY_RUN" == "true" ]]; then
   log_warn "Dry-run mode — no changes will be made"
@@ -103,6 +102,7 @@ case "$SUBCOMMAND" in
     ;;
 
   setup-forgejo)
+    require_cmd docker
     setup_forgejo
     ;;
 
@@ -111,6 +111,7 @@ case "$SUBCOMMAND" in
     ;;
 
   setup-woodpecker)
+    require_cmd docker
     setup_woodpecker
     ;;
 
@@ -123,6 +124,7 @@ case "$SUBCOMMAND" in
     ;;
 
   setup-mattermost)
+    require_cmd docker
     setup_mattermost
     ;;
 
@@ -132,6 +134,7 @@ case "$SUBCOMMAND" in
 
   all)
     log_step "Running all SSO setup subcommands"
+    require_cmd docker
     setup_forgejo
     setup_portainer
     setup_woodpecker

@@ -111,7 +111,11 @@ upsert_env_var() {
     return 0
   fi
   if grep -q "^${key}=" "$file" 2>/dev/null; then
-    sed -i "s|^${key}=.*|${key}=${value}|" "$file"
+    # Escape sed replacement metacharacters: \, &, and the | delimiter
+    local escaped_value="${value//\\/\\\\}"
+    escaped_value="${escaped_value//&/\\&}"
+    escaped_value="${escaped_value//|/\\|}"
+    sed -i "s|^${key}=.*|${key}=${escaped_value}|" "$file"
   else
     echo "${key}=${value}" >> "$file"
   fi

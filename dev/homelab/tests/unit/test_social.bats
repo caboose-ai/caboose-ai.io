@@ -124,6 +124,18 @@ setup() {
   [[ "$output" == *"configured"* ]]
 }
 
+# ── setup_social — client_id set but secret missing ────────────────────────
+
+@test "setup_social: does not report configured when only client_id set" {
+  GITHUB_OAUTH_CLIENT_ID="gh-id"
+  GITHUB_OAUTH_CLIENT_SECRET=""
+
+  run setup_social
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"Social login sources configured"* ]]
+  [[ "$output" == *"No social login"* ]] || [[ "$output" == *"SECRET not set"* ]]
+}
+
 # ── setup_social — dry-run ─────────────────────────────────────────────────
 
 @test "setup_social: dry-run does not create sources" {

@@ -221,14 +221,16 @@ AUTHLIST
   }
   export -f curl
 
-  local captured_url=""
+  export URL_CAPTURE_FILE
+  URL_CAPTURE_FILE=$(mktemp)
+
   docker() {
     case "$*" in
       *"auth list"*)
         echo "ID   Name   Type"
         ;;
       *"auth add-oauth"*)
-        captured_url="$*"
+        echo "$*" > "$URL_CAPTURE_FILE"
         ;;
     esac
   }
@@ -236,5 +238,10 @@ AUTHLIST
 
   run setup_forgejo
   [ "$status" -eq 0 ]
-  [[ "$output" == *"auth.test.example.com"* ]] || [[ "$output" == *"created"* ]]
+
+  # Verify the discovery URL passed to docker used the correct DOMAIN
+  run grep "auth.test.example.com" "$URL_CAPTURE_FILE"
+  [ "$status" -eq 0 ]
+
+  rm -f "$URL_CAPTURE_FILE"
 }
