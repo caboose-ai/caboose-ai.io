@@ -250,7 +250,7 @@ func (m AppModel) runSecretsGeneration() tea.Cmd {
 				return val, nil
 			}
 			return "", fmt.Errorf("no value provided for required secret %s", key)
-		})
+		}, nil)
 		if err != nil {
 			return views.SecretsErrorMsg{Err: err}
 		}

@@ -1,6 +1,9 @@
 package install
 
-import "github.com/caboose-ai/caboose-ai.io/internal/services"
+import (
+	"github.com/caboose-ai/caboose-ai.io/internal/secrets"
+	"github.com/caboose-ai/caboose-ai.io/internal/services"
+)
 
 type Phase int
 
@@ -70,6 +73,10 @@ type State struct {
 	ServiceResults []ServiceResult
 	RestartNeeded  []string
 	Errors         []error
+}
+
+func (s *State) BootstrapDefs() []secrets.SecretDef {
+	return secrets.BootstrapSecrets()
 }
 
 func NewState() *State {

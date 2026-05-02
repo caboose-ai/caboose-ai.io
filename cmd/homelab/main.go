@@ -17,59 +17,50 @@ import (
 )
 
 func main() {
-	var (
-		dryRun         bool
-		force          bool
-		verbose        bool
-		nonInteractive bool
-		configPath     string
-		domain         string
-		composeDir     string
-		opVault        string
-		n8nUser        string
-		email          string
-	)
+	subcmd, args := extractSubcommand(os.Args[1:])
 
-	flag.BoolVar(&dryRun, "dry-run", false, "Print what would happen without making changes")
-	flag.BoolVar(&force, "force", false, "Force re-creation of existing resources")
-	flag.BoolVar(&verbose, "verbose", false, "Show detailed output")
-	flag.BoolVar(&nonInteractive, "non-interactive", false, "Run without TUI prompts")
-	flag.StringVar(&configPath, "config", "", "Path to YAML config file")
-	flag.StringVar(&domain, "domain", "", "Homelab domain (e.g. caboose-ai.io)")
-	flag.StringVar(&composeDir, "compose-dir", "", "Path to docker-compose.yml directory")
-	flag.StringVar(&opVault, "op-vault", "", "1Password vault name")
-	flag.StringVar(&n8nUser, "n8n-user", "", "N8N admin username")
-	flag.StringVar(&email, "email", "", "Admin email for Authentik bootstrap")
-	flag.Parse()
-
-	args := flag.Args()
-	if len(args) == 0 {
+	if subcmd == "" {
 		fmt.Fprintln(os.Stderr, "Usage: homelab <command> [flags]")
 		fmt.Fprintln(os.Stderr, "\nCommands:")
 		fmt.Fprintln(os.Stderr, "  install    Bootstrap the homelab SSO stack")
-		fmt.Fprintln(os.Stderr, "\nFlags:")
-		flag.PrintDefaults()
 		os.Exit(1)
 	}
 
-	switch args[0] {
+	fs := flag.NewFlagSet(subcmd, flag.ExitOnError)
+	var opts cliOpts
+	fs.BoolVar(&opts.dryRun, "dry-run", false, "Print what would happen without making changes")
+	fs.BoolVar(&opts.force, "force", false, "Force re-creation of existing resources")
+	fs.BoolVar(&opts.verbose, "verbose", false, "Show detailed output")
+	fs.BoolVar(&opts.nonInteractive, "non-interactive", false, "Run without TUI prompts")
+	fs.StringVar(&opts.configPath, "config", "", "Path to YAML config file")
+	fs.StringVar(&opts.domain, "domain", "", "Homelab domain (e.g. caboose-ai.io)")
+	fs.StringVar(&opts.composeDir, "compose-dir", "", "Path to docker-compose.yml directory")
+	fs.StringVar(&opts.opVault, "op-vault", "", "1Password vault name")
+	fs.StringVar(&opts.n8nUser, "n8n-user", "", "N8N admin username")
+	fs.StringVar(&opts.email, "email", "", "Admin email for Authentik bootstrap")
+	fs.Parse(args)
+
+	switch subcmd {
 	case "install":
-		os.Exit(runInstall(cliOpts{
-			configPath:     configPath,
-			dryRun:         dryRun,
-			force:          force,
-			verbose:        verbose,
-			nonInteractive: nonInteractive,
-			domain:         domain,
-			composeDir:     composeDir,
-			opVault:        opVault,
-			n8nUser:        n8nUser,
-			email:          email,
-		}))
+		os.Exit(runInstall(opts))
 	default:
-		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", args[0])
+		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", subcmd)
 		os.Exit(1)
 	}
+}
+
+func extractSubcommand(args []string) (string, []string) {
+	known := map[string]bool{"install": true}
+	var rest []string
+	var subcmd string
+	for _, arg := range args {
+		if subcmd == "" && known[arg] {
+			subcmd = arg
+		} else {
+			rest = append(rest, arg)
+		}
+	}
+	return subcmd, rest
 }
 
 type cliOpts struct {

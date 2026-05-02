@@ -111,31 +111,50 @@ func (inst *Installer) EnsureVault(ctx context.Context) error {
 	return inst.Secrets.EnsureVault(ctx)
 }
 
-func (inst *Installer) GenerateSecrets(ctx context.Context, promptFn func(key string) (string, error)) error {
+type SecretProgress struct {
+	Key    string
+	Action string // "generating", "exists", "prompted", "stored", "error"
+	Err    error
+}
+
+func (inst *Installer) GenerateSecrets(ctx context.Context, promptFn func(key string) (string, error), progressFn func(SecretProgress)) error {
+	if progressFn == nil {
+		progressFn = func(SecretProgress) {}
+	}
 	for _, def := range secrets.BootstrapSecrets() {
 		if def.Prompt {
+			progressFn(SecretProgress{Key: def.Key, Action: "prompting"})
 			val, err := promptFn(def.Key)
 			if err != nil {
+				progressFn(SecretProgress{Key: def.Key, Action: "error", Err: err})
 				return err
 			}
 			if val == "" {
-				return fmt.Errorf("required value for %s cannot be empty", def.Key)
-			}
-			if err := inst.Secrets.Put(ctx, def.Key, val); err != nil {
+				err := fmt.Errorf("required value for %s cannot be empty", def.Key)
+				progressFn(SecretProgress{Key: def.Key, Action: "error", Err: err})
 				return err
 			}
+			if err := inst.Secrets.Put(ctx, def.Key, val); err != nil {
+				progressFn(SecretProgress{Key: def.Key, Action: "error", Err: err})
+				return err
+			}
+			progressFn(SecretProgress{Key: def.Key, Action: "stored"})
 			continue
 		}
 
 		existing, _ := inst.Secrets.Get(ctx, def.Key)
 		if existing != "" && !inst.State.Force {
+			progressFn(SecretProgress{Key: def.Key, Action: "exists"})
 			continue
 		}
 
+		progressFn(SecretProgress{Key: def.Key, Action: "generating"})
 		_, err := inst.Secrets.Generate(ctx, def.Key, def.Length, def.Opts)
 		if err != nil {
+			progressFn(SecretProgress{Key: def.Key, Action: "error", Err: err})
 			return fmt.Errorf("generating %s: %w", def.Key, err)
 		}
+		progressFn(SecretProgress{Key: def.Key, Action: "stored"})
 	}
 	return nil
 }
@@ -175,15 +194,20 @@ func (inst *Installer) RenameAdmin(ctx context.Context) error {
 	return inst.AK.RenameAdminUser(ctx, "akadmin", "auth-admin")
 }
 
-func (inst *Installer) ConfigureServices(ctx context.Context) []ServiceResult {
+func (inst *Installer) ConfigureServices(ctx context.Context, progressFn func(name string, done bool)) []ServiceResult {
+	if progressFn == nil {
+		progressFn = func(string, bool) {}
+	}
 	opts := services.ConfigureOpts{
 		DryRun: inst.State.DryRun,
 		Force:  inst.State.Force,
 	}
 
 	for _, svc := range inst.Services {
+		progressFn(svc.Name(), false)
 		result, err := svc.Configure(ctx, opts)
 		inst.State.AddServiceResult(svc.Name(), result, err)
+		progressFn(svc.Name(), true)
 	}
 	return inst.State.ServiceResults
 }
