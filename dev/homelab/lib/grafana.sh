@@ -25,8 +25,8 @@ setup_grafana() {
 
   log_info "Provider found — client_id: ${client_id:0:8}..."
 
-  existing_id=$(read_env_var "$HOMELAB_ENV" "GF_AUTH_GENERIC_OAUTH_CLIENT_ID")
-  existing_secret=$(read_env_var "$HOMELAB_ENV" "GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET")
+  existing_id=$(secret_get "GF_AUTH_GENERIC_OAUTH_CLIENT_ID")
+  existing_secret=$(secret_get "GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET")
 
   if [[ "$existing_id" == "$client_id" && "$existing_secret" == "$client_secret" && "$FORCE" != "true" ]]; then
     log_success "Grafana OAuth credentials already in .env. No changes needed."
@@ -37,10 +37,10 @@ setup_grafana() {
     log_warn "Different client_id in .env (${existing_id:0:8}...). Overwriting..."
   fi
 
-  log_info "Writing Grafana OAuth credentials to ${HOMELAB_ENV}..."
-  upsert_env_var "$HOMELAB_ENV" "GF_AUTH_GENERIC_OAUTH_CLIENT_ID" "$client_id"
-  upsert_env_var "$HOMELAB_ENV" "GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET" "$client_secret"
+  log_info "Storing Grafana OAuth credentials..."
+  secret_put "GF_AUTH_GENERIC_OAUTH_CLIENT_ID" "$client_id"
+  secret_put "GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET" "$client_secret"
 
-  log_success "Grafana OAuth credentials written to .env"
+  log_success "Grafana OAuth credentials stored"
   log_info "Restart Grafana to pick up the new credentials: docker compose restart grafana"
 }

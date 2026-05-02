@@ -31,7 +31,7 @@ teardown() {
 
   run setup_open_webui
   [ "$status" -eq 0 ]
-  [[ "$output" == *"written"* ]]
+  [[ "$output" == *"stored"* ]]
 
   run grep "OPEN_WEBUI_OAUTH_CLIENT_ID=owid123" "$TEST_ENV"
   [ "$status" -eq 0 ]
@@ -69,7 +69,7 @@ teardown() {
 
   run setup_open_webui
   [ "$status" -eq 0 ]
-  [[ "$output" == *"written"* ]]
+  [[ "$output" == *"stored"* ]]
 }
 
 # ── setup_open_webui — provider missing ────────────────────────────────────

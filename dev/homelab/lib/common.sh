@@ -70,6 +70,38 @@ run_cmd() {
   "$@"
 }
 
+# ── Secret store (fnox integration — optional) ─────────────────────────────
+# When fnox is available, secrets are read from fnox first and written to both
+# fnox and .env. When fnox is absent, .env is the only store.
+
+HAS_FNOX="false"
+if command -v fnox &>/dev/null; then
+  HAS_FNOX="true"
+fi
+
+secret_get() {
+  local key="$1"
+  if [[ "$HAS_FNOX" == "true" ]]; then
+    local val
+    val=$(fnox get "$key" --if-missing ignore 2>/dev/null) || true
+    if [[ -n "$val" ]]; then
+      echo "$val"
+      return 0
+    fi
+  fi
+  read_env_var "$HOMELAB_ENV" "$key"
+}
+
+secret_put() {
+  local key="$1" value="$2"
+  upsert_env_var "$HOMELAB_ENV" "$key" "$value"
+  if [[ "$HAS_FNOX" == "true" && "$DRY_RUN" != "true" ]]; then
+    echo "$value" | fnox set "$key" 2>/dev/null && \
+      log_info "  ↳ backed up ${key} to fnox" || \
+      log_warn "  ↳ fnox set ${key} failed (non-fatal)"
+  fi
+}
+
 # ── Environment file helpers ────────────────────────────────────────────────
 
 upsert_env_var() {

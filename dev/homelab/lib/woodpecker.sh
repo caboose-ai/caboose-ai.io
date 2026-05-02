@@ -62,16 +62,16 @@ setup_woodpecker() {
       woodpecker_delete_oauth_app "$forgejo_url" "$auth" "$app_id"
     else
       client_id=$(woodpecker_get_client_id "$forgejo_url" "$auth" "$app_id")
-      client_secret=$(read_env_var "$HOMELAB_ENV" "WOODPECKER_GITEA_SECRET")
+      client_secret=$(secret_get "WOODPECKER_GITEA_SECRET")
 
       if [[ -n "$client_secret" ]]; then
-        log_info "Reusing existing client_id and secret from .env"
-        upsert_env_var "$HOMELAB_ENV" "WOODPECKER_GITEA_CLIENT" "$client_id"
+        log_info "Reusing existing client_id and secret"
+        secret_put "WOODPECKER_GITEA_CLIENT" "$client_id"
         log_success "Woodpecker OAuth already configured (app ID: ${app_id})"
         return 0
       fi
 
-      log_error "OAuth app exists but WOODPECKER_GITEA_SECRET is not in ${HOMELAB_ENV}."
+      log_error "OAuth app exists but WOODPECKER_GITEA_SECRET not found (checked fnox and ${HOMELAB_ENV})."
       log_error "Forgejo only returns the secret at creation time."
       log_error "Re-run with --force to delete and recreate the app."
       return 1
@@ -97,9 +97,9 @@ setup_woodpecker() {
     return 1
   fi
 
-  log_info "Writing credentials to ${HOMELAB_ENV}..."
-  upsert_env_var "$HOMELAB_ENV" "WOODPECKER_GITEA_CLIENT" "$client_id"
-  upsert_env_var "$HOMELAB_ENV" "WOODPECKER_GITEA_SECRET" "$client_secret"
+  log_info "Storing credentials..."
+  secret_put "WOODPECKER_GITEA_CLIENT" "$client_id"
+  secret_put "WOODPECKER_GITEA_SECRET" "$client_secret"
 
   log_success "Woodpecker OAuth configured"
   log_info "client_id: ${client_id:0:8}..."

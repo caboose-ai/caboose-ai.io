@@ -31,7 +31,7 @@ teardown() {
 
   run setup_grafana
   [ "$status" -eq 0 ]
-  [[ "$output" == *"written"* ]]
+  [[ "$output" == *"stored"* ]]
 
   run grep "GF_AUTH_GENERIC_OAUTH_CLIENT_ID=gid123" "$TEST_ENV"
   [ "$status" -eq 0 ]
@@ -69,7 +69,7 @@ teardown() {
 
   run setup_grafana
   [ "$status" -eq 0 ]
-  [[ "$output" == *"written"* ]]
+  [[ "$output" == *"stored"* ]]
 }
 
 # ── setup_grafana — different client_id ────────────────────────────────────

@@ -21,9 +21,9 @@ forgejo_internal_url() {
 
 forgejo_admin_password() {
   local pass
-  pass=$(read_env_var "$HOMELAB_ENV" "GITEA_ADMIN_PASSWORD")
+  pass=$(secret_get "GITEA_ADMIN_PASSWORD")
   [[ -z "$pass" ]] && {
-    log_error "GITEA_ADMIN_PASSWORD not found in $HOMELAB_ENV"
+    log_error "GITEA_ADMIN_PASSWORD not found (checked fnox and $HOMELAB_ENV)"
     return 1
   }
   echo "$pass"

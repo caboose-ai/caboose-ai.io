@@ -114,3 +114,69 @@ teardown() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"bad thing"* ]]
 }
+
+# ── secret_get ─────────────────────────────────────────────────────────────
+
+@test "secret_get: reads from .env when fnox unavailable" {
+  HAS_FNOX="false"
+  echo "MY_SECRET=from-env" >> "$TEST_ENV"
+  result=$(secret_get "MY_SECRET")
+  [ "$result" = "from-env" ]
+}
+
+@test "secret_get: returns empty when key missing everywhere" {
+  HAS_FNOX="false"
+  result=$(secret_get "NONEXISTENT")
+  [ "$result" = "" ]
+}
+
+@test "secret_get: prefers fnox when available" {
+  HAS_FNOX="true"
+  echo "MY_SECRET=from-env" >> "$TEST_ENV"
+
+  fnox() { echo "from-fnox"; }
+  export -f fnox
+
+  result=$(secret_get "MY_SECRET")
+  [ "$result" = "from-fnox" ]
+}
+
+@test "secret_get: falls back to .env when fnox returns empty" {
+  HAS_FNOX="true"
+  echo "MY_SECRET=from-env" >> "$TEST_ENV"
+
+  fnox() { echo ""; }
+  export -f fnox
+
+  result=$(secret_get "MY_SECRET")
+  [ "$result" = "from-env" ]
+}
+
+# ── secret_put ─────────────────────────────────────────────────────────────
+
+@test "secret_put: writes to .env" {
+  HAS_FNOX="false"
+  secret_put "NEW_SECRET" "the-value"
+  run grep "^NEW_SECRET=the-value" "$TEST_ENV"
+  [ "$status" -eq 0 ]
+}
+
+@test "secret_put: writes to both .env and fnox when available" {
+  HAS_FNOX="true"
+  local fnox_called=""
+  fnox() { fnox_called="$*"; cat > /dev/null; }
+  export -f fnox
+
+  secret_put "NEW_SECRET" "the-value"
+
+  run grep "^NEW_SECRET=the-value" "$TEST_ENV"
+  [ "$status" -eq 0 ]
+}
+
+@test "secret_put: dry-run skips both stores" {
+  DRY_RUN="true"
+  HAS_FNOX="true"
+  secret_put "SKIP_ME" "nope"
+  run grep "SKIP_ME" "$TEST_ENV"
+  [ "$status" -ne 0 ]
+}

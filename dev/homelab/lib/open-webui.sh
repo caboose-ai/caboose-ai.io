@@ -27,8 +27,8 @@ setup_open_webui() {
 
   log_info "Provider found — client_id: ${client_id:0:8}..."
 
-  existing_id=$(read_env_var "$HOMELAB_ENV" "OPEN_WEBUI_OAUTH_CLIENT_ID")
-  existing_secret=$(read_env_var "$HOMELAB_ENV" "OPEN_WEBUI_OAUTH_CLIENT_SECRET")
+  existing_id=$(secret_get "OPEN_WEBUI_OAUTH_CLIENT_ID")
+  existing_secret=$(secret_get "OPEN_WEBUI_OAUTH_CLIENT_SECRET")
 
   if [[ "$existing_id" == "$client_id" && "$existing_secret" == "$client_secret" && "$FORCE" != "true" ]]; then
     log_success "Open WebUI OIDC credentials already in .env. No changes needed."
@@ -39,10 +39,10 @@ setup_open_webui() {
     log_warn "Different client_id in .env (${existing_id:0:8}...). Overwriting..."
   fi
 
-  log_info "Writing Open WebUI OIDC credentials to ${HOMELAB_ENV}..."
-  upsert_env_var "$HOMELAB_ENV" "OPEN_WEBUI_OAUTH_CLIENT_ID" "$client_id"
-  upsert_env_var "$HOMELAB_ENV" "OPEN_WEBUI_OAUTH_CLIENT_SECRET" "$client_secret"
+  log_info "Storing Open WebUI OIDC credentials..."
+  secret_put "OPEN_WEBUI_OAUTH_CLIENT_ID" "$client_id"
+  secret_put "OPEN_WEBUI_OAUTH_CLIENT_SECRET" "$client_secret"
 
-  log_success "Open WebUI OIDC credentials written to .env"
+  log_success "Open WebUI OIDC credentials stored"
   log_info "Restart Open WebUI to pick up the new credentials: docker compose restart open-webui"
 }
