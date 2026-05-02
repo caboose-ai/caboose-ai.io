@@ -73,6 +73,7 @@ fi
 
 source "${SCRIPT_DIR}/lib/common.sh"
 source "${SCRIPT_DIR}/lib/authentik.sh"
+source "${SCRIPT_DIR}/lib/forgejo.sh"
 
 if [[ "${SSO_LIB_ONLY:-}" == "true" ]]; then
   return 0 2>/dev/null || exit 0
@@ -96,8 +97,7 @@ case "$SUBCOMMAND" in
     ;;
 
   setup-forgejo)
-    log_error "Not yet implemented. Coming in Phase 2 (sso-rewrite/forgejo)."
-    exit 1
+    setup_forgejo
     ;;
 
   setup-portainer)
