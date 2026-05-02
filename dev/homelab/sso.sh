@@ -76,6 +76,10 @@ source "${SCRIPT_DIR}/lib/authentik.sh"
 source "${SCRIPT_DIR}/lib/forgejo.sh"
 source "${SCRIPT_DIR}/lib/portainer.sh"
 source "${SCRIPT_DIR}/lib/woodpecker.sh"
+source "${SCRIPT_DIR}/lib/grafana.sh"
+source "${SCRIPT_DIR}/lib/open-webui.sh"
+source "${SCRIPT_DIR}/lib/mattermost.sh"
+source "${SCRIPT_DIR}/lib/social.sh"
 
 if [[ "${SSO_LIB_ONLY:-}" == "true" ]]; then
   return 0 2>/dev/null || exit 0
@@ -111,28 +115,31 @@ case "$SUBCOMMAND" in
     ;;
 
   setup-grafana)
-    log_error "Not yet implemented. Coming in Phase 5 (sso-rewrite/grafana)."
-    exit 1
+    setup_grafana
     ;;
 
   setup-open-webui)
-    log_error "Not yet implemented. Coming in Phase 6 (sso-rewrite/open-webui)."
-    exit 1
+    setup_open_webui
     ;;
 
   setup-mattermost)
-    log_error "Not yet implemented. Coming in Phase 7 (sso-rewrite/mattermost)."
-    exit 1
+    setup_mattermost
     ;;
 
   setup-social)
-    log_error "Not yet implemented. Coming in Phase 8 (sso-rewrite/social-login)."
-    exit 1
+    setup_social
     ;;
 
   all)
-    log_error "Not yet implemented. Coming in Phase 9 (sso-rewrite/cleanup)."
-    exit 1
+    log_step "Running all SSO setup subcommands"
+    setup_forgejo
+    setup_portainer
+    setup_woodpecker
+    setup_grafana
+    setup_open_webui
+    setup_mattermost
+    setup_social
+    log_step "All SSO setup complete"
     ;;
 
   *)
