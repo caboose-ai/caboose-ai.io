@@ -74,6 +74,7 @@ fi
 source "${SCRIPT_DIR}/lib/common.sh"
 source "${SCRIPT_DIR}/lib/authentik.sh"
 source "${SCRIPT_DIR}/lib/forgejo.sh"
+source "${SCRIPT_DIR}/lib/portainer.sh"
 
 if [[ "${SSO_LIB_ONLY:-}" == "true" ]]; then
   return 0 2>/dev/null || exit 0
@@ -101,8 +102,7 @@ case "$SUBCOMMAND" in
     ;;
 
   setup-portainer)
-    log_error "Not yet implemented. Coming in Phase 3 (sso-rewrite/portainer)."
-    exit 1
+    setup_portainer
     ;;
 
   setup-woodpecker)
