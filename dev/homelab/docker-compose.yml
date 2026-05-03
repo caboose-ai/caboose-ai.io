@@ -117,6 +117,8 @@ services:
     container_name: grafana
     ports:
       - "127.0.0.1:3001:3000"
+    extra_hosts:
+      - host.docker.internal:host-gateway
     environment:
       GF_SERVER_ROOT_URL: https://grafana.caboose-ai.io
       GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-admin}"
@@ -131,6 +133,9 @@ services:
       GF_AUTH_GENERIC_OAUTH_TOKEN_URL: "https://auth.caboose-ai.io/application/o/token/"
       GF_AUTH_GENERIC_OAUTH_API_URL: "https://auth.caboose-ai.io/application/o/userinfo/"
       GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH: "contains(groups[*], 'homelab-admins') && 'Admin' || 'Viewer'"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Viewer"
+      GF_SECURITY_ALLOW_EMBEDDING: "true"
     volumes:
       - grafana_data:/var/lib/grafana
     networks:
@@ -250,6 +255,43 @@ services:
       - apps
     restart: unless-stopped
 
+  # Ghost — blog behind SSO gate
+  ghost:
+    image: ghost:5-alpine
+    container_name: ghost
+    ports:
+      - "127.0.0.1:2368:2368"
+    environment:
+      url: https://blog.caboose-ai.io
+      database__client: mysql
+      database__connection__host: ghost-db
+      database__connection__user: ghost
+      database__connection__password: ${GHOST_DB_PASS:-ghostpass}
+      database__connection__database: ghost
+      NODE_ENV: production
+    volumes:
+      - ghost_data:/var/lib/ghost/content
+    depends_on:
+      - ghost-db
+    networks:
+      - ghost-internal
+      - apps
+    restart: unless-stopped
+
+  ghost-db:
+    image: mysql:8.4
+    container_name: ghost-db
+    environment:
+      MYSQL_ROOT_PASSWORD: ${GHOST_DB_PASS:-ghostpass}
+      MYSQL_USER: ghost
+      MYSQL_PASSWORD: ${GHOST_DB_PASS:-ghostpass}
+      MYSQL_DATABASE: ghost
+    volumes:
+      - ghost_db:/var/lib/mysql
+    networks:
+      - ghost-internal
+    restart: unless-stopped
+
   # SonarQube — code quality & security scanning
   sonarqube:
     image: sonarqube:community
@@ -268,6 +310,7 @@ services:
       - sonarqube-db
     networks:
       - sonarqube-internal
+      - apps
     restart: unless-stopped
 
   sonarqube-db:
@@ -293,6 +336,8 @@ volumes:
   authentik_postgres_data:
   authentik_redis_data:
   homarr_data:
+  ghost_data:
+  ghost_db:
   sonarqube_data:
   sonarqube_logs:
   sonarqube_extensions:
@@ -308,6 +353,10 @@ networks:
   # with authentik-server live here.
   apps:
     driver: bridge
+  # Ghost DB tier — isolated from all other services.
+  ghost-internal:
+    driver: bridge
+    internal: true
   # SonarQube DB tier — isolated from all other services.
   sonarqube-internal:
     driver: bridge
