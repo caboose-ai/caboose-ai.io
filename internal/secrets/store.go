@@ -10,6 +10,7 @@ type SecretStore interface {
 	Get(ctx context.Context, key string) (string, error)
 	Put(ctx context.Context, key, value string) error
 	Generate(ctx context.Context, key string, length int, opts GenerateOpts) (string, error)
+	Delete(ctx context.Context, key string) error
 	EnsureVault(ctx context.Context) error
 }
 
@@ -30,6 +31,7 @@ func BootstrapSecrets() []SecretDef {
 		{Key: "WOODPECKER_AGENT_SECRET", Length: 32, Opts: GenerateOpts{Recipe: "letters,digits,32"}},
 		{Key: "GRAFANA_ADMIN_PASSWORD", Length: 32, Opts: GenerateOpts{Recipe: "letters,digits,symbols,32"}},
 		{Key: "GITEA_ADMIN_PASSWORD", Length: 32, Opts: GenerateOpts{Recipe: "letters,digits,symbols,32"}},
+		{Key: "PORTAINER_ADMIN_PASSWORD", Length: 32, Opts: GenerateOpts{Recipe: "letters,digits,symbols,32"}},
 		{Key: "N8N_USER", Prompt: true},
 		{Key: "N8N_PASSWORD", Length: 32, Opts: GenerateOpts{Recipe: "letters,digits,symbols,32"}},
 		{Key: "SONAR_DB_PASS", Length: 32, Opts: GenerateOpts{Recipe: "letters,digits,32"}},

@@ -20,6 +20,8 @@ import (
 type vaultReadyMsg struct{}
 type healthyMsg struct{}
 type akReadyMsg struct{}
+type providersReadyMsg struct{}
+type outpostReadyMsg struct{}
 type restartCompleteMsg struct{}
 
 type AppModel struct {
@@ -111,8 +113,16 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case healthyMsg:
 		return m, m.runInitAndRename()
 
-	// ── AK ready → Configure phase ──────────────────────────────────────────
+	// ── AK ready → provision OAuth2 providers ───────────────────────────────
 	case akReadyMsg:
+		return m, m.runProvisionProviders()
+
+	// ── Providers ready → Provision outpost ─────────────────────────────────
+	case providersReadyMsg:
+		return m, m.runProvisionOutpost()
+
+	// ── Outpost ready → Configure phase ─────────────────────────────────────
+	case outpostReadyMsg:
 		m.stepper.Current = 2
 		if err := m.installer.BuildServices(context.Background()); err != nil {
 			return m, tea.Quit
@@ -279,8 +289,12 @@ func (m AppModel) runInitAndRename() tea.Cmd {
 			return views.SecretsErrorMsg{Err: fmt.Errorf("retrieving Authentik bootstrap token: %w", err)}
 		}
 		m.installer.InitAK(token)
-		// RenameAdmin is idempotent; ignore errors (auth-admin may already exist).
 		_ = m.installer.RenameAdmin(ctx)
+
+		if err := m.installer.InitForgejo(ctx); err != nil {
+			return views.SecretsErrorMsg{Err: fmt.Errorf("Forgejo admin init: %w", err)}
+		}
+
 		return akReadyMsg{}
 	}
 }
@@ -297,6 +311,24 @@ func (m AppModel) configureServiceAtIndex(index int) tea.Cmd {
 			Index:  index,
 			Result: install.ServiceResult{Name: svc.Name(), Result: result, Err: err},
 		}
+	}
+}
+
+func (m AppModel) runProvisionProviders() tea.Cmd {
+	return func() tea.Msg {
+		if err := m.installer.ProvisionProviders(context.Background(), nil); err != nil {
+			return views.SecretsErrorMsg{Err: fmt.Errorf("provisioning providers: %w", err)}
+		}
+		return providersReadyMsg{}
+	}
+}
+
+func (m AppModel) runProvisionOutpost() tea.Cmd {
+	return func() tea.Msg {
+		if err := m.installer.ProvisionOutpost(context.Background(), nil); err != nil {
+			return views.SecretsErrorMsg{Err: fmt.Errorf("provisioning outpost: %w", err)}
+		}
+		return outpostReadyMsg{}
 	}
 }
 

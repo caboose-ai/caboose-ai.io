@@ -16,6 +16,9 @@ const (
 	PhaseComposeUp
 	PhaseWaitHealthy
 	PhaseRenameAdmin
+	PhaseInitForgejo
+	PhaseProvisionProviders
+	PhaseProvisionOutpost
 	PhaseSetupForgejo
 	PhaseSetupWoodpecker
 	PhaseSetupPortainer
@@ -33,7 +36,8 @@ func (p Phase) String() string {
 	names := [...]string{
 		"Check Prerequisites", "Prompt Domain", "Ensure Vault",
 		"Generate Secrets", "Write .env", "Compose Up",
-		"Wait for Health", "Rename Admin",
+		"Wait for Health", "Rename Admin", "Init Forgejo", "Provision Providers",
+		"Provision Outpost",
 		"Setup Forgejo", "Setup Woodpecker", "Setup Portainer",
 		"Setup Grafana", "Setup Open WebUI", "Setup Mattermost",
 		"Setup Social Login", "Restart Services", "Final Health Check",
@@ -49,7 +53,7 @@ func (p Phase) Group() int {
 	switch {
 	case p <= PhaseWriteEnv:
 		return 1
-	case p <= PhaseRenameAdmin:
+	case p <= PhaseInitForgejo:
 		return 2
 	default:
 		return 3

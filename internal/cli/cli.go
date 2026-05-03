@@ -47,6 +47,11 @@ func RunInstall(ctx context.Context, inst *install.Installer) int {
 		logger.Info("[dry-run] would run docker compose up", "dir", inst.Config.ComposeDir)
 		logger.Info("[dry-run] would wait for services to be healthy")
 		logger.Info("[dry-run] would rename akadmin → auth-admin")
+		logger.Info("[dry-run] would initialize Forgejo admin user")
+		logger.Info("[dry-run] would provision OAuth2 providers")
+		for _, spec := range inst.ProviderSpecs() {
+			logger.Info("  [dry-run] would ensure provider", "name", spec.Name, "slug", spec.Slug)
+		}
 		logger.Info("[dry-run] would configure all services")
 		logger.Info("[dry-run] install complete (no changes made)")
 		return 0
@@ -94,13 +99,21 @@ func RunInstall(ctx context.Context, inst *install.Installer) int {
 	}
 	logger.Info("compose started")
 
-	logger.Info("waiting for services to be healthy (timeout 120s)")
+	logger.Info("waiting for services to be healthy (timeout 5m)")
+	healthOK := true
 	for status := range inst.WaitHealthy(ctx) {
 		if status.Healthy {
 			logger.Info("  ✓ healthy", "service", status.Name, "elapsed", status.Elapsed)
 		} else {
 			logger.Warn("  ● polling", "service", status.Name, "error", status.Err)
+			if status.Err == context.DeadlineExceeded {
+				healthOK = false
+			}
 		}
+	}
+	if !healthOK {
+		logger.Error("health check timed out — Authentik did not become ready")
+		return 3
 	}
 
 	token, err := inst.Secrets.Get(ctx, "AUTHENTIK_BOOTSTRAP_TOKEN")
@@ -109,6 +122,13 @@ func RunInstall(ctx context.Context, inst *install.Installer) int {
 		return 3
 	}
 	inst.InitAK(token)
+
+	logger.Info("initializing Forgejo admin user")
+	if err := inst.InitForgejo(ctx); err != nil {
+		logger.Error("Forgejo init failed", "error", err)
+		return 3
+	}
+	logger.Info("Forgejo admin user ready")
 
 	logger.Info("building service configurators")
 	if err := inst.BuildServices(ctx); err != nil {
@@ -122,6 +142,24 @@ func RunInstall(ctx context.Context, inst *install.Installer) int {
 	} else {
 		logger.Info("admin user renamed")
 	}
+
+	logger.Info("provisioning OAuth2 providers in Authentik")
+	if err := inst.ProvisionProviders(ctx, func(p install.ProviderProgress) {
+		switch p.Action {
+		case "exists":
+			logger.Info("  ✓ exists", "provider", p.Name)
+		case "creating":
+			logger.Info("  ● creating", "provider", p.Name)
+		case "created":
+			logger.Info("  ✓ created", "provider", p.Name)
+		case "error":
+			logger.Error("  ✗ failed", "provider", p.Name, "error", p.Err)
+		}
+	}); err != nil {
+		logger.Error("provider provisioning failed", "error", err)
+		return 3
+	}
+	logger.Info("providers ready")
 
 	logger.Info("configuring services")
 	svcResults := inst.ConfigureServices(ctx, func(name string, done bool) {

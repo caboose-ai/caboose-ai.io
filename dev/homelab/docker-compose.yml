@@ -4,6 +4,12 @@ services:
     container_name: forgejo
     ports:
       - "127.0.0.1:3000:3000"
+    environment:
+      GITEA__security__INSTALL_LOCK: "true"
+      GITEA__server__ROOT_URL: "https://git.caboose-ai.io"
+      GITEA__server__DOMAIN: "git.caboose-ai.io"
+      GITEA__server__SSH_DOMAIN: "git.caboose-ai.io"
+      GITEA__database__DB_TYPE: "sqlite3"
     volumes:
       - forgejo_data:/data
     networks:
@@ -61,6 +67,7 @@ services:
     environment:
       OLLAMA_BASE_URL: http://host.docker.internal:11434
       ENABLE_OAUTH_SIGNUP: "true"
+      OAUTH_MERGE_ACCOUNTS_BY_EMAIL: "true"
       OAUTH_PROVIDER_NAME: "Authentik"
       OPENID_PROVIDER_URL: "https://auth.caboose-ai.io/application/o/open-webui/.well-known/openid-configuration"
       OAUTH_CLIENT_ID: "${OPEN_WEBUI_OAUTH_CLIENT_ID}"

@@ -68,7 +68,7 @@ func (c *Configurator) Configure(ctx context.Context, opts services.ConfigureOpt
 	}
 
 	if existingID != "" && opts.Force {
-		if _, err := c.Docker.Exec(ctx, c.Container, "gitea", "admin", "auth", "delete", "--id", existingID); err != nil {
+		if _, err := c.Docker.ExecAs(ctx, c.Container, "git", "gitea", "admin", "auth", "delete", "--id", existingID); err != nil {
 			return nil, fmt.Errorf("deleting existing auth source: %w", err)
 		}
 		existingID = ""
@@ -90,7 +90,7 @@ func (c *Configurator) Configure(ctx context.Context, opts services.ConfigureOpt
 }
 
 func (c *Configurator) authSourceID(ctx context.Context) (string, error) {
-	out, err := c.Docker.Exec(ctx, c.Container, "gitea", "admin", "auth", "list")
+	out, err := c.Docker.ExecAs(ctx, c.Container, "git", "gitea", "admin", "auth", "list")
 	if err != nil {
 		return "", fmt.Errorf("listing auth sources: %w", err)
 	}
@@ -106,24 +106,30 @@ func (c *Configurator) authSourceID(ctx context.Context) (string, error) {
 }
 
 func (c *Configurator) addOIDC(ctx context.Context, clientID, clientSecret, discoveryURL string) error {
-	_, err := c.Docker.Exec(ctx, c.Container,
+	_, err := c.Docker.ExecAs(ctx, c.Container, "git",
 		"gitea", "admin", "auth", "add-oauth",
 		"--name", c.SourceName,
 		"--provider", "openidConnect",
 		"--key", clientID,
 		"--secret", clientSecret,
 		"--auto-discover-url", discoveryURL,
+		"--scopes", "openid",
+		"--scopes", "email",
+		"--scopes", "profile",
 	)
 	return err
 }
 
 func (c *Configurator) updateOIDC(ctx context.Context, sourceID, clientID, clientSecret, discoveryURL string) error {
-	_, err := c.Docker.Exec(ctx, c.Container,
+	_, err := c.Docker.ExecAs(ctx, c.Container, "git",
 		"gitea", "admin", "auth", "update-oauth",
 		"--id", sourceID,
 		"--key", clientID,
 		"--secret", clientSecret,
 		"--auto-discover-url", discoveryURL,
+		"--scopes", "openid",
+		"--scopes", "email",
+		"--scopes", "profile",
 	)
 	return err
 }

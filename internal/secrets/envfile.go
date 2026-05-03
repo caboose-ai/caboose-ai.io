@@ -62,6 +62,32 @@ func (s *EnvFileStore) Generate(_ context.Context, key string, length int, opts 
 	return value, nil
 }
 
+func (s *EnvFileStore) Delete(_ context.Context, key string) error {
+	lines, err := readLines(s.Path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+
+	prefix := key + "="
+	filtered := lines[:0]
+	for _, line := range lines {
+		if !strings.HasPrefix(line, prefix) {
+			filtered = append(filtered, line)
+		}
+	}
+	return writeLines(s.Path, filtered)
+}
+
+func (s *EnvFileStore) DeleteAll() error {
+	if err := os.Remove(s.Path); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
 func (s *EnvFileStore) EnsureVault(_ context.Context) error {
 	return nil
 }

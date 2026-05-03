@@ -23,6 +23,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "Usage: homelab <command> [flags]")
 		fmt.Fprintln(os.Stderr, "\nCommands:")
 		fmt.Fprintln(os.Stderr, "  install    Bootstrap the homelab SSO stack")
+		fmt.Fprintln(os.Stderr, "  reset      Tear down everything and delete all secrets")
 		os.Exit(1)
 	}
 
@@ -43,6 +44,8 @@ func main() {
 	switch subcmd {
 	case "install":
 		os.Exit(runInstall(opts))
+	case "reset":
+		os.Exit(runReset(opts))
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", subcmd)
 		os.Exit(1)
@@ -50,7 +53,7 @@ func main() {
 }
 
 func extractSubcommand(args []string) (string, []string) {
-	known := map[string]bool{"install": true}
+	known := map[string]bool{"install": true, "reset": true}
 	var rest []string
 	var subcmd string
 	for _, arg := range args {
@@ -135,4 +138,34 @@ func runInstall(opts cliOpts) int {
 		return 1
 	}
 	return 0
+}
+
+func runReset(opts cliOpts) int {
+	var cfg *config.Config
+
+	if opts.configPath != "" {
+		var err error
+		cfg, err = config.LoadFromFile(opts.configPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
+			return 1
+		}
+	} else {
+		cfg = config.DefaultConfig()
+	}
+
+	if opts.composeDir != "" {
+		cfg.ComposeDir = opts.composeDir
+	}
+	if opts.opVault != "" {
+		cfg.OPVault = opts.opVault
+	}
+	cfg.DryRun = opts.dryRun
+
+	cmdRunner := runner.NewLocalRunner()
+	httpClient := runner.NewHTTPClient()
+	secretStore := secrets.NewOnePasswordStore(cfg.OPVault, cmdRunner, cfg.EnvPath())
+
+	inst := install.New(cfg, secretStore, cmdRunner, httpClient)
+	return cli.RunReset(context.Background(), inst)
 }

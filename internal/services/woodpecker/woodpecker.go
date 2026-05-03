@@ -1,12 +1,16 @@
 package woodpecker
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"strings"
 
 	"github.com/caboose-ai/caboose-ai.io/internal/docker"
+	"github.com/caboose-ai/caboose-ai.io/internal/runner"
 	"github.com/caboose-ai/caboose-ai.io/internal/secrets"
 	"github.com/caboose-ai/caboose-ai.io/internal/services"
 )
@@ -15,6 +19,7 @@ const appName = "Woodpecker CI"
 
 type Configurator struct {
 	Docker        *docker.ExecClient
+	HTTP          runner.HTTPClient
 	Secrets       secrets.SecretStore
 	Container     string
 	AdminUsername string
@@ -22,9 +27,10 @@ type Configurator struct {
 	RedirectURI   string
 }
 
-func New(d *docker.ExecClient, s secrets.SecretStore, container, adminUser, adminPass, redirectURI string) *Configurator {
+func New(d *docker.ExecClient, httpClient runner.HTTPClient, s secrets.SecretStore, container, adminUser, adminPass, redirectURI string) *Configurator {
 	return &Configurator{
 		Docker:        d,
+		HTTP:          httpClient,
 		Secrets:       s,
 		Container:     container,
 		AdminUsername:  adminUser,
@@ -98,13 +104,11 @@ func (c *Configurator) Configure(ctx context.Context, opts services.ConfigureOpt
 }
 
 func (c *Configurator) forgejoInternalURL(ctx context.Context) (string, error) {
-	out, err := c.Docker.Exec(ctx, c.Container, "sh", "-c",
-		"ip -4 addr show eth0 | grep -oP 'inet \\K[0-9.]+'")
+	ip, err := c.Docker.ContainerIP(ctx, "forgejo", "")
 	if err != nil {
 		return "", fmt.Errorf("getting Forgejo container IP: %w", err)
 	}
-	ip := strings.TrimSpace(string(out))
-	return fmt.Sprintf("http://%s:3000", ip), nil
+	return fmt.Sprintf("http://%s:3000", strings.TrimSpace(string(ip))), nil
 }
 
 func (c *Configurator) findOAuthApp(ctx context.Context, forgejoURL string) (string, error) {
@@ -135,8 +139,9 @@ func (c *Configurator) deleteOAuthApp(ctx context.Context, forgejoURL, appID str
 
 func (c *Configurator) createOAuthApp(ctx context.Context, forgejoURL string) (clientID, clientSecret string, err error) {
 	payload := map[string]any{
-		"name":          appName,
-		"redirect_uris": []string{c.RedirectURI},
+		"name":                appName,
+		"redirect_uris":      []string{c.RedirectURI},
+		"confidential_client": true,
 	}
 	body, _ := json.Marshal(payload)
 	out, err := c.forgejoAPI(ctx, "POST", forgejoURL+"/api/v1/user/applications/oauth2", body)
@@ -158,11 +163,31 @@ func (c *Configurator) createOAuthApp(ctx context.Context, forgejoURL string) (c
 }
 
 func (c *Configurator) forgejoAPI(ctx context.Context, method, url string, body []byte) ([]byte, error) {
-	args := []string{"-sf", "-X", method, "-u", c.AdminUsername + ":" + c.AdminPass}
+	var bodyReader io.Reader
 	if body != nil {
-		args = append(args, "-H", "Content-Type: application/json", "-d", string(body))
+		bodyReader = bytes.NewReader(body)
 	}
-	args = append(args, url)
+	req, err := http.NewRequestWithContext(ctx, method, url, bodyReader)
+	if err != nil {
+		return nil, fmt.Errorf("building Forgejo %s request: %w", method, err)
+	}
+	req.SetBasicAuth(c.AdminUsername, c.AdminPass)
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 
-	return c.Docker.Exec(ctx, c.Container, append([]string{"curl"}, args...)...)
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("Forgejo API %s %s: %w", method, url, err)
+	}
+	defer resp.Body.Close()
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("reading Forgejo response: %w", err)
+	}
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("Forgejo API %s returned HTTP %d: %s", method, resp.StatusCode, string(data))
+	}
+	return data, nil
 }

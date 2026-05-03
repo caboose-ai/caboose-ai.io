@@ -25,6 +25,10 @@ func (c *ComposeClient) Down(ctx context.Context) ([]byte, error) {
 	return c.run(ctx, "down")
 }
 
+func (c *ComposeClient) DownWithVolumes(ctx context.Context) ([]byte, error) {
+	return c.run(ctx, "down", "-v")
+}
+
 func (c *ComposeClient) Restart(ctx context.Context, services ...string) ([]byte, error) {
 	args := append([]string{"restart"}, services...)
 	return c.run(ctx, args...)
