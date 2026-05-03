@@ -23,6 +23,7 @@ type akReadyMsg struct{}
 type providersReadyMsg struct{}
 type outpostReadyMsg struct{}
 type restartCompleteMsg struct{}
+type socialReadyMsg struct{}
 
 type AppModel struct {
 	installer       *install.Installer
@@ -104,8 +105,12 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.activeView, cmd = m.activeView.Update(msg)
 		return m, cmd
 
-	// ── Secrets complete → Compose phase ───────────────────────────────────
+	// ── Secrets complete → Resolve social credentials ──────────────────────
 	case views.SecretsCompleteMsg:
+		return m, m.runResolveSocialCredentials()
+
+	// ── Social credentials ready → Compose phase ────────────────────────────
+	case socialReadyMsg:
 		m.stepper.Current = 1
 		return m, m.runComposeAndHealth()
 
@@ -339,5 +344,25 @@ func (m AppModel) runRestartServices() tea.Cmd {
 	return func() tea.Msg {
 		_ = m.installer.RestartServices(context.Background())
 		return restartCompleteMsg{}
+	}
+}
+
+func (m AppModel) runResolveSocialCredentials() tea.Cmd {
+	promptVals := make(map[string]string, len(m.promptValues))
+	for k, v := range m.promptValues {
+		promptVals[k] = v
+	}
+	return func() tea.Msg {
+		ctx := context.Background()
+		err := m.installer.ResolveSocialCredentials(ctx, func(key string) (string, error) {
+			if val, ok := promptVals[key]; ok && val != "" {
+				return val, nil
+			}
+			return "", nil
+		})
+		if err != nil {
+			return views.SecretsErrorMsg{Err: fmt.Errorf("resolving social credentials: %w", err)}
+		}
+		return socialReadyMsg{}
 	}
 }
