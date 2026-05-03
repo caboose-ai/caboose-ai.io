@@ -3,16 +3,17 @@ package cli
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"os"
 	"strings"
+
+	clog "github.com/charmbracelet/log"
 
 	"github.com/caboose-ai/caboose-ai.io/internal/health"
 	"github.com/caboose-ai/caboose-ai.io/internal/install"
 )
 
 func RunInstall(ctx context.Context, inst *install.Installer) int {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	logger := clog.NewWithOptions(os.Stderr, clog.Options{ReportTimestamp: true})
 	dryRun := inst.Config.DryRun
 
 	logger.Info("checking prerequisites")
@@ -246,7 +247,7 @@ func RunInstall(ctx context.Context, inst *install.Installer) int {
 	return 0
 }
 
-func logHealth(logger *slog.Logger, status health.Status) {
+func logHealth(logger *clog.Logger, status health.Status) {
 	if status.Healthy {
 		logger.Info("  ✓ healthy", "service", status.Name)
 	} else {
