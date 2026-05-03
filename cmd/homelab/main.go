@@ -36,6 +36,10 @@ func main() {
 	fs.StringVar(&opts.configPath, "config", "", "Path to YAML config file")
 	fs.StringVar(&opts.domain, "domain", "", "Homelab domain (e.g. caboose-ai.io)")
 	fs.StringVar(&opts.composeDir, "compose-dir", "", "Path to docker-compose.yml directory")
+	fs.StringVar(&opts.orchestrator, "orchestrator", "", "Backend orchestrator: compose (default) or kubernetes")
+	fs.StringVar(&opts.kubeNamespace, "kube-namespace", "", "Kubernetes namespace for homelab resources (default: homelab)")
+	fs.StringVar(&opts.kubeconfig, "kubeconfig", "", "Path to kubeconfig file for kubectl")
+	fs.StringVar(&opts.kubeContext, "kube-context", "", "Kubernetes context name for kubectl")
 	fs.StringVar(&opts.opVault, "op-vault", "", "1Password vault name")
 	fs.StringVar(&opts.n8nUser, "n8n-user", "", "N8N admin username")
 	fs.StringVar(&opts.email, "email", "", "Admin email for Authentik bootstrap")
@@ -74,6 +78,10 @@ type cliOpts struct {
 	opVault        string
 	n8nUser        string
 	email          string
+	orchestrator   string
+	kubeNamespace  string
+	kubeconfig     string
+	kubeContext    string
 }
 
 func runInstall(opts cliOpts) int {
@@ -96,6 +104,10 @@ func runInstall(opts cliOpts) int {
 	if opts.composeDir != "" {
 		cfg.ComposeDir = opts.composeDir
 	}
+	if opts.orchestrator != "" { cfg.Orchestrator = opts.orchestrator }
+	if opts.kubeNamespace != "" { cfg.Kubernetes.Namespace = opts.kubeNamespace }
+	if opts.kubeconfig != "" { cfg.Kubernetes.Kubeconfig = opts.kubeconfig }
+	if opts.kubeContext != "" { cfg.Kubernetes.Context = opts.kubeContext }
 	if opts.opVault != "" {
 		cfg.OPVault = opts.opVault
 	}
@@ -154,6 +166,10 @@ func runReset(opts cliOpts) int {
 	if opts.composeDir != "" {
 		cfg.ComposeDir = opts.composeDir
 	}
+	if opts.orchestrator != "" { cfg.Orchestrator = opts.orchestrator }
+	if opts.kubeNamespace != "" { cfg.Kubernetes.Namespace = opts.kubeNamespace }
+	if opts.kubeconfig != "" { cfg.Kubernetes.Kubeconfig = opts.kubeconfig }
+	if opts.kubeContext != "" { cfg.Kubernetes.Context = opts.kubeContext }
 	if opts.opVault != "" {
 		cfg.OPVault = opts.opVault
 	}

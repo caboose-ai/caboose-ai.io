@@ -211,6 +211,13 @@ func (s *Server) requireAuthentik() error {
 	return nil
 }
 
+func (s *Server) requireCompose() error {
+	if s.cfg != nil && s.cfg.Orchestrator == "kubernetes" {
+		return fmt.Errorf("docker-compose MCP tools are not supported when orchestrator=kubernetes")
+	}
+	return nil
+}
+
 func textResult(text string) *sdkmcp.CallToolResult {
 	return &sdkmcp.CallToolResult{
 		Content: []sdkmcp.Content{

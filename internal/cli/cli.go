@@ -44,7 +44,7 @@ func RunInstall(ctx context.Context, inst *install.Installer) int {
 				logger.Info("  [dry-run] would generate", "key", def.Key, "length", def.Length)
 			}
 		}
-		logger.Info("[dry-run] would run docker compose up", "dir", inst.Config.ComposeDir)
+		logger.Info("[dry-run] would apply homelab backend", "orchestrator", inst.Backend.Name(), "dir", inst.Config.ComposeDir)
 		logger.Info("[dry-run] would resolve optional social OAuth credentials from config/1Password")
 		logger.Info("[dry-run] would wait for services to be healthy")
 		logger.Info("[dry-run] would rename akadmin → auth-admin")
@@ -100,12 +100,12 @@ func RunInstall(ctx context.Context, inst *install.Installer) int {
 	}
 	logger.Info("social credential resolution complete")
 
-	logger.Info("starting docker compose", "dir", inst.Config.ComposeDir)
+	logger.Info("starting homelab backend", "orchestrator", inst.Backend.Name(), "dir", inst.Config.ComposeDir)
 	if err := inst.ComposeUp(ctx); err != nil {
-		logger.Error("compose up failed", "error", err)
+		logger.Error("backend apply failed", "orchestrator", inst.Backend.Name(), "error", err)
 		return 3
 	}
-	logger.Info("compose started")
+	logger.Info("backend started", "orchestrator", inst.Backend.Name())
 
 	logger.Info("waiting for services to be healthy (timeout 5m)")
 	healthOK := true
