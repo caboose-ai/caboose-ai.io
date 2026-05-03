@@ -46,6 +46,11 @@ email: admin@test.example.com
 compose_dir: /opt/homelab
 n8n_user: testuser
 op_vault: TestVault
+orchestrator: kubernetes
+kubernetes:
+  namespace: lab
+  kubeconfig: /tmp/kubeconfig
+  context: prod
 social:
   github:
     client_id: gh-id
@@ -75,6 +80,9 @@ social:
 	if cfg.Social.GitHub == nil || cfg.Social.GitHub.ClientID != "gh-id" {
 		t.Errorf("Social.GitHub = %+v", cfg.Social.GitHub)
 	}
+	if cfg.Orchestrator != "kubernetes" || cfg.Kubernetes.Namespace != "lab" {
+		t.Errorf("kubernetes config not loaded: %+v", cfg.Kubernetes)
+	}
 }
 
 func TestValidate(t *testing.T) {
@@ -84,6 +92,12 @@ func TestValidate(t *testing.T) {
 	}
 
 	cfg.Domain = "example.com"
+	cfg.Orchestrator = "bad"
+	if err := cfg.Validate(); err == nil {
+		t.Errorf("expected orchestrator validation error")
+	}
+
+	cfg.Orchestrator = "kubernetes"
 	if err := cfg.Validate(); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -96,5 +110,11 @@ func TestDefaultConfig(t *testing.T) {
 	}
 	if cfg.ComposeDir != "dev/homelab" {
 		t.Errorf("default ComposeDir = %q, want dev/homelab", cfg.ComposeDir)
+	}
+	if cfg.Orchestrator != "compose" {
+		t.Errorf("default Orchestrator = %q", cfg.Orchestrator)
+	}
+	if cfg.Kubernetes.Namespace != "homelab" {
+		t.Errorf("default Kubernetes Namespace = %q", cfg.Kubernetes.Namespace)
 	}
 }

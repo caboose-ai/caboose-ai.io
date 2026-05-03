@@ -11,6 +11,8 @@ type Config struct {
 	Domain     string        `yaml:"domain"`
 	Email      string        `yaml:"email"`
 	ComposeDir string        `yaml:"compose_dir"`
+	Orchestrator string      `yaml:"orchestrator"`
+	Kubernetes KubernetesConfig `yaml:"kubernetes"`
 	N8NUser    string        `yaml:"n8n_user"`
 	Social     SocialConfig  `yaml:"social"`
 	OPVault    string        `yaml:"op_vault"`
@@ -19,6 +21,12 @@ type Config struct {
 	Force          bool `yaml:"-"`
 	Verbose        bool `yaml:"-"`
 	NonInteractive bool `yaml:"-"`
+}
+
+type KubernetesConfig struct {
+	Namespace  string `yaml:"namespace"`
+	Kubeconfig string `yaml:"kubeconfig,omitempty"`
+	Context    string `yaml:"context,omitempty"`
 }
 
 type SocialConfig struct {
@@ -34,6 +42,8 @@ type OAuthCredentials struct {
 func DefaultConfig() *Config {
 	return &Config{
 		ComposeDir: "dev/homelab",
+		Orchestrator: "compose",
+		Kubernetes: KubernetesConfig{Namespace: "homelab"},
 		OPVault:    "Homelab",
 		N8NUser:    "admin",
 	}
@@ -54,6 +64,15 @@ func LoadFromFile(path string) (*Config, error) {
 func (c *Config) Validate() error {
 	if c.Domain == "" {
 		return fmt.Errorf("domain is required")
+	}
+	if c.Orchestrator == "" {
+		c.Orchestrator = "compose"
+	}
+	if c.Kubernetes.Namespace == "" {
+		c.Kubernetes.Namespace = "homelab"
+	}
+	if c.Orchestrator != "compose" && c.Orchestrator != "kubernetes" {
+		return fmt.Errorf("orchestrator must be one of: compose, kubernetes")
 	}
 	return nil
 }

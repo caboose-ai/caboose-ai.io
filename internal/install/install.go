@@ -10,6 +10,7 @@ import (
 	"github.com/caboose-ai/caboose-ai.io/internal/config"
 	"github.com/caboose-ai/caboose-ai.io/internal/docker"
 	"github.com/caboose-ai/caboose-ai.io/internal/health"
+	"github.com/caboose-ai/caboose-ai.io/internal/orchestrator"
 	"github.com/caboose-ai/caboose-ai.io/internal/prereq"
 	"github.com/caboose-ai/caboose-ai.io/internal/runner"
 	"github.com/caboose-ai/caboose-ai.io/internal/secrets"
@@ -31,6 +32,7 @@ type Installer struct {
 	Runner     runner.CommandRunner
 	HTTP       runner.HTTPClient
 	Compose    *docker.ComposeClient
+	Backend    orchestrator.Backend
 	DockerExec *docker.ExecClient
 	AK         *authentik.Client
 	Services   []services.ServiceConfigurator
@@ -48,6 +50,10 @@ func New(cfg *config.Config, secretStore secrets.SecretStore, r runner.CommandRu
 		HTTP:       httpClient,
 		Compose:    compose,
 		DockerExec: dockerExec,
+	}
+	inst.Backend = orchestrator.NewComposeBackend(compose)
+	if cfg.Orchestrator == "kubernetes" {
+		inst.Backend = orchestrator.NewKubernetesBackend(r, cfg)
 	}
 
 	inst.State.DryRun = cfg.DryRun
@@ -168,8 +174,7 @@ func (inst *Installer) ComposeUp(ctx context.Context) error {
 	if inst.State.DryRun {
 		return nil
 	}
-	_, err := inst.Compose.Up(ctx)
-	return err
+	return inst.Backend.Apply(ctx)
 }
 
 func (inst *Installer) WaitHealthy(ctx context.Context) <-chan health.Status {
@@ -227,9 +232,9 @@ func (inst *Installer) Reset(ctx context.Context, progressFn func(step, detail s
 		progressFn = func(string, string) {}
 	}
 
-	progressFn("compose", "stopping containers and removing volumes")
-	if _, err := inst.Compose.DownWithVolumes(ctx); err != nil {
-		return fmt.Errorf("compose down -v: %w", err)
+	progressFn(inst.Backend.Name(), "stopping homelab resources")
+	if err := inst.Backend.Teardown(ctx); err != nil {
+		return fmt.Errorf("%s teardown: %w", inst.Backend.Name(), err)
 	}
 
 	progressFn("secrets", "deleting bootstrap secrets from 1Password")

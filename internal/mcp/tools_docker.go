@@ -44,6 +44,7 @@ func (s *Server) registerDockerTools() {
 }
 
 func (s *Server) handleDockerPS(ctx context.Context, _ *sdkmcp.CallToolRequest, _ any) (*sdkmcp.CallToolResult, any, error) {
+	if err := s.requireCompose(); err != nil { return nil, nil, err }
 	out, err := s.compose.PS(ctx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("docker_ps: %w", err)
@@ -52,6 +53,7 @@ func (s *Server) handleDockerPS(ctx context.Context, _ *sdkmcp.CallToolRequest, 
 }
 
 func (s *Server) handleDockerUp(ctx context.Context, _ *sdkmcp.CallToolRequest, _ any) (*sdkmcp.CallToolResult, any, error) {
+	if err := s.requireCompose(); err != nil { return nil, nil, err }
 	out, err := s.compose.Up(ctx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("docker_up: %w", err)
@@ -60,6 +62,7 @@ func (s *Server) handleDockerUp(ctx context.Context, _ *sdkmcp.CallToolRequest, 
 }
 
 func (s *Server) handleDockerDown(ctx context.Context, _ *sdkmcp.CallToolRequest, _ any) (*sdkmcp.CallToolResult, any, error) {
+	if err := s.requireCompose(); err != nil { return nil, nil, err }
 	out, err := s.compose.Down(ctx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("docker_down: %w", err)
@@ -68,6 +71,7 @@ func (s *Server) handleDockerDown(ctx context.Context, _ *sdkmcp.CallToolRequest
 }
 
 func (s *Server) handleDockerRestart(ctx context.Context, _ *sdkmcp.CallToolRequest, input dockerRestartInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := s.requireCompose(); err != nil { return nil, nil, err }
 	if len(input.Services) == 0 {
 		return nil, nil, fmt.Errorf("docker_restart: at least one service name is required")
 	}
@@ -79,6 +83,7 @@ func (s *Server) handleDockerRestart(ctx context.Context, _ *sdkmcp.CallToolRequ
 }
 
 func (s *Server) handleDockerLogs(ctx context.Context, _ *sdkmcp.CallToolRequest, input dockerLogsInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := s.requireCompose(); err != nil { return nil, nil, err }
 	if input.Service == "" {
 		return nil, nil, fmt.Errorf("docker_logs: service name is required")
 	}
