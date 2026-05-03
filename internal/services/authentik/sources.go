@@ -19,6 +19,18 @@ type sourceList struct {
 	Results []OAuthSource `json:"results"`
 }
 
+func (c *Client) ListSources(ctx context.Context) ([]OAuthSource, error) {
+	data, err := c.Get(ctx, "/api/v3/sources/oauth/?page_size=50")
+	if err != nil {
+		return nil, err
+	}
+	var list sourceList
+	if err := json.Unmarshal(data, &list); err != nil {
+		return nil, fmt.Errorf("parsing sources: %w", err)
+	}
+	return list.Results, nil
+}
+
 func (c *Client) GetSourcePK(ctx context.Context, slug string) (string, error) {
 	data, err := c.Get(ctx, fmt.Sprintf("/api/v3/sources/oauth/?slug=%s", url.QueryEscape(slug)))
 	if err != nil {
