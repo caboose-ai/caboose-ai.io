@@ -123,3 +123,62 @@ func TestResolveSocialCredentials_SkipOnBlank(t *testing.T) {
 		t.Errorf("GitHub should be nil when skipped, got %+v", inst.Config.Social.GitHub)
 	}
 }
+
+func TestResolveSocialCredentials_ConfigTakesPriority(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Domain = "test.example.com"
+	cfg.Social = config.SocialConfig{
+		GitHub: &config.OAuthCredentials{ClientID: "cfg-id", ClientSecret: "cfg-secret"},
+	}
+	inst := &Installer{
+		Config: cfg,
+		State:  NewState(),
+		Secrets: &mockSecretStore{data: map[string]string{
+			"GITHUB_OAUTH_CLIENT_ID":     "op-id",
+			"GITHUB_OAUTH_CLIENT_SECRET": "op-secret",
+		}},
+	}
+
+	githubPromptCalled := false
+	err := inst.ResolveSocialCredentials(context.Background(), func(key string) (string, error) {
+		if key == "GITHUB_OAUTH_CLIENT_ID" || key == "GITHUB_OAUTH_CLIENT_SECRET" {
+			githubPromptCalled = true
+		}
+		return "", nil
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if inst.Config.Social.GitHub.ClientID != "cfg-id" {
+		t.Errorf("config should take priority, got %q", inst.Config.Social.GitHub.ClientID)
+	}
+	if githubPromptCalled {
+		t.Error("prompt should not be called for GitHub when config has values")
+	}
+}
+
+func TestResolveSocialCredentials_BothProviders(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Domain = "test.example.com"
+	inst := &Installer{
+		Config: cfg,
+		State:  NewState(),
+		Secrets: &mockSecretStore{data: map[string]string{
+			"GITHUB_OAUTH_CLIENT_ID":     "gh-id",
+			"GITHUB_OAUTH_CLIENT_SECRET": "gh-secret",
+			"GOOGLE_OAUTH_CLIENT_ID":     "go-id",
+			"GOOGLE_OAUTH_CLIENT_SECRET": "go-secret",
+		}},
+	}
+
+	err := inst.ResolveSocialCredentials(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if inst.Config.Social.GitHub == nil || inst.Config.Social.GitHub.ClientID != "gh-id" {
+		t.Errorf("GitHub not resolved: %+v", inst.Config.Social.GitHub)
+	}
+	if inst.Config.Social.Google == nil || inst.Config.Social.Google.ClientID != "go-id" {
+		t.Errorf("Google not resolved: %+v", inst.Config.Social.Google)
+	}
+}
