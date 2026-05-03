@@ -22,6 +22,10 @@ func (m *mockSecretStore) Put(_ context.Context, key, value string) error {
 func (m *mockSecretStore) Generate(_ context.Context, _ string, _ int, _ secrets.GenerateOpts) (string, error) {
 	return "", nil
 }
+func (m *mockSecretStore) Delete(_ context.Context, key string) error {
+	delete(m.data, key)
+	return nil
+}
 func (m *mockSecretStore) EnsureVault(_ context.Context) error { return nil }
 
 func TestResolveSocialCredentials_FromConfig(t *testing.T) {
