@@ -34,6 +34,7 @@ type AppModel struct {
 	quitting        bool
 	promptValues    map[string]string
 	bootstrapDefs   []secrets.SecretDef // cached once to avoid repeated allocations
+	socialDefs      []secrets.SecretDef
 }
 
 func NewApp(installer *install.Installer) AppModel {
@@ -45,6 +46,7 @@ func NewApp(installer *install.Installer) AppModel {
 		activeView:    welcome,
 		promptValues:  make(map[string]string),
 		bootstrapDefs: secrets.BootstrapSecrets(),
+		socialDefs:    secrets.SocialSecrets(),
 	}
 }
 
@@ -237,6 +239,13 @@ func (m AppModel) continueSecretsPhase() tea.Cmd {
 			continue
 		}
 		// Need to prompt.
+		key := def.Key
+		return func() tea.Msg { return views.SecretPromptNeededMsg{Key: key} }
+	}
+	for _, def := range m.socialDefs {
+		if _, ok := m.promptValues[def.Key]; ok {
+			continue
+		}
 		key := def.Key
 		return func() tea.Msg { return views.SecretPromptNeededMsg{Key: key} }
 	}

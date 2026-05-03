@@ -34,6 +34,7 @@ type SecretsErrorMsg struct{ Err error }
 
 type SecretsModel struct {
 	defs      []secrets.SecretDef
+	defByKey  map[string]secrets.SecretDef
 	statuses  map[string]string // "done", "generating", "prompting", "error"
 	errors    map[string]error
 	spinner   spinner.Model
@@ -50,8 +51,14 @@ func NewSecrets() SecretsModel {
 	ti := textinput.New()
 	ti.CharLimit = 100
 	ti.Width = 40
+	defs := append(secrets.BootstrapSecrets(), secrets.SocialSecrets()...)
+	defByKey := make(map[string]secrets.SecretDef, len(defs))
+	for _, def := range defs {
+		defByKey[def.Key] = def
+	}
 	return SecretsModel{
-		defs:     secrets.BootstrapSecrets(),
+		defs:     defs,
+		defByKey: defByKey,
 		statuses: make(map[string]string),
 		errors:   make(map[string]error),
 		spinner:  s,
@@ -78,6 +85,9 @@ func (m SecretsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.prompting = msg.Key
 		m.statuses[msg.Key] = "prompting"
 		m.input.Placeholder = msg.Key
+		if def, ok := m.defByKey[msg.Key]; ok && def.Optional {
+			m.input.Placeholder = msg.Key + " (optional, Enter to skip)"
+		}
 		m.input.Focus()
 		return m, textinput.Blink
 
@@ -90,7 +100,8 @@ func (m SecretsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		if m.prompting != "" && msg.String() == "enter" {
 			val := m.input.Value()
-			if val != "" {
+			def, ok := m.defByKey[m.prompting]
+			if val != "" || (ok && def.Optional) {
 				key := m.prompting
 				m.statuses[key] = "done"
 				m.prompting = ""
