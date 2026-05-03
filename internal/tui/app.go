@@ -24,6 +24,12 @@ type providersReadyMsg struct{}
 type outpostReadyMsg struct{}
 type restartCompleteMsg struct{}
 type socialReadyMsg struct{}
+type turnstileReadyMsg struct{}
+type adminInitDoneMsg struct{}
+type captchaDoneMsg struct{}
+type enrollmentDoneMsg struct{}
+type forgejoDoneMsg struct{}
+type progressMsg string
 
 type AppModel struct {
 	installer       *install.Installer
@@ -33,8 +39,10 @@ type AppModel struct {
 	height          int
 	quitting        bool
 	promptValues    map[string]string
-	bootstrapDefs   []secrets.SecretDef // cached once to avoid repeated allocations
+	bootstrapDefs   []secrets.SecretDef
 	socialDefs      []secrets.SecretDef
+	turnstileDefs   []secrets.SecretDef
+	currentProgress string
 }
 
 func NewApp(installer *install.Installer) AppModel {
@@ -47,6 +55,7 @@ func NewApp(installer *install.Installer) AppModel {
 		promptValues:  make(map[string]string),
 		bootstrapDefs: secrets.BootstrapSecrets(),
 		socialDefs:    secrets.SocialSecrets(),
+		turnstileDefs: secrets.TurnstileSecrets(),
 	}
 }
 
@@ -66,6 +75,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.quitting = true
 			return m, tea.Quit
 		}
+
+	case progressMsg:
+		m.currentProgress = string(msg)
+		return m, nil
 
 	// ── Domain confirmed → run prereqs ─────────────────────────────────────
 	case views.DomainConfirmedMsg:
@@ -111,25 +124,54 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case views.SecretsCompleteMsg:
 		return m, m.runResolveSocialCredentials()
 
-	// ── Social credentials ready → Compose phase ────────────────────────────
+	// ── Social credentials ready → resolve Turnstile credentials ────────────
 	case socialReadyMsg:
+		return m, m.runResolveTurnstileCredentials()
+
+	// ── Turnstile credentials ready → Compose phase ─────────────────────────
+	case turnstileReadyMsg:
 		m.stepper.Current = 1
+		m.currentProgress = "Starting containers..."
 		return m, m.runComposeAndHealth()
 
 	// ── Compose + health done → init AK and rename admin ───────────────────
 	case healthyMsg:
+		m.currentProgress = "Renaming admin user to auth-admin..."
 		return m, m.runInitAndRename()
 
-	// ── AK ready → provision OAuth2 providers ───────────────────────────────
+	// ── AK init done → generate recovery link + store admin password ────────
+	case adminInitDoneMsg:
+		m.currentProgress = "Generating admin recovery link..."
+		return m, m.runAdminRecoveryLink()
+
+	// ── AK ready (recovery done) → setup captcha ────────────────────────────
 	case akReadyMsg:
+		m.currentProgress = "Creating Turnstile captcha stage..."
+		return m, m.runSetupCaptcha()
+
+	// ── Captcha done → setup inactive enrollment ────────────────────────────
+	case captchaDoneMsg:
+		m.currentProgress = "Configuring enrollment flow for inactive users..."
+		return m, m.runSetupInactiveEnrollment()
+
+	// ── Enrollment done → init Forgejo ──────────────────────────────────────
+	case enrollmentDoneMsg:
+		m.currentProgress = "Initializing Forgejo admin..."
+		return m, m.runInitForgejo()
+
+	// ── Forgejo done → provision OAuth2 providers ───────────────────────────
+	case forgejoDoneMsg:
+		m.currentProgress = "Provisioning OAuth2 providers..."
 		return m, m.runProvisionProviders()
 
 	// ── Providers ready → Provision outpost ─────────────────────────────────
 	case providersReadyMsg:
+		m.currentProgress = "Provisioning proxy providers..."
 		return m, m.runProvisionOutpost()
 
 	// ── Outpost ready → Configure phase ─────────────────────────────────────
 	case outpostReadyMsg:
+		m.currentProgress = ""
 		m.stepper.Current = 2
 		if err := m.installer.BuildServices(context.Background()); err != nil {
 			return m, tea.Quit
@@ -202,12 +244,16 @@ func (m AppModel) View() string {
 
 	header := styles.HeaderStyle.Render("Homelab SSO Installer")
 	stepper := m.stepper.View()
+	var progress string
+	if m.currentProgress != "" {
+		progress = "\n  " + styles.RunningStyle.Render("⠋ "+m.currentProgress)
+	}
 	content := m.activeView.View()
 	help := styles.HelpStyle.Render("  q quit  enter confirm")
 
 	return lipgloss.JoinVertical(lipgloss.Left,
 		header,
-		stepper,
+		stepper+progress,
 		content,
 		help,
 	)
@@ -253,6 +299,19 @@ func (m AppModel) continueSecretsPhase() tea.Cmd {
 		return func() tea.Msg { return views.SecretPromptNeededMsg{Key: key} }
 	}
 	for _, def := range m.socialDefs {
+		if _, ok := m.promptValues[def.Key]; ok {
+			continue
+		}
+		key := def.Key
+		return func() tea.Msg { return views.SecretPromptNeededMsg{Key: key} }
+	}
+	for _, def := range m.turnstileDefs {
+		if inst := m.installer; inst.Config.Turnstile.SiteKey != "" && def.Key == "TURNSTILE_SITE_KEY" {
+			continue
+		}
+		if inst := m.installer; inst.Config.Turnstile.SecretKey != "" && def.Key == "TURNSTILE_SECRET_KEY" {
+			continue
+		}
 		if _, ok := m.promptValues[def.Key]; ok {
 			continue
 		}
@@ -317,12 +376,51 @@ func (m AppModel) runInitAndRename() tea.Cmd {
 		}
 		m.installer.InitAK(token)
 		_ = m.installer.RenameAdmin(ctx)
+		return adminInitDoneMsg{}
+	}
+}
 
+func (m AppModel) runAdminRecoveryLink() tea.Cmd {
+	return func() tea.Msg {
+		ctx := context.Background()
+		link, err := m.installer.GenerateAdminRecoveryLink(ctx, nil)
+		if err != nil {
+			return views.SecretsErrorMsg{Err: fmt.Errorf("admin recovery link: %w", err)}
+		}
+		m.installer.State.AdminRecoveryLink = link
+		adminPass, _ := m.installer.Secrets.Get(ctx, "AUTHENTIK_BOOTSTRAP_PASSWORD")
+		m.installer.State.AdminPassword = adminPass
+		return akReadyMsg{}
+	}
+}
+
+func (m AppModel) runSetupCaptcha() tea.Cmd {
+	return func() tea.Msg {
+		ctx := context.Background()
+		if err := m.installer.SetupCaptcha(ctx, nil); err != nil {
+			return views.SecretsErrorMsg{Err: fmt.Errorf("captcha setup: %w", err)}
+		}
+		return captchaDoneMsg{}
+	}
+}
+
+func (m AppModel) runSetupInactiveEnrollment() tea.Cmd {
+	return func() tea.Msg {
+		ctx := context.Background()
+		if err := m.installer.SetupInactiveEnrollment(ctx, nil); err != nil {
+			return views.SecretsErrorMsg{Err: fmt.Errorf("enrollment setup: %w", err)}
+		}
+		return enrollmentDoneMsg{}
+	}
+}
+
+func (m AppModel) runInitForgejo() tea.Cmd {
+	return func() tea.Msg {
+		ctx := context.Background()
 		if err := m.installer.InitForgejo(ctx); err != nil {
 			return views.SecretsErrorMsg{Err: fmt.Errorf("Forgejo admin init: %w", err)}
 		}
-
-		return akReadyMsg{}
+		return forgejoDoneMsg{}
 	}
 }
 
@@ -363,6 +461,26 @@ func (m AppModel) runRestartServices() tea.Cmd {
 	return func() tea.Msg {
 		_ = m.installer.RestartServices(context.Background())
 		return restartCompleteMsg{}
+	}
+}
+
+func (m AppModel) runResolveTurnstileCredentials() tea.Cmd {
+	promptVals := make(map[string]string, len(m.promptValues))
+	for k, v := range m.promptValues {
+		promptVals[k] = v
+	}
+	return func() tea.Msg {
+		ctx := context.Background()
+		err := m.installer.ResolveTurnstileCredentials(ctx, func(key string) (string, error) {
+			if val, ok := promptVals[key]; ok && val != "" {
+				return val, nil
+			}
+			return "", nil
+		})
+		if err != nil {
+			return views.SecretsErrorMsg{Err: fmt.Errorf("resolving Turnstile credentials: %w", err)}
+		}
+		return turnstileReadyMsg{}
 	}
 }
 
