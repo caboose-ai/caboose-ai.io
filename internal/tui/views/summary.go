@@ -10,13 +10,28 @@ import (
 	"github.com/caboose-ai/caboose-ai.io/internal/tui/styles"
 )
 
-type SummaryModel struct {
-	results []install.ServiceResult
-	domain  string
+// SummaryParams holds everything the summary view needs to render.
+type SummaryParams struct {
+	Results       []install.ServiceResult
+	Domain        string
+	AdminPassword string
+	RecoveryLink  string
 }
 
-func NewSummary(results []install.ServiceResult, domain string) SummaryModel {
-	return SummaryModel{results: results, domain: domain}
+type SummaryModel struct {
+	results       []install.ServiceResult
+	domain        string
+	adminPassword string
+	recoveryLink  string
+}
+
+func NewSummary(params SummaryParams) SummaryModel {
+	return SummaryModel{
+		results:       params.Results,
+		domain:        params.Domain,
+		adminPassword: params.AdminPassword,
+		recoveryLink:  params.RecoveryLink,
+	}
 }
 
 func (m SummaryModel) Init() tea.Cmd { return nil }
@@ -47,6 +62,23 @@ func (m SummaryModel) View() string {
 				lines = append(lines, styles.SuccessStyle.Render(fmt.Sprintf("  ✓ %-25s %s", r.Name, r.Result.Message)))
 			}
 		}
+	}
+
+	if m.adminPassword != "" {
+		border := styles.DimStyle.Render("──────────────────────────────────────")
+		lines = append(lines, "")
+		lines = append(lines, border)
+		lines = append(lines, "  Auth Admin Credentials")
+		lines = append(lines, border)
+		lines = append(lines, "  Username:  auth-admin")
+		lines = append(lines, fmt.Sprintf("  Password:  %s", m.adminPassword))
+		lines = append(lines, "")
+		lines = append(lines, "  One-time setup link (set up TOTP):")
+		lines = append(lines, fmt.Sprintf("    %s", m.recoveryLink))
+		lines = append(lines, "")
+		lines = append(lines, styles.DimStyle.Render("  Stored in 1Password:"))
+		lines = append(lines, styles.DimStyle.Render(`    op read "op://Homelab/AUTHENTIK_BOOTSTRAP_PASSWORD/password"`))
+		lines = append(lines, border)
 	}
 
 	lines = append(lines, "")

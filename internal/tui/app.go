@@ -135,7 +135,12 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 		if len(m.installer.Services) == 0 {
-			summaryView := views.NewSummary(m.installer.State.ServiceResults, m.installer.State.Domain)
+			summaryView := views.NewSummary(views.SummaryParams{
+				Results:       m.installer.State.ServiceResults,
+				Domain:        m.installer.State.Domain,
+				AdminPassword: m.installer.State.AdminPassword,
+				RecoveryLink:  m.installer.State.AdminRecoveryLink,
+			})
 			m.activeView = summaryView
 			return m, summaryView.Init()
 		}
@@ -175,7 +180,12 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// ── Restart done → summary ──────────────────────────────────────────────
 	case restartCompleteMsg:
-		summaryView := views.NewSummary(m.installer.State.ServiceResults, m.installer.State.Domain)
+		summaryView := views.NewSummary(views.SummaryParams{
+			Results:       m.installer.State.ServiceResults,
+			Domain:        m.installer.State.Domain,
+			AdminPassword: m.installer.State.AdminPassword,
+			RecoveryLink:  m.installer.State.AdminRecoveryLink,
+		})
 		m.activeView = summaryView
 		return m, summaryView.Init()
 	}
