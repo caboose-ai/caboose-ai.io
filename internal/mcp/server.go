@@ -68,6 +68,7 @@ func New(cfg *config.Config) *Server {
 	s.registerSecretsTools()
 	s.registerMonitoringTools()
 	s.registerAuthentikTools()
+	s.registerAgentTools()
 	s.registerResources()
 	s.registerPrompts()
 
