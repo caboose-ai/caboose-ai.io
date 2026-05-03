@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 
 	"github.com/caboose-ai/caboose-ai.io/internal/runner"
@@ -15,6 +16,7 @@ type Client struct {
 	BaseURL string
 	Token   string
 	HTTP    runner.HTTPClient
+	Logger  *slog.Logger
 }
 
 func NewClient(baseURL, token string, httpClient runner.HTTPClient) *Client {
@@ -33,11 +35,19 @@ func (c *Client) Patch(ctx context.Context, path string, body any) ([]byte, erro
 	return c.doJSON(ctx, http.MethodPatch, path, body)
 }
 
+func (c *Client) log() *slog.Logger {
+	if c.Logger != nil {
+		return c.Logger
+	}
+	return slog.Default()
+}
+
 func (c *Client) doJSON(ctx context.Context, method, path string, body any) ([]byte, error) {
 	data, err := json.Marshal(body)
 	if err != nil {
 		return nil, fmt.Errorf("marshaling request body: %w", err)
 	}
+	c.log().Debug("authentik request", "method", method, "path", path, "body", string(data))
 	return c.do(ctx, method, path, bytes.NewReader(data))
 }
 
@@ -52,6 +62,10 @@ func (c *Client) do(ctx context.Context, method, path string, body io.Reader) ([
 		req.Header.Set("Content-Type", "application/json")
 	}
 
+	if body == nil {
+		c.log().Debug("authentik request", "method", method, "path", path)
+	}
+
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("requesting %s %s: %w", method, path, err)
@@ -62,6 +76,8 @@ func (c *Client) do(ctx context.Context, method, path string, body io.Reader) ([
 	if err != nil {
 		return nil, fmt.Errorf("reading response from %s: %w", path, err)
 	}
+
+	c.log().Debug("authentik response", "method", method, "path", path, "status", resp.StatusCode)
 
 	if resp.StatusCode >= 400 {
 		return nil, fmt.Errorf("%s %s returned HTTP %d: %s", method, path, resp.StatusCode, string(data))

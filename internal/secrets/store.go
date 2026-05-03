@@ -10,6 +10,7 @@ type SecretStore interface {
 	Get(ctx context.Context, key string) (string, error)
 	Put(ctx context.Context, key, value string) error
 	Generate(ctx context.Context, key string, length int, opts GenerateOpts) (string, error)
+	Delete(ctx context.Context, key string) error
 	EnsureVault(ctx context.Context) error
 }
 
@@ -30,8 +31,24 @@ func BootstrapSecrets() []SecretDef {
 		{Key: "WOODPECKER_AGENT_SECRET", Length: 32, Opts: GenerateOpts{Recipe: "letters,digits,32"}},
 		{Key: "GRAFANA_ADMIN_PASSWORD", Length: 32, Opts: GenerateOpts{Recipe: "letters,digits,symbols,32"}},
 		{Key: "GITEA_ADMIN_PASSWORD", Length: 32, Opts: GenerateOpts{Recipe: "letters,digits,symbols,32"}},
+		{Key: "PORTAINER_ADMIN_PASSWORD", Length: 32, Opts: GenerateOpts{Recipe: "letters,digits,symbols,32"}},
 		{Key: "N8N_USER", Prompt: true},
 		{Key: "N8N_PASSWORD", Length: 32, Opts: GenerateOpts{Recipe: "letters,digits,symbols,32"}},
 		{Key: "SONAR_DB_PASS", Length: 32, Opts: GenerateOpts{Recipe: "letters,digits,32"}},
+		{Key: "GHOST_DB_PASS", Length: 32, Opts: GenerateOpts{Recipe: "letters,digits,32"}},
+	}
+}
+
+// DerivedSecretKeys returns the keys for OAuth credentials written to the
+// secret store by service configurators during install. These are cleaned up
+// on reset alongside the bootstrap secrets.
+func DerivedSecretKeys() []string {
+	return []string{
+		"GF_AUTH_GENERIC_OAUTH_CLIENT_ID",
+		"GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET",
+		"OPEN_WEBUI_OAUTH_CLIENT_ID",
+		"OPEN_WEBUI_OAUTH_CLIENT_SECRET",
+		"WOODPECKER_GITEA_CLIENT",
+		"WOODPECKER_GITEA_SECRET",
 	}
 }

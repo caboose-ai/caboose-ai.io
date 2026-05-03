@@ -33,7 +33,7 @@ type OAuthCredentials struct {
 
 func DefaultConfig() *Config {
 	return &Config{
-		ComposeDir: ".",
+		ComposeDir: "dev/homelab",
 		OPVault:    "Homelab",
 		N8NUser:    "admin",
 	}

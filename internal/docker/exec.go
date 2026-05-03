@@ -20,6 +20,11 @@ func (c *ExecClient) Exec(ctx context.Context, container string, cmd ...string) 
 	return c.Runner.Run(ctx, "docker", args...)
 }
 
+func (c *ExecClient) ExecAs(ctx context.Context, container, user string, cmd ...string) ([]byte, error) {
+	args := append([]string{"exec", "-u", user, container}, cmd...)
+	return c.Runner.Run(ctx, "docker", args...)
+}
+
 func (c *ExecClient) ContainerIP(ctx context.Context, container, network string) (string, error) {
 	tmpl := fmt.Sprintf("{{range .NetworkSettings.Networks}}{{if eq .NetworkID %q}}{{.IPAddress}}{{end}}{{end}}", network)
 	out, err := c.Runner.Run(ctx, "docker", "inspect", "--format", tmpl, container)

@@ -3,6 +3,8 @@ package install
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"os"
 	"time"
 
 	"github.com/caboose-ai/caboose-ai.io/internal/config"
@@ -58,7 +60,11 @@ func New(cfg *config.Config, secretStore secrets.SecretStore, r runner.CommandRu
 
 func (inst *Installer) InitAK(token string) {
 	urls := inst.Config.URLs()
-	inst.AK = authentik.NewClient(urls.Authentik, token, inst.HTTP)
+	client := authentik.NewClient(urls.Authentik, token, inst.HTTP)
+	if inst.Config.Verbose {
+		client.Logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	}
+	inst.AK = client
 }
 
 // BuildServices constructs and registers all service configurators. It must be
@@ -74,15 +80,14 @@ func (inst *Installer) BuildServices(ctx context.Context) error {
 		return fmt.Errorf("retrieving GITEA_ADMIN_PASSWORD: %w", err)
 	}
 
-	// PORTAINER_ADMIN_PASSWORD is not a bootstrap secret; fall back to "admin".
-	portainerAdminPass, _ := inst.Secrets.Get(ctx, "PORTAINER_ADMIN_PASSWORD")
-	if portainerAdminPass == "" {
-		portainerAdminPass = "admin"
+	portainerAdminPass, err := inst.Secrets.Get(ctx, "PORTAINER_ADMIN_PASSWORD")
+	if err != nil {
+		return fmt.Errorf("retrieving PORTAINER_ADMIN_PASSWORD: %w", err)
 	}
 
 	inst.Services = []services.ServiceConfigurator{
 		forgejo.New(inst.AK, inst.DockerExec, inst.Secrets, "forgejo", "auth-admin", urls.Authentik),
-		woodpecker.New(inst.DockerExec, inst.Secrets, "woodpecker-server", "auth-admin", giteaAdminPass, urls.Woodpecker+"/authorize"),
+		woodpecker.New(inst.DockerExec, inst.HTTP, inst.Secrets, "woodpecker-server", "auth-admin", giteaAdminPass, urls.Woodpecker+"/authorize"),
 		portainer.New(inst.AK, inst.HTTP, urls.Portainer, portainerAdminPass, urls.Authentik, urls.Portainer+"/"),
 		grafana.New(inst.AK, inst.Secrets),
 		openwebui.New(inst.AK, inst.Secrets),
@@ -111,31 +116,50 @@ func (inst *Installer) EnsureVault(ctx context.Context) error {
 	return inst.Secrets.EnsureVault(ctx)
 }
 
-func (inst *Installer) GenerateSecrets(ctx context.Context, promptFn func(key string) (string, error)) error {
+type SecretProgress struct {
+	Key    string
+	Action string // "generating", "exists", "prompted", "stored", "error"
+	Err    error
+}
+
+func (inst *Installer) GenerateSecrets(ctx context.Context, promptFn func(key string) (string, error), progressFn func(SecretProgress)) error {
+	if progressFn == nil {
+		progressFn = func(SecretProgress) {}
+	}
 	for _, def := range secrets.BootstrapSecrets() {
 		if def.Prompt {
+			progressFn(SecretProgress{Key: def.Key, Action: "prompting"})
 			val, err := promptFn(def.Key)
 			if err != nil {
+				progressFn(SecretProgress{Key: def.Key, Action: "error", Err: err})
 				return err
 			}
 			if val == "" {
-				return fmt.Errorf("required value for %s cannot be empty", def.Key)
-			}
-			if err := inst.Secrets.Put(ctx, def.Key, val); err != nil {
+				err := fmt.Errorf("required value for %s cannot be empty", def.Key)
+				progressFn(SecretProgress{Key: def.Key, Action: "error", Err: err})
 				return err
 			}
+			if err := inst.Secrets.Put(ctx, def.Key, val); err != nil {
+				progressFn(SecretProgress{Key: def.Key, Action: "error", Err: err})
+				return err
+			}
+			progressFn(SecretProgress{Key: def.Key, Action: "stored"})
 			continue
 		}
 
 		existing, _ := inst.Secrets.Get(ctx, def.Key)
 		if existing != "" && !inst.State.Force {
+			progressFn(SecretProgress{Key: def.Key, Action: "exists"})
 			continue
 		}
 
+		progressFn(SecretProgress{Key: def.Key, Action: "generating"})
 		_, err := inst.Secrets.Generate(ctx, def.Key, def.Length, def.Opts)
 		if err != nil {
+			progressFn(SecretProgress{Key: def.Key, Action: "error", Err: err})
 			return fmt.Errorf("generating %s: %w", def.Key, err)
 		}
+		progressFn(SecretProgress{Key: def.Key, Action: "stored"})
 	}
 	return nil
 }
@@ -159,9 +183,14 @@ func (inst *Installer) WaitHealthy(ctx context.Context) <-chan health.Status {
 			Client:      inst.HTTP,
 			Headers:     map[string]string{"Authorization": "Bearer " + token},
 		},
+		&health.HTTPChecker{
+			ServiceName: "Forgejo",
+			URL:         "http://127.0.0.1:3000/api/v1/settings/api",
+			Client:      inst.HTTP,
+		},
 	}
 
-	poller := health.NewPoller(checks, 3*time.Second, 120*time.Second)
+	poller := health.NewPoller(checks, 3*time.Second, 5*time.Minute)
 	return poller.PollAll(ctx)
 }
 
@@ -175,17 +204,56 @@ func (inst *Installer) RenameAdmin(ctx context.Context) error {
 	return inst.AK.RenameAdminUser(ctx, "akadmin", "auth-admin")
 }
 
-func (inst *Installer) ConfigureServices(ctx context.Context) []ServiceResult {
+func (inst *Installer) ConfigureServices(ctx context.Context, progressFn func(name string, done bool)) []ServiceResult {
+	if progressFn == nil {
+		progressFn = func(string, bool) {}
+	}
 	opts := services.ConfigureOpts{
 		DryRun: inst.State.DryRun,
 		Force:  inst.State.Force,
 	}
 
 	for _, svc := range inst.Services {
+		progressFn(svc.Name(), false)
 		result, err := svc.Configure(ctx, opts)
 		inst.State.AddServiceResult(svc.Name(), result, err)
+		progressFn(svc.Name(), true)
 	}
 	return inst.State.ServiceResults
+}
+
+func (inst *Installer) Reset(ctx context.Context, progressFn func(step, detail string)) error {
+	if progressFn == nil {
+		progressFn = func(string, string) {}
+	}
+
+	progressFn("compose", "stopping containers and removing volumes")
+	if _, err := inst.Compose.DownWithVolumes(ctx); err != nil {
+		return fmt.Errorf("compose down -v: %w", err)
+	}
+
+	progressFn("secrets", "deleting bootstrap secrets from 1Password")
+	for _, def := range secrets.BootstrapSecrets() {
+		if err := inst.Secrets.Delete(ctx, def.Key); err != nil {
+			progressFn("secrets", fmt.Sprintf("warning: could not delete %s: %v", def.Key, err))
+		}
+	}
+
+	progressFn("secrets", "deleting derived OAuth secrets from 1Password")
+	for _, key := range secrets.DerivedSecretKeys() {
+		if err := inst.Secrets.Delete(ctx, key); err != nil {
+			progressFn("secrets", fmt.Sprintf("warning: could not delete %s: %v", key, err))
+		}
+	}
+
+	progressFn("env", "removing .env file")
+	envPath := inst.Config.EnvPath()
+	if err := os.Remove(envPath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("removing %s: %w", envPath, err)
+	}
+
+	progressFn("done", "reset complete — run 'homelab install' to start fresh")
+	return nil
 }
 
 func (inst *Installer) RestartServices(ctx context.Context) error {

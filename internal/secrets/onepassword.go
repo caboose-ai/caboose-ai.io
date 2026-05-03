@@ -51,6 +51,11 @@ func (s *OnePasswordStore) Get(ctx context.Context, key string) (string, error) 
 	if err := json.Unmarshal(out, &field); err != nil {
 		return s.Env.Get(ctx, key)
 	}
+
+	// Sync to .env so Docker Compose can read it.
+	if field.Value != "" {
+		s.Env.Put(ctx, key, field.Value)
+	}
 	return field.Value, nil
 }
 
@@ -122,6 +127,13 @@ func (s *OnePasswordStore) Generate(ctx context.Context, key string, length int,
 	}
 
 	return value, nil
+}
+
+func (s *OnePasswordStore) Delete(ctx context.Context, key string) error {
+	if _, err := s.Runner.Run(ctx, "op", "item", "delete", key, "--vault", s.Vault); err != nil {
+		return fmt.Errorf("deleting 1Password item %q: %w", key, err)
+	}
+	return s.Env.Delete(ctx, key)
 }
 
 func extractPassword(opJSON []byte) (string, error) {

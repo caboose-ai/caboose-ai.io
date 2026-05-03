@@ -19,8 +19,13 @@ func TestDeriveURLs(t *testing.T) {
 		{"Woodpecker", urls.Woodpecker, "https://ci.example.com"},
 		{"Portainer", urls.Portainer, "https://docker.example.com"},
 		{"Grafana", urls.Grafana, "https://grafana.example.com"},
-		{"OpenWebUI", urls.OpenWebUI, "https://chat.example.com"},
-		{"Mattermost", urls.Mattermost, "https://mattermost.example.com"},
+		{"OpenWebUI", urls.OpenWebUI, "https://ai.example.com"},
+		{"Mattermost", urls.Mattermost, "https://chat.example.com"},
+		{"Dashboard", urls.Dashboard, "https://example.com"},
+		{"DashAlias", urls.DashAlias, "https://dash.example.com"},
+		{"N8N", urls.N8N, "https://n8n.example.com"},
+		{"OpenClaw", urls.OpenClaw, "https://openclaw.example.com"},
+		{"CI", urls.CI, "https://ci.example.com"},
 	}
 
 	for _, tt := range tests {
@@ -89,7 +94,7 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.OPVault != "Homelab" {
 		t.Errorf("default OPVault = %q, want Homelab", cfg.OPVault)
 	}
-	if cfg.ComposeDir != "." {
-		t.Errorf("default ComposeDir = %q, want .", cfg.ComposeDir)
+	if cfg.ComposeDir != "dev/homelab" {
+		t.Errorf("default ComposeDir = %q, want dev/homelab", cfg.ComposeDir)
 	}
 }

@@ -17,46 +17,71 @@ import (
 )
 
 func main() {
-	var (
-		dryRun         bool
-		force          bool
-		verbose        bool
-		nonInteractive bool
-		configPath     string
-	)
+	subcmd, args := extractSubcommand(os.Args[1:])
 
-	flag.BoolVar(&dryRun, "dry-run", false, "Print what would happen without making changes")
-	flag.BoolVar(&force, "force", false, "Force re-creation of existing resources")
-	flag.BoolVar(&verbose, "verbose", false, "Show detailed output")
-	flag.BoolVar(&nonInteractive, "non-interactive", false, "Run without TUI prompts")
-	flag.StringVar(&configPath, "config", "", "Path to YAML config file (required for --non-interactive)")
-	flag.Parse()
-
-	args := flag.Args()
-	if len(args) == 0 {
+	if subcmd == "" {
 		fmt.Fprintln(os.Stderr, "Usage: homelab <command> [flags]")
 		fmt.Fprintln(os.Stderr, "\nCommands:")
 		fmt.Fprintln(os.Stderr, "  install    Bootstrap the homelab SSO stack")
-		fmt.Fprintln(os.Stderr, "\nFlags:")
-		flag.PrintDefaults()
+		fmt.Fprintln(os.Stderr, "  reset      Tear down everything and delete all secrets")
 		os.Exit(1)
 	}
 
-	switch args[0] {
+	fs := flag.NewFlagSet(subcmd, flag.ExitOnError)
+	var opts cliOpts
+	fs.BoolVar(&opts.dryRun, "dry-run", false, "Print what would happen without making changes")
+	fs.BoolVar(&opts.force, "force", false, "Force re-creation of existing resources")
+	fs.BoolVar(&opts.verbose, "verbose", false, "Show detailed output")
+	fs.BoolVar(&opts.nonInteractive, "non-interactive", false, "Run without TUI prompts")
+	fs.StringVar(&opts.configPath, "config", "", "Path to YAML config file")
+	fs.StringVar(&opts.domain, "domain", "", "Homelab domain (e.g. caboose-ai.io)")
+	fs.StringVar(&opts.composeDir, "compose-dir", "", "Path to docker-compose.yml directory")
+	fs.StringVar(&opts.opVault, "op-vault", "", "1Password vault name")
+	fs.StringVar(&opts.n8nUser, "n8n-user", "", "N8N admin username")
+	fs.StringVar(&opts.email, "email", "", "Admin email for Authentik bootstrap")
+	fs.Parse(args)
+
+	switch subcmd {
 	case "install":
-		os.Exit(runInstall(configPath, dryRun, force, verbose, nonInteractive))
+		os.Exit(runInstall(opts))
+	case "reset":
+		os.Exit(runReset(opts))
 	default:
-		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", args[0])
+		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", subcmd)
 		os.Exit(1)
 	}
 }
 
-func runInstall(configPath string, dryRun, force, verbose, nonInteractive bool) int {
+func extractSubcommand(args []string) (string, []string) {
+	known := map[string]bool{"install": true, "reset": true}
+	if len(args) == 0 {
+		return "", nil
+	}
+	if known[args[0]] {
+		return args[0], args[1:]
+	}
+	return "", args
+}
+
+type cliOpts struct {
+	configPath     string
+	dryRun         bool
+	force          bool
+	verbose        bool
+	nonInteractive bool
+	domain         string
+	composeDir     string
+	opVault        string
+	n8nUser        string
+	email          string
+}
+
+func runInstall(opts cliOpts) int {
 	var cfg *config.Config
 
-	if configPath != "" {
+	if opts.configPath != "" {
 		var err error
-		cfg, err = config.LoadFromFile(configPath)
+		cfg, err = config.LoadFromFile(opts.configPath)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 			return 1
@@ -65,12 +90,28 @@ func runInstall(configPath string, dryRun, force, verbose, nonInteractive bool) 
 		cfg = config.DefaultConfig()
 	}
 
-	cfg.DryRun = dryRun
-	cfg.Force = force
-	cfg.Verbose = verbose
-	cfg.NonInteractive = nonInteractive
+	if opts.domain != "" {
+		cfg.Domain = opts.domain
+	}
+	if opts.composeDir != "" {
+		cfg.ComposeDir = opts.composeDir
+	}
+	if opts.opVault != "" {
+		cfg.OPVault = opts.opVault
+	}
+	if opts.n8nUser != "" {
+		cfg.N8NUser = opts.n8nUser
+	}
+	if opts.email != "" {
+		cfg.Email = opts.email
+	}
 
-	if nonInteractive {
+	cfg.DryRun = opts.dryRun
+	cfg.Force = opts.force
+	cfg.Verbose = opts.verbose
+	cfg.NonInteractive = opts.nonInteractive
+
+	if opts.nonInteractive {
 		if err := cfg.Validate(); err != nil {
 			fmt.Fprintf(os.Stderr, "Config validation error: %v\n", err)
 			return 1
@@ -83,7 +124,7 @@ func runInstall(configPath string, dryRun, force, verbose, nonInteractive bool) 
 
 	inst := install.New(cfg, secretStore, cmdRunner, httpClient)
 
-	if nonInteractive {
+	if opts.nonInteractive {
 		return cli.RunInstall(context.Background(), inst)
 	}
 
@@ -94,4 +135,34 @@ func runInstall(configPath string, dryRun, force, verbose, nonInteractive bool) 
 		return 1
 	}
 	return 0
+}
+
+func runReset(opts cliOpts) int {
+	var cfg *config.Config
+
+	if opts.configPath != "" {
+		var err error
+		cfg, err = config.LoadFromFile(opts.configPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
+			return 1
+		}
+	} else {
+		cfg = config.DefaultConfig()
+	}
+
+	if opts.composeDir != "" {
+		cfg.ComposeDir = opts.composeDir
+	}
+	if opts.opVault != "" {
+		cfg.OPVault = opts.opVault
+	}
+	cfg.DryRun = opts.dryRun
+
+	cmdRunner := runner.NewLocalRunner()
+	httpClient := runner.NewHTTPClient()
+	secretStore := secrets.NewOnePasswordStore(cfg.OPVault, cmdRunner, cfg.EnvPath())
+
+	inst := install.New(cfg, secretStore, cmdRunner, httpClient)
+	return cli.RunReset(context.Background(), inst)
 }

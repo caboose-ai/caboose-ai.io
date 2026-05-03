@@ -58,8 +58,18 @@ func (c *Configurator) Configure(ctx context.Context, opts services.ConfigureOpt
 		return &services.ConfigureResult{Status: services.StatusDryRun, Message: "would configure Portainer OAuth"}, nil
 	}
 
+	alreadyInit, err := c.initAdmin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("Portainer admin init: %w", err)
+	}
+
 	jwt, err := c.getJWT(ctx)
 	if err != nil {
+		if alreadyInit {
+			return nil, fmt.Errorf("Portainer admin login failed — Portainer was already initialized with a different password; "+
+				"update PORTAINER_ADMIN_PASSWORD in your 1Password vault to match the existing admin password, "+
+				"then re-run install: %w", err)
+		}
 		return nil, err
 	}
 
@@ -73,6 +83,36 @@ func (c *Configurator) Configure(ctx context.Context, opts services.ConfigureOpt
 	}
 
 	return &services.ConfigureResult{Status: services.StatusCreated, Message: "Portainer OAuth configured"}, nil
+}
+
+// initAdmin posts to Portainer's admin init endpoint. It returns (true, nil)
+// when Portainer was already initialized (HTTP 409), (false, nil) on fresh
+// initialization, and (false, err) on any other failure.
+func (c *Configurator) initAdmin(ctx context.Context) (alreadyInit bool, err error) {
+	body, _ := json.Marshal(map[string]string{
+		"Username": "admin",
+		"Password": c.AdminPass,
+	})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.PortainerURL+"/api/users/admin/init", bytes.NewReader(body))
+	if err != nil {
+		return false, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return false, fmt.Errorf("initializing Portainer admin: %w", err)
+	}
+	defer resp.Body.Close()
+	io.ReadAll(resp.Body)
+
+	if resp.StatusCode == http.StatusConflict {
+		return true, nil
+	}
+	if resp.StatusCode >= 400 {
+		return false, fmt.Errorf("Portainer admin init returned HTTP %d", resp.StatusCode)
+	}
+	return false, nil
 }
 
 func (c *Configurator) getJWT(ctx context.Context) (string, error) {
