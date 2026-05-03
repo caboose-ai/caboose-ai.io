@@ -3,6 +3,7 @@ package docker
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/caboose-ai/caboose-ai.io/internal/runner"
@@ -41,6 +42,10 @@ func (c *ComposeClient) PS(ctx context.Context) ([]byte, error) {
 func (c *ComposeClient) run(ctx context.Context, args ...string) ([]byte, error) {
 	fullArgs := append([]string{"compose", "-f", c.ComposeDir + "/docker-compose.yml"}, args...)
 	return c.Runner.Run(ctx, "docker", fullArgs...)
+}
+
+func (c *ComposeClient) Logs(ctx context.Context, service string, tail int) ([]byte, error) {
+	return c.run(ctx, "logs", "--no-color", "--tail", strconv.Itoa(tail), service)
 }
 
 func (c *ComposeClient) IsRunning(ctx context.Context, service string) (bool, error) {

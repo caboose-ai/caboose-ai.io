@@ -1,0 +1,154 @@
+package mcp
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/caboose-ai/caboose-ai.io/internal/config"
+	"github.com/caboose-ai/caboose-ai.io/internal/docker"
+	"github.com/caboose-ai/caboose-ai.io/internal/health"
+	"github.com/caboose-ai/caboose-ai.io/internal/services"
+	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
+)
+
+func TestExtractServiceFromURI(t *testing.T) {
+	tests := []struct {
+		uri  string
+		want string
+	}{
+		{"homelab://services/forgejo/status", "forgejo"},
+		{"homelab://services/open-webui/status", "open-webui"},
+		{"homelab://services//status", ""},
+		{"invalid", ""},
+	}
+	for _, tt := range tests {
+		got := extractServiceFromURI(tt.uri)
+		if got != tt.want {
+			t.Errorf("extractServiceFromURI(%q) = %q, want %q", tt.uri, got, tt.want)
+		}
+	}
+}
+
+func TestHandleServiceStatusResource(t *testing.T) {
+	r := &mockRunner{output: []byte(`[{"Name":"forgejo","State":"running"}]`)}
+	s := &Server{
+		compose:  docker.NewComposeClient(r, "/test"),
+		checkers: []health.Checker{&mockChecker{name: "Forgejo", err: nil}},
+		services: []services.ServiceConfigurator{
+			&mockServiceConfigurator{slug: "forgejo", name: "Forgejo", result: &services.ConfigureResult{Status: services.StatusAlreadyConfigured}},
+		},
+	}
+
+	req := &sdkmcp.ReadResourceRequest{
+		Params: &sdkmcp.ReadResourceParams{URI: "homelab://services/forgejo/status"},
+	}
+
+	result, err := s.handleServiceStatusResource(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	text := result.Contents[0].Text
+	if !strings.Contains(text, `"running": true`) {
+		t.Errorf("expected running true: %q", text)
+	}
+	if !strings.Contains(text, `"healthy": true`) {
+		t.Errorf("expected healthy true: %q", text)
+	}
+	if !strings.Contains(text, `"configured": true`) {
+		t.Errorf("expected configured true: %q", text)
+	}
+}
+
+func TestHandleDiagnoseServicePrompt(t *testing.T) {
+	r := &mockRunner{output: []byte("some log output")}
+	s := &Server{
+		compose:  docker.NewComposeClient(r, "/test"),
+		checkers: []health.Checker{&mockChecker{name: "Forgejo", err: nil}},
+	}
+
+	req := &sdkmcp.GetPromptRequest{
+		Params: &sdkmcp.GetPromptParams{
+			Name:      "diagnose-service",
+			Arguments: map[string]string{"service": "forgejo"},
+		},
+	}
+
+	result, err := s.handleDiagnoseServicePrompt(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	text := result.Messages[0].Content.(*sdkmcp.TextContent).Text
+	if !strings.Contains(text, "Diagnostic Report: forgejo") {
+		t.Errorf("expected diagnostic header: %q", text)
+	}
+	if !strings.Contains(text, "Healthy") {
+		t.Errorf("expected health section: %q", text)
+	}
+}
+
+func TestHandleFullStackReportPrompt(t *testing.T) {
+	r := &mockRunner{output: []byte(`[{"Name":"forgejo"}]`)}
+	s := &Server{
+		compose:  docker.NewComposeClient(r, "/test"),
+		checkers: []health.Checker{&mockChecker{name: "Forgejo", err: nil}},
+		services: []services.ServiceConfigurator{
+			&mockServiceConfigurator{slug: "forgejo", name: "Forgejo", result: &services.ConfigureResult{Status: services.StatusAlreadyConfigured}},
+		},
+	}
+
+	result, err := s.handleFullStackReportPrompt(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	text := result.Messages[0].Content.(*sdkmcp.TextContent).Text
+	if !strings.Contains(text, "Full Stack Report") {
+		t.Errorf("expected report header: %q", text)
+	}
+	if !strings.Contains(text, "Forgejo: healthy") {
+		t.Errorf("expected Forgejo health: %q", text)
+	}
+	if !strings.Contains(text, "Forgejo: configured") {
+		t.Errorf("expected Forgejo config status: %q", text)
+	}
+}
+
+func TestURLsResource(t *testing.T) {
+	urls := config.DeriveURLs("example.com")
+	if !strings.Contains(urls.Authentik, "auth.example.com") {
+		t.Errorf("expected auth URL, got %q", urls.Authentik)
+	}
+}
+
+func TestStaticResourceReadsFile(t *testing.T) {
+	dir := t.TempDir()
+	content := "test: true\nservices:\n  forgejo:\n    image: gitea"
+	os.WriteFile(filepath.Join(dir, "docker-compose.yml"), []byte(content), 0644)
+
+	s := &Server{cfg: &config.Config{ComposeDir: dir}}
+
+	req := &sdkmcp.ReadResourceRequest{
+		Params: &sdkmcp.ReadResourceParams{URI: "homelab://config/docker-compose"},
+	}
+
+	handler := func(ctx context.Context, req *sdkmcp.ReadResourceRequest) (*sdkmcp.ReadResourceResult, error) {
+		path := filepath.Join(s.cfg.ComposeDir, "docker-compose.yml")
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, err
+		}
+		return &sdkmcp.ReadResourceResult{
+			Contents: []*sdkmcp.ResourceContents{{URI: req.Params.URI, Text: string(data)}},
+		}, nil
+	}
+
+	result, err := handler(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Contents[0].Text != content {
+		t.Errorf("expected file content, got %q", result.Contents[0].Text)
+	}
+}
