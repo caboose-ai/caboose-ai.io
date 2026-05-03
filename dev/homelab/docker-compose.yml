@@ -250,6 +250,7 @@ services:
       disable: true
     volumes:
       - homarr_data:/app/data/configs
+      - ./homarr-default.json:/app/data/configs/default.json:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - apps
