@@ -8,14 +8,14 @@ import (
 )
 
 type Config struct {
-	Domain     string        `yaml:"domain"`
-	Email      string        `yaml:"email"`
-	ComposeDir string        `yaml:"compose_dir"`
-	Orchestrator string      `yaml:"orchestrator"`
-	Kubernetes KubernetesConfig `yaml:"kubernetes"`
-	N8NUser    string        `yaml:"n8n_user"`
-	Social     SocialConfig  `yaml:"social"`
-	OPVault    string        `yaml:"op_vault"`
+	Domain       string           `yaml:"domain"`
+	Email        string           `yaml:"email"`
+	ComposeDir   string           `yaml:"compose_dir"`
+	Orchestrator string           `yaml:"orchestrator"`
+	Kubernetes   KubernetesConfig `yaml:"kubernetes"`
+	N8NUser      string           `yaml:"n8n_user"`
+	Social       SocialConfig     `yaml:"social"`
+	OPVault      string           `yaml:"op_vault"`
 
 	DryRun         bool `yaml:"-"`
 	Force          bool `yaml:"-"`
@@ -41,11 +41,12 @@ type OAuthCredentials struct {
 
 func DefaultConfig() *Config {
 	return &Config{
-		ComposeDir: "dev/homelab",
+		ComposeDir:   "dev/homelab",
 		Orchestrator: "compose",
-		Kubernetes: KubernetesConfig{Namespace: "homelab"},
-		OPVault:    "Homelab",
-		N8NUser:    "admin",
+		Kubernetes:   KubernetesConfig{Namespace: "homelab"},
+		OPVault:      "Homelab",
+		N8NUser:      "admin",
+		Email:        "cxm6467@gmail.com",
 	}
 }
 
