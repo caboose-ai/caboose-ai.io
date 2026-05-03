@@ -21,7 +21,7 @@ type secretsPutInput struct {
 type secretsGenerateInput struct {
 	Key    string `json:"key" jsonschema:"the secret key to generate"`
 	Length int    `json:"length,omitempty" jsonschema:"length of the generated secret (default 32)"`
-	Recipe string `json:"recipe,omitempty" jsonschema:"generation recipe: hex or letters,digits,symbols (default letters,digits,32)"`
+	Recipe string `json:"recipe,omitempty" jsonschema:"generation recipe: hex or letters,digits,symbols (default letters,digits,<length>)"`
 }
 
 func (s *Server) registerSecretsTools() {
@@ -80,7 +80,7 @@ func (s *Server) handleSecretsGenerate(ctx context.Context, _ *sdkmcp.CallToolRe
 	}
 	recipe := input.Recipe
 	if recipe == "" {
-		recipe = "letters,digits,32"
+		recipe = fmt.Sprintf("letters,digits,%d", length)
 	}
 	val, err := s.secrets.Generate(ctx, input.Key, length, secrets.GenerateOpts{Recipe: recipe})
 	if err != nil {
