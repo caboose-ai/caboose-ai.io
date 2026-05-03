@@ -45,6 +45,7 @@ func RunInstall(ctx context.Context, inst *install.Installer) int {
 			}
 		}
 		logger.Info("[dry-run] would run docker compose up", "dir", inst.Config.ComposeDir)
+		logger.Info("[dry-run] would resolve optional social OAuth credentials from config/1Password")
 		logger.Info("[dry-run] would wait for services to be healthy")
 		logger.Info("[dry-run] would rename akadmin → auth-admin")
 		logger.Info("[dry-run] would initialize Forgejo admin user")
@@ -91,6 +92,13 @@ func RunInstall(ctx context.Context, inst *install.Installer) int {
 		return 2
 	}
 	logger.Info("secrets ready")
+
+	logger.Info("resolving optional social OAuth credentials (GitHub/Google)")
+	if err := inst.ResolveSocialCredentials(ctx, nil); err != nil {
+		logger.Error("social credential resolution failed", "error", err)
+		return 2
+	}
+	logger.Info("social credential resolution complete")
 
 	logger.Info("starting docker compose", "dir", inst.Config.ComposeDir)
 	if err := inst.ComposeUp(ctx); err != nil {
