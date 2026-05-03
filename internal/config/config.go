@@ -15,6 +15,7 @@ type Config struct {
 	Kubernetes   KubernetesConfig `yaml:"kubernetes"`
 	N8NUser      string           `yaml:"n8n_user"`
 	Social       SocialConfig     `yaml:"social"`
+	Turnstile    TurnstileConfig  `yaml:"turnstile"`
 	OPVault      string           `yaml:"op_vault"`
 
 	DryRun         bool `yaml:"-"`
@@ -37,6 +38,11 @@ type SocialConfig struct {
 type OAuthCredentials struct {
 	ClientID     string `yaml:"client_id"`
 	ClientSecret string `yaml:"client_secret"`
+}
+
+type TurnstileConfig struct {
+	SiteKey   string `yaml:"site_key"`
+	SecretKey string `yaml:"secret_key"`
 }
 
 func DefaultConfig() *Config {

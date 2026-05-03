@@ -51,6 +51,8 @@ func DerivedSecretKeys() []string {
 		"OPEN_WEBUI_OAUTH_CLIENT_SECRET",
 		"WOODPECKER_GITEA_CLIENT",
 		"WOODPECKER_GITEA_SECRET",
+		"TURNSTILE_SITE_KEY",
+		"TURNSTILE_SECRET_KEY",
 	}
 }
 
@@ -60,5 +62,12 @@ func SocialSecrets() []SecretDef {
 		{Key: "GITHUB_OAUTH_CLIENT_SECRET", Prompt: true, Optional: true},
 		{Key: "GOOGLE_OAUTH_CLIENT_ID", Prompt: true, Optional: true},
 		{Key: "GOOGLE_OAUTH_CLIENT_SECRET", Prompt: true, Optional: true},
+	}
+}
+
+func TurnstileSecrets() []SecretDef {
+	return []SecretDef{
+		{Key: "TURNSTILE_SITE_KEY", Prompt: true, Optional: true},
+		{Key: "TURNSTILE_SECRET_KEY", Prompt: true, Optional: true},
 	}
 }
