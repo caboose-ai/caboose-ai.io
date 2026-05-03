@@ -15,10 +15,11 @@ type SecretStore interface {
 }
 
 type SecretDef struct {
-	Key    string
-	Length int
-	Opts   GenerateOpts
-	Prompt bool // if true, prompt user instead of generating
+	Key      string
+	Length   int
+	Opts     GenerateOpts
+	Prompt   bool // if true, prompt user instead of generating
+	Optional bool // if true, secret can be skipped
 }
 
 func BootstrapSecrets() []SecretDef {
@@ -50,5 +51,14 @@ func DerivedSecretKeys() []string {
 		"OPEN_WEBUI_OAUTH_CLIENT_SECRET",
 		"WOODPECKER_GITEA_CLIENT",
 		"WOODPECKER_GITEA_SECRET",
+	}
+}
+
+func SocialSecrets() []SecretDef {
+	return []SecretDef{
+		{Key: "GITHUB_OAUTH_CLIENT_ID", Prompt: true, Optional: true},
+		{Key: "GITHUB_OAUTH_CLIENT_SECRET", Prompt: true, Optional: true},
+		{Key: "GOOGLE_OAUTH_CLIENT_ID", Prompt: true, Optional: true},
+		{Key: "GOOGLE_OAUTH_CLIENT_SECRET", Prompt: true, Optional: true},
 	}
 }
