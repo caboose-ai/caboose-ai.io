@@ -50,13 +50,15 @@ func (c *Client) RenameAdminUser(ctx context.Context, from, to string) error {
 		return nil
 	}
 
-	user, err := c.FindUser(ctx, from)
-	if err != nil {
-		return err
-	}
-	if user == nil {
-		return fmt.Errorf("user %q not found", from)
+	for _, candidate := range []string{from, "akauth"} {
+		user, err := c.FindUser(ctx, candidate)
+		if err != nil {
+			return err
+		}
+		if user != nil {
+			return c.RenameUser(ctx, user.PK, to)
+		}
 	}
 
-	return c.RenameUser(ctx, user.PK, to)
+	return fmt.Errorf("user %q not found", from)
 }
