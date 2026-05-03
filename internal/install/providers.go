@@ -37,6 +37,13 @@ func (inst *Installer) ProvisionProviders(ctx context.Context, progressFn func(P
 		progressFn = func(ProviderProgress) {}
 	}
 
+	if inst.State.DryRun {
+		for _, spec := range inst.ProviderSpecs() {
+			progressFn(ProviderProgress{Name: spec.Name, Action: "created"})
+		}
+		return nil
+	}
+
 	authFlow, err := inst.AK.GetFlow(ctx, "default-provider-authorization-implicit-consent")
 	if err != nil {
 		return fmt.Errorf("looking up authorization flow: %w", err)
@@ -59,7 +66,11 @@ func (inst *Installer) ProvisionProviders(ctx context.Context, progressFn func(P
 	}
 
 	for _, spec := range inst.ProviderSpecs() {
-		existing, _ := inst.AK.GetProvider(ctx, spec.Name)
+		existing, err := inst.AK.GetProvider(ctx, spec.Name)
+		if err != nil {
+			progressFn(ProviderProgress{Name: spec.Name, Action: "error", Err: err})
+			return fmt.Errorf("looking up provider %q: %w", spec.Name, err)
+		}
 		if existing != nil {
 			progressFn(ProviderProgress{Name: spec.Name, Action: "exists"})
 			continue
@@ -85,7 +96,11 @@ func (inst *Installer) ProvisionProviders(ctx context.Context, progressFn func(P
 			return fmt.Errorf("creating provider %q: %w", spec.Name, err)
 		}
 
-		app, _ := inst.AK.GetApplication(ctx, spec.Slug)
+		app, err := inst.AK.GetApplication(ctx, spec.Slug)
+		if err != nil {
+			progressFn(ProviderProgress{Name: spec.Name, Action: "error", Err: err})
+			return fmt.Errorf("looking up application %q: %w", spec.Slug, err)
+		}
 		if app == nil {
 			if _, err := inst.AK.CreateApplication(ctx, spec.Name, spec.Slug, provider.PK); err != nil {
 				progressFn(ProviderProgress{Name: spec.Name, Action: "error", Err: err})

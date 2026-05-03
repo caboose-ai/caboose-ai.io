@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 
 	"github.com/caboose-ai/caboose-ai.io/internal/docker"
 	"github.com/caboose-ai/caboose-ai.io/internal/runner"
@@ -103,12 +102,11 @@ func (c *Configurator) Configure(ctx context.Context, opts services.ConfigureOpt
 	}, nil
 }
 
-func (c *Configurator) forgejoInternalURL(ctx context.Context) (string, error) {
-	ip, err := c.Docker.ContainerIP(ctx, "forgejo", "")
-	if err != nil {
-		return "", fmt.Errorf("getting Forgejo container IP: %w", err)
-	}
-	return fmt.Sprintf("http://%s:3000", strings.TrimSpace(string(ip))), nil
+func (c *Configurator) forgejoInternalURL(_ context.Context) (string, error) {
+	// Forgejo maps its port to 127.0.0.1:3000 on the host, so the installer
+	// (which runs on the host) can always reach it there without needing to
+	// inspect container networks.
+	return "http://127.0.0.1:3000", nil
 }
 
 func (c *Configurator) findOAuthApp(ctx context.Context, forgejoURL string) (string, error) {

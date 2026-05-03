@@ -43,12 +43,12 @@ func (c *Checker) CheckAll(ctx context.Context) []Result {
 
 func (c *Checker) checkOPLogin(ctx context.Context) Result {
 	name := "op signed in"
-	out, err := c.Runner.Run(ctx, "op", "account", "list", "--format=json")
+	out, err := c.Runner.Run(ctx, "op", "whoami", "--format=json")
 	if err != nil {
 		return Result{Name: name, Err: fmt.Errorf("not signed in to 1Password: run `op signin` first")}
 	}
 	if len(out) < 3 {
-		return Result{Name: name, Err: fmt.Errorf("no 1Password accounts configured: run `op account add`")}
+		return Result{Name: name, Err: fmt.Errorf("no active 1Password session: run `op signin`")}
 	}
 	return Result{Name: name, Found: true, Version: "authenticated"}
 }

@@ -6,9 +6,9 @@ services:
       - "127.0.0.1:3000:3000"
     environment:
       GITEA__security__INSTALL_LOCK: "true"
-      GITEA__server__ROOT_URL: "https://git.caboose-ai.io"
-      GITEA__server__DOMAIN: "git.caboose-ai.io"
-      GITEA__server__SSH_DOMAIN: "git.caboose-ai.io"
+      GITEA__server__ROOT_URL: "${FORGEJO_ROOT_URL:-https://git.caboose-ai.io}"
+      GITEA__server__DOMAIN: "${FORGEJO_DOMAIN:-git.caboose-ai.io}"
+      GITEA__server__SSH_DOMAIN: "${FORGEJO_DOMAIN:-git.caboose-ai.io}"
       GITEA__database__DB_TYPE: "sqlite3"
     volumes:
       - forgejo_data:/data
@@ -262,7 +262,7 @@ services:
     ports:
       - "127.0.0.1:2368:2368"
     environment:
-      url: https://blog.caboose-ai.io
+      url: "${GHOST_URL:-https://blog.caboose-ai.io}"
       database__client: mysql
       database__connection__host: ghost-db
       database__connection__user: ghost

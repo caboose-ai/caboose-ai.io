@@ -13,7 +13,7 @@ func RunReset(ctx context.Context, inst *install.Installer) int {
 
 	if inst.Config.DryRun {
 		logger.Info("[dry-run] would stop all containers and remove volumes")
-		logger.Info("[dry-run] would delete all bootstrap secrets from 1Password")
+		logger.Info("[dry-run] would delete all bootstrap and derived OAuth secrets from 1Password")
 		logger.Info("[dry-run] would delete .env file")
 		logger.Info("[dry-run] reset complete (no changes made)")
 		return 0

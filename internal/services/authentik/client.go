@@ -77,7 +77,7 @@ func (c *Client) do(ctx context.Context, method, path string, body io.Reader) ([
 		return nil, fmt.Errorf("reading response from %s: %w", path, err)
 	}
 
-	c.log().Debug("authentik response", "method", method, "path", path, "status", resp.StatusCode, "body", string(data))
+	c.log().Debug("authentik response", "method", method, "path", path, "status", resp.StatusCode)
 
 	if resp.StatusCode >= 400 {
 		return nil, fmt.Errorf("%s %s returned HTTP %d: %s", method, path, resp.StatusCode, string(data))

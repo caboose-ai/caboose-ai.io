@@ -239,6 +239,13 @@ func (inst *Installer) Reset(ctx context.Context, progressFn func(step, detail s
 		}
 	}
 
+	progressFn("secrets", "deleting derived OAuth secrets from 1Password")
+	for _, key := range secrets.DerivedSecretKeys() {
+		if err := inst.Secrets.Delete(ctx, key); err != nil {
+			progressFn("secrets", fmt.Sprintf("warning: could not delete %s: %v", key, err))
+		}
+	}
+
 	progressFn("env", "removing .env file")
 	envPath := inst.Config.EnvPath()
 	if err := os.Remove(envPath); err != nil && !os.IsNotExist(err) {

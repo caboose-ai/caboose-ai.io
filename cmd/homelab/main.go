@@ -54,16 +54,13 @@ func main() {
 
 func extractSubcommand(args []string) (string, []string) {
 	known := map[string]bool{"install": true, "reset": true}
-	var rest []string
-	var subcmd string
-	for _, arg := range args {
-		if subcmd == "" && known[arg] {
-			subcmd = arg
-		} else {
-			rest = append(rest, arg)
-		}
+	if len(args) == 0 {
+		return "", nil
 	}
-	return subcmd, rest
+	if known[args[0]] {
+		return args[0], args[1:]
+	}
+	return "", args
 }
 
 type cliOpts struct {

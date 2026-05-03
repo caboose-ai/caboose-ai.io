@@ -130,7 +130,9 @@ func (s *OnePasswordStore) Generate(ctx context.Context, key string, length int,
 }
 
 func (s *OnePasswordStore) Delete(ctx context.Context, key string) error {
-	s.Runner.Run(ctx, "op", "item", "delete", key, "--vault", s.Vault)
+	if _, err := s.Runner.Run(ctx, "op", "item", "delete", key, "--vault", s.Vault); err != nil {
+		return fmt.Errorf("deleting 1Password item %q: %w", key, err)
+	}
 	return s.Env.Delete(ctx, key)
 }
 

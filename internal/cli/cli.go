@@ -112,7 +112,7 @@ func RunInstall(ctx context.Context, inst *install.Installer) int {
 		}
 	}
 	if !healthOK {
-		logger.Error("health check timed out — Authentik did not become ready")
+		logger.Error("health check timed out — one or more services did not become ready")
 		return 3
 	}
 
@@ -161,6 +161,28 @@ func RunInstall(ctx context.Context, inst *install.Installer) int {
 	}
 	logger.Info("providers ready")
 
+	logger.Info("provisioning proxy providers and outpost in Authentik")
+	if err := inst.ProvisionOutpost(ctx, func(p install.OutpostProgress) {
+		switch p.Action {
+		case "exists":
+			logger.Info("  ✓ exists", "provider", p.Name)
+		case "creating":
+			logger.Info("  ● creating", "provider", p.Name)
+		case "created":
+			logger.Info("  ✓ created", "provider", p.Name)
+		case "binding":
+			logger.Info("  ● binding providers to outpost")
+		case "bound":
+			logger.Info("  ✓ outpost updated")
+		case "error":
+			logger.Error("  ✗ failed", "provider", p.Name, "error", p.Err)
+		}
+	}); err != nil {
+		logger.Error("outpost provisioning failed", "error", err)
+		return 3
+	}
+	logger.Info("outpost ready")
+
 	logger.Info("configuring services")
 	svcResults := inst.ConfigureServices(ctx, func(name string, done bool) {
 		if !done {
@@ -195,8 +217,17 @@ func RunInstall(ctx context.Context, inst *install.Installer) int {
 	}
 
 	logger.Info("final health check")
+	finalHealthOK := true
 	for status := range inst.WaitHealthy(ctx) {
 		logHealth(logger, status)
+		if status.Err == context.DeadlineExceeded {
+			finalHealthOK = false
+		}
+	}
+
+	if !finalHealthOK {
+		logger.Warn("one or more services remain unhealthy after restart")
+		return 4
 	}
 
 	if hasErrors {

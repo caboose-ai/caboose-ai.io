@@ -274,8 +274,11 @@ func (m AppModel) runComposeAndHealth() tea.Cmd {
 		if err := m.installer.ComposeUp(ctx); err != nil {
 			return views.SecretsErrorMsg{Err: fmt.Errorf("compose up failed: %w", err)}
 		}
-		// Drain the health channel; the channel closes when all checks pass or timeout.
-		for range m.installer.WaitHealthy(ctx) {
+		// Drain the health channel; check for timeout.
+		for status := range m.installer.WaitHealthy(ctx) {
+			if status.Err == context.DeadlineExceeded {
+				return views.SecretsErrorMsg{Err: fmt.Errorf("health check timed out waiting for %s to become ready", status.Name)}
+			}
 		}
 		return healthyMsg{}
 	}
