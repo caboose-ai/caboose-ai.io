@@ -9,7 +9,12 @@ import (
 )
 
 type mockSecretStore struct {
-	data map[string]string
+	data         map[string]string
+	lastGenerate struct {
+		key    string
+		length int
+		opts   secrets.GenerateOpts
+	}
 }
 
 func (m *mockSecretStore) Get(_ context.Context, key string) (string, error) {
@@ -19,7 +24,10 @@ func (m *mockSecretStore) Put(_ context.Context, key, value string) error {
 	m.data[key] = value
 	return nil
 }
-func (m *mockSecretStore) Generate(_ context.Context, key string, _ int, _ secrets.GenerateOpts) (string, error) {
+func (m *mockSecretStore) Generate(_ context.Context, key string, length int, opts secrets.GenerateOpts) (string, error) {
+	m.lastGenerate.key = key
+	m.lastGenerate.length = length
+	m.lastGenerate.opts = opts
 	val := "generated-" + key
 	m.data[key] = val
 	return val, nil
@@ -92,6 +100,31 @@ func TestHandleSecretsGenerate(t *testing.T) {
 	text := extractText(result)
 	if !strings.Contains(text, "generated-GEN_KEY") {
 		t.Errorf("unexpected result: %q", text)
+	}
+	if store.lastGenerate.length != 32 {
+		t.Errorf("expected default length 32, got %d", store.lastGenerate.length)
+	}
+	if store.lastGenerate.opts.Recipe != "letters,digits,32" {
+		t.Errorf("expected default recipe to include default length, got %q", store.lastGenerate.opts.Recipe)
+	}
+}
+
+func TestHandleSecretsGenerate_CustomLengthUsesMatchingDefaultRecipe(t *testing.T) {
+	store := &mockSecretStore{data: map[string]string{}}
+	s := &Server{secrets: store}
+
+	_, _, err := s.handleSecretsGenerate(context.Background(), nil, secretsGenerateInput{
+		Key:    "GEN_KEY",
+		Length: 64,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if store.lastGenerate.length != 64 {
+		t.Errorf("expected length 64, got %d", store.lastGenerate.length)
+	}
+	if store.lastGenerate.opts.Recipe != "letters,digits,64" {
+		t.Errorf("expected generated default recipe to honor requested length, got %q", store.lastGenerate.opts.Recipe)
 	}
 }
 
