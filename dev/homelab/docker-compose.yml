@@ -327,6 +327,25 @@ services:
       - sonarqube-internal
     restart: unless-stopped
 
+  # Paperclip — multi-agent workspace
+  paperclip:
+    image: paperclip/paperclip:latest
+    container_name: paperclip
+    ports:
+      - "127.0.0.1:3100:3100"
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3100
+      PAPERCLIP_HOME: /paperclip
+      PAPERCLIP_PUBLIC_URL: "${PAPERCLIP_PUBLIC_URL:-https://paperclip.caboose-ai.io}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+    volumes:
+      - paperclip_data:/paperclip
+    networks:
+      - apps
+    restart: unless-stopped
+
 volumes:
   forgejo_data:
   portainer_data:
@@ -343,6 +362,7 @@ volumes:
   sonarqube_logs:
   sonarqube_extensions:
   sonarqube_db:
+  paperclip_data:
 
 networks:
   # Authentik DB tier — internal:true prevents outbound internet access and
