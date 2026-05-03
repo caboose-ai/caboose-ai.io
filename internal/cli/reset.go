@@ -2,14 +2,15 @@ package cli
 
 import (
 	"context"
-	"log/slog"
 	"os"
+
+	clog "github.com/charmbracelet/log"
 
 	"github.com/caboose-ai/caboose-ai.io/internal/install"
 )
 
 func RunReset(ctx context.Context, inst *install.Installer) int {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	logger := clog.NewWithOptions(os.Stderr, clog.Options{ReportTimestamp: true})
 
 	if inst.Config.DryRun {
 		logger.Info("[dry-run] would stop all containers and remove volumes")

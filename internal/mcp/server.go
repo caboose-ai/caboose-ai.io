@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strings"
+
+	clog "github.com/charmbracelet/log"
 
 	"github.com/caboose-ai/caboose-ai.io/internal/config"
 	"github.com/caboose-ai/caboose-ai.io/internal/docker"
@@ -90,7 +91,7 @@ func (s *Server) RunHTTP(addr string) error {
 
 	protected := authMiddleware(handler)
 
-	log.Printf("Homelab MCP server listening on %s (Authentik token auth enabled)", addr)
+	clog.Info("Homelab MCP server listening", "addr", addr, "auth", "Authentik token")
 	return http.ListenAndServe(addr, protected)
 }
 
