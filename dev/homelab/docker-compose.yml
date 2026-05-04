@@ -114,10 +114,10 @@ services:
       MM_METRICSSETTINGS_ENABLE: "true"
       MM_METRICSSETTINGS_LISTENADDRESS: ":8067"
     volumes:
-      - mattermost_data:/opt/mattermost/data
-      - mattermost_config:/opt/mattermost/config
-      - mattermost_logs:/opt/mattermost/logs
-      - mattermost_plugins:/opt/mattermost/plugins
+      - mattermost_data:/mattermost/data
+      - mattermost_config:/mattermost/config
+      - mattermost_logs:/mattermost/logs
+      - mattermost_plugins:/mattermost/plugins
     depends_on:
       - mattermost-db
     networks:
@@ -392,7 +392,34 @@ services:
       - apps
     restart: unless-stopped
 
+  # Loki — log aggregation, queried by Grafana
+  loki:
+    image: grafana/loki:3.5.0
+    container_name: loki
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - loki_data:/loki
+    networks:
+      - apps
+    restart: unless-stopped
+
+  # Promtail — ships Docker container logs to Loki
+  promtail:
+    image: grafana/promtail:3.5.0
+    container_name: promtail
+    command: -config.file=/etc/promtail/config.yml
+    volumes:
+      - ./promtail.yml:/etc/promtail/config.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - loki
+    networks:
+      - apps
+    restart: unless-stopped
+
 volumes:
+  loki_data:
   forgejo_data:
   portainer_data:
   open_webui_data:

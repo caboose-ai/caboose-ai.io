@@ -256,10 +256,14 @@ func (inst *Installer) Reset(ctx context.Context, progressFn func(step, detail s
 		}
 	}
 
-	progressFn("env", "removing .env file")
-	envPath := inst.Config.EnvPath()
-	if err := os.Remove(envPath); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("removing %s: %w", envPath, err)
+	if inst.State.KeepEnv {
+		progressFn("env", "keeping .env file (--keep-env)")
+	} else {
+		progressFn("env", "removing .env file")
+		envPath := inst.Config.EnvPath()
+		if err := os.Remove(envPath); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("removing %s: %w", envPath, err)
+		}
 	}
 
 	progressFn("done", "reset complete — run 'homelab install' to start fresh")
