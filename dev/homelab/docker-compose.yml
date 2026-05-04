@@ -177,6 +177,9 @@ services:
       GF_SECURITY_ALLOW_EMBEDDING: "true"
     volumes:
       - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
     networks:
       - apps
     restart: unless-stopped
@@ -225,8 +228,6 @@ services:
     image: ghcr.io/goauthentik/server:2026.2.2
     container_name: authentik-server
     command: server
-    ports:
-      - "127.0.0.1:9002:9000"
     environment:
       AUTHENTIK_REDIS__HOST: authentik-redis
       AUTHENTIK_POSTGRESQL__HOST: authentik-postgres
@@ -240,6 +241,10 @@ services:
       AUTHENTIK_BOOTSTRAP_EMAIL: "${AUTHENTIK_BOOTSTRAP_EMAIL}"
       AUTHENTIK_BOOTSTRAP_PASSWORD: "${AUTHENTIK_BOOTSTRAP_PASSWORD}"
       AUTHENTIK_BOOTSTRAP_TOKEN: "${AUTHENTIK_BOOTSTRAP_TOKEN}"
+      AUTHENTIK_LISTEN__METRICS: "0.0.0.0:9300"
+    ports:
+      - "127.0.0.1:9002:9000"
+      - "127.0.0.1:9300:9300"
     depends_on:
       - authentik-postgres
       - authentik-redis
