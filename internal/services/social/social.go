@@ -96,6 +96,12 @@ func (c *Configurator) Configure(ctx context.Context, opts services.ConfigureOpt
 		return &services.ConfigureResult{Status: services.StatusSkipped, Message: "No social login credentials provided"}, nil
 	}
 
+	if !opts.DryRun {
+		if err := c.bindSourcesToLoginFlow(ctx); err != nil {
+			return nil, fmt.Errorf("binding sources to login flow: %w", err)
+		}
+	}
+
 	status := services.StatusCreated
 	if opts.DryRun {
 		status = services.StatusDryRun
@@ -104,4 +110,23 @@ func (c *Configurator) Configure(ctx context.Context, opts services.ConfigureOpt
 		Status:  status,
 		Message: fmt.Sprintf("%d social login source(s) configured", configured),
 	}, nil
+}
+
+func (c *Configurator) bindSourcesToLoginFlow(ctx context.Context) error {
+	stage, err := c.AK.GetIdentificationStage(ctx, "default-authentication-flow")
+	if err != nil || stage == nil {
+		return err
+	}
+
+	sources, err := c.AK.ListSources(ctx)
+	if err != nil {
+		return err
+	}
+
+	pks := make([]string, len(sources))
+	for i, s := range sources {
+		pks[i] = s.PK
+	}
+
+	return c.AK.SetIdentificationStageSources(ctx, stage.PK, pks)
 }
