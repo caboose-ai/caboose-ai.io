@@ -327,10 +327,12 @@ services:
       - sonarqube-internal
     restart: unless-stopped
 
-  # Paperclip — multi-agent workspace
+  # Paperclip — multi-agent workspace (image not yet published)
   paperclip:
-    image: paperclip/paperclip:latest
+    image: ghcr.io/paperclipai/paperclip:latest
     container_name: paperclip
+    profiles:
+      - paperclip
     ports:
       - "127.0.0.1:3100:3100"
     environment:
