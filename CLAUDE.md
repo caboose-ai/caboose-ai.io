@@ -28,7 +28,8 @@ Go binary is at `/home/caboose/.local/go/bin/go`. If `go` isn't on PATH, use `PA
 - `internal/tui/` — Bubbletea TUI with message-driven phase transitions
 - `internal/mcp/` — MCP server, tools, resources
 - `internal/runner/` — CommandRunner + HTTPClient interfaces for testability
-- `dev/homelab/` — Docker Compose, Prometheus config, Authentik patches
+- `internal/migrate/` — Host-to-Docker migration orchestrators (e.g. Mattermost)
+- `dev/homelab/` — Docker Compose, Prometheus/Loki/Promtail config, Grafana dashboards, Authentik patches
 
 ## Conventions
 
@@ -55,6 +56,16 @@ Go binary is at `/home/caboose/.local/go/bin/go`. If `go` isn't on PATH, use `PA
 - Commit format: `type(scope): description`
 - Types: feat, fix, test, docs, chore, refactor
 
+### Documentation
+- Every PR to main that changes code or infrastructure MUST update docs.
+- Files to keep in sync: `CLAUDE.md`, `.github/copilot-instructions.md`, `README.md`
+- `CLAUDE.md` — architecture map, conventions, service list, "Adding a New Service" checklist
+- `.github/copilot-instructions.md` — mirrors CLAUDE.md for GitHub Copilot
+- `README.md` — project overview, service table, setup instructions for humans
+- CI enforces this via `.github/workflows/docs-check.yml`. Add `docs-exempt` label to skip.
+- When adding a service: update the Architecture section, Live Environment services list, and README service table.
+- When adding a package: update the Architecture section in all three files.
+
 ### Docker Compose
 - `dev/homelab/docker-compose.yml` — all services
 - Secrets via `${VAR}` from `.env`
@@ -75,7 +86,8 @@ Go binary is at `/home/caboose/.local/go/bin/go`. If `go` isn't on PATH, use `PA
 
 - Domain: `caboose-ai.io`
 - Auth: `auth.caboose-ai.io` (Authentik)
-- Services: git, ci, docker, grafana, ai, n8n, sonar, chat, openclaw, blog
+- Services: git, ci, docker, grafana, ai, n8n, sonar, chat, openclaw, blog, dash
+- Observability: Prometheus (metrics), Loki + Promtail (logs), Grafana (dashboards)
 - Caddy reverse proxy on the host
 - Cloudflare tunnel for `chat` and `sonar` subdomains
 - Ollama on host for local LLM inference

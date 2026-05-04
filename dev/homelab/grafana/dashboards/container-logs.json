@@ -8,41 +8,30 @@
   "panels": [
     {
       "datasource": { "type": "loki", "uid": "loki" },
-      "fieldConfig": { "defaults": {}, "overrides": [] },
-      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" } }, "overrides": [] },
+      "gridPos": { "h": 5, "w": 24, "x": 0, "y": 0 },
       "id": 1,
       "options": {
-        "dedupStrategy": "none",
-        "enableLogDetails": true,
-        "prettifyLogMessage": false,
-        "showCommonLabels": false,
-        "showLabels": true,
-        "showTime": true,
-        "sortOrder": "Descending",
-        "wrapLogMessage": true
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
       },
       "targets": [
         {
           "datasource": { "type": "loki", "uid": "loki" },
-          "editorMode": "builder",
-          "expr": "{container=~\"$container\"} |~ \"$search\"",
+          "editorMode": "code",
+          "expr": "sum by (container) (count_over_time({container=~\"${container:regex}\"} |~ `$search` $level [$__auto]))",
+          "legendFormat": "{{container}}",
           "queryType": "range",
           "refId": "A"
         }
       ],
       "title": "Log Volume",
-      "type": "timeseries",
-      "transformations": [
-        {
-          "id": "extractFields",
-          "options": { "source": "Line" }
-        }
-      ]
+      "type": "timeseries"
     },
     {
       "datasource": { "type": "loki", "uid": "loki" },
       "fieldConfig": { "defaults": {}, "overrides": [] },
-      "gridPos": { "h": 20, "w": 24, "x": 0, "y": 4 },
+      "gridPos": { "h": 20, "w": 24, "x": 0, "y": 5 },
       "id": 2,
       "options": {
         "dedupStrategy": "none",
@@ -58,7 +47,7 @@
         {
           "datasource": { "type": "loki", "uid": "loki" },
           "editorMode": "code",
-          "expr": "{container=~\"$container\"} |~ \"$search\" | $level",
+          "expr": "{container=~\"${container:regex}\"} |~ `$search` $level",
           "queryType": "range",
           "refId": "A"
         }
@@ -72,10 +61,11 @@
   "templating": {
     "list": [
       {
-        "current": { "selected": true, "text": "All", "value": "$__all" },
+        "current": { "selected": true, "text": ["All"], "value": ["$__all"] },
         "datasource": { "type": "loki", "uid": "loki" },
         "definition": "",
         "includeAll": true,
+        "allValue": ".+",
         "multi": true,
         "name": "container",
         "options": [],
@@ -96,9 +86,9 @@
         "name": "level",
         "options": [
           { "selected": true, "text": "All", "value": "" },
-          { "selected": false, "text": "Error", "value": "|~ \"(?i)error|ERROR|err\"" },
-          { "selected": false, "text": "Warning", "value": "|~ \"(?i)warn|WARNING\"" },
-          { "selected": false, "text": "Info", "value": "|~ \"(?i)info|INFO\"" }
+          { "selected": false, "text": "Error", "value": "|~ `(?i)(error|err|fatal)`" },
+          { "selected": false, "text": "Warning", "value": "|~ `(?i)(warn|warning)`" },
+          { "selected": false, "text": "Info", "value": "|~ `(?i)(info)`" }
         ],
         "query": "",
         "type": "custom"

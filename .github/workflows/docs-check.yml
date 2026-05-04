@@ -1,0 +1,57 @@
+name: Documentation Check
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  docs-check:
+    runs-on: ubuntu-latest
+    env:
+      DOCS_EXEMPT: ${{ contains(github.event.pull_request.labels.*.name, 'docs-exempt') }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check documentation was updated
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          changed_files=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
+
+          has_code_changes=false
+          has_compose_changes=false
+          has_doc_updates=false
+
+          while IFS= read -r file; do
+            case "$file" in
+              internal/*|cmd/*) has_code_changes=true ;;
+              dev/homelab/docker-compose.yml) has_compose_changes=true ;;
+              CLAUDE.md|.github/copilot-instructions.md|README.md) has_doc_updates=true ;;
+            esac
+          done <<< "$changed_files"
+
+          if [[ "$has_code_changes" == "true" || "$has_compose_changes" == "true" ]]; then
+            if [[ "$has_doc_updates" == "false" ]]; then
+              echo "::warning::Code or infrastructure changed but no documentation was updated."
+              echo ""
+              echo "Update the relevant docs to reflect the change:"
+              echo "  - CLAUDE.md (architecture, conventions, services)"
+              echo "  - .github/copilot-instructions.md (architecture, patterns)"
+              echo "  - README.md (services list, setup instructions)"
+              echo ""
+              echo "Add the 'docs-exempt' label to skip this check."
+
+              if [[ "$DOCS_EXEMPT" == "true" ]]; then
+                echo ""
+                echo "docs-exempt label found — skipping."
+                exit 0
+              fi
+
+              exit 1
+            fi
+          fi
+
+          echo "Documentation check passed."
