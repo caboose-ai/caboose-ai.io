@@ -7,7 +7,7 @@ run = "go build ./..."
 
 [tasks.homelab]
 description = "Build and run the homelab TUI installer"
-run = "go build -o ./homelab ./cmd/homelab && ./homelab"
+run = "go build -o ./homelab ./cmd/homelab && ./homelab install"
 
 [tasks.mcp]
 description = "Build and run the MCP server"
@@ -19,7 +19,7 @@ run = "go test ./internal/... -v"
 
 [tasks.reset]
 description = "Stop containers and remove volumes, then rebuild"
-run = "docker compose -f dev/homelab/docker-compose.yml down -v && go build -o ./homelab ./cmd/homelab && ./homelab"
+run = "docker compose -f dev/homelab/docker-compose.yml down -v && go build -o ./homelab ./cmd/homelab && ./homelab reset"
 
 [tasks.down]
 description = "Stop containers (keep data)"
