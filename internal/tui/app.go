@@ -376,6 +376,9 @@ func (m AppModel) runInitAndRename() tea.Cmd {
 		}
 		m.installer.InitAK(token)
 		_ = m.installer.RenameAdmin(ctx)
+		if err := m.installer.ConfigureBrand(ctx); err != nil {
+			return views.SecretsErrorMsg{Err: fmt.Errorf("configuring brand: %w", err)}
+		}
 		return adminInitDoneMsg{}
 	}
 }
