@@ -99,6 +99,45 @@ services:
       - apps
     restart: unless-stopped
 
+  # Mattermost — team chat with OIDC via Authentik
+  mattermost:
+    image: mattermost/mattermost-team-edition:10.6
+    container_name: mattermost
+    ports:
+      - "127.0.0.1:8065:8065"
+      - "127.0.0.1:8067:8067"
+    environment:
+      MM_SQLSETTINGS_DRIVERNAME: postgres
+      MM_SQLSETTINGS_DATASOURCE: postgres://mattermost:${MATTERMOST_DB_PASS}@mattermost-db:5432/mattermost?sslmode=disable
+      MM_SERVICESETTINGS_SITEURL: https://chat.caboose-ai.io
+      MM_SERVICESETTINGS_LISTENADDRESS: ":8065"
+      MM_METRICSSETTINGS_ENABLE: "true"
+      MM_METRICSSETTINGS_LISTENADDRESS: ":8067"
+    volumes:
+      - mattermost_data:/opt/mattermost/data
+      - mattermost_config:/opt/mattermost/config
+      - mattermost_logs:/opt/mattermost/logs
+      - mattermost_plugins:/opt/mattermost/plugins
+    depends_on:
+      - mattermost-db
+    networks:
+      - mattermost-internal
+      - apps
+    restart: unless-stopped
+
+  mattermost-db:
+    image: postgres:16.13
+    container_name: mattermost-db
+    environment:
+      POSTGRES_USER: mattermost
+      POSTGRES_PASSWORD: ${MATTERMOST_DB_PASS}
+      POSTGRES_DB: mattermost
+    volumes:
+      - mattermost_db:/var/lib/postgresql/data
+    networks:
+      - mattermost-internal
+    restart: unless-stopped
+
   prometheus:
     image: prom/prometheus:v3.11.3
     container_name: prometheus
@@ -360,6 +399,11 @@ volumes:
   homarr_data:
   ghost_data:
   ghost_db:
+  mattermost_config:
+  mattermost_data:
+  mattermost_db:
+  mattermost_logs:
+  mattermost_plugins:
   sonarqube_data:
   sonarqube_logs:
   sonarqube_extensions:
@@ -378,6 +422,10 @@ networks:
     driver: bridge
   # Ghost DB tier — isolated from all other services.
   ghost-internal:
+    driver: bridge
+    internal: true
+  # Mattermost DB tier — isolated from all other services.
+  mattermost-internal:
     driver: bridge
     internal: true
   # SonarQube DB tier — isolated from all other services.
