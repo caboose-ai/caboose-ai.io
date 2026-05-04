@@ -27,6 +27,8 @@ internal/
     authentik/          Authentik API client (providers, sources, outpost)
   mcp/                  MCP server, tools, resources
   cli/                  Non-interactive CLI runner
+  migrate/              Host-to-Docker migration orchestrators
+  orchestrator/         Backend abstraction (compose, kubernetes)
 ```
 
 ## Conventions
@@ -76,10 +78,12 @@ internal/
 
 ## Documentation
 
-- Keep `docs/superpowers/specs/` and `docs/superpowers/plans/` up to date when implementing features.
-- Design specs describe what and why. Plans describe how, step by step.
+- Every PR to main that changes code or infrastructure MUST update docs.
+- Files to keep in sync: `CLAUDE.md`, `.github/copilot-instructions.md`, `README.md`
+- CI enforces this via `.github/workflows/docs-check.yml`. Add `docs-exempt` label to skip.
 - When modifying a service configurator, verify the corresponding compose entry still matches.
-- When adding a new service: add compose entry, Caddy site, Authentik provider/proxy, and a service configurator.
+- When adding a new service: update Architecture sections, service lists, and README service table.
+- When adding a new package: update the Architecture tree in all three doc files.
 
 ## Common Tasks
 
