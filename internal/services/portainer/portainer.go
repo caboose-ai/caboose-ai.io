@@ -17,6 +17,7 @@ import (
 type Configurator struct {
 	AK           *authentik.Client
 	HTTP         runner.HTTPClient
+	AuthHTTP     runner.HTTPClient
 	PortainerURL string
 	AdminPass    string
 	AuthentikURL string
@@ -27,6 +28,7 @@ func New(ak *authentik.Client, httpClient runner.HTTPClient, portainerURL, admin
 	return &Configurator{
 		AK:           ak,
 		HTTP:         httpClient,
+		AuthHTTP:     newNoRedirectClient(),
 		PortainerURL: portainerURL,
 		AdminPass:    adminPass,
 		AuthentikURL: authentikURL,
@@ -116,16 +118,13 @@ func (c *Configurator) initAdmin(ctx context.Context) (alreadyInit bool, err err
 	return false, nil
 }
 
-// noRedirectDo creates an HTTP client that does not follow redirects and
-// executes the given request.
-func (c *Configurator) noRedirectDo(req *http.Request) (*http.Response, error) {
-	client := &http.Client{
+func newNoRedirectClient() *http.Client {
+	return &http.Client{
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
 		Timeout: 30 * time.Second,
 	}
-	return client.Do(req)
 }
 
 func (c *Configurator) getJWT(ctx context.Context) (string, error) {
@@ -145,7 +144,7 @@ func (c *Configurator) getJWT(ctx context.Context) (string, error) {
 		}
 		req.Header.Set("Content-Type", "application/json")
 
-		resp, err := c.noRedirectDo(req)
+		resp, err := c.AuthHTTP.Do(req)
 		if err != nil {
 			return "", fmt.Errorf("authenticating with Portainer: %w", err)
 		}
@@ -185,7 +184,6 @@ func (c *Configurator) getJWT(ctx context.Context) (string, error) {
 		}
 		return result.JWT, nil
 	}
-
 	return "", fmt.Errorf("Portainer auth failed after %d attempts", maxRetries)
 }
 
