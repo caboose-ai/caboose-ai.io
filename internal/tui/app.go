@@ -43,6 +43,7 @@ type AppModel struct {
 	socialDefs      []secrets.SecretDef
 	turnstileDefs   []secrets.SecretDef
 	currentProgress string
+	secretsCh       chan tea.Msg
 }
 
 func NewApp(installer *install.Installer) AppModel {
@@ -56,6 +57,7 @@ func NewApp(installer *install.Installer) AppModel {
 		bootstrapDefs: secrets.BootstrapSecrets(),
 		socialDefs:    secrets.SocialSecrets(),
 		turnstileDefs: secrets.TurnstileSecrets(),
+		secretsCh:     make(chan tea.Msg, 16),
 	}
 }
 
@@ -113,9 +115,14 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.promptValues[msg.Key] = msg.Value
 		return m, m.continueSecretsPhase()
 
+	// ── Individual secret progress → forward to view, keep listening ───────
+	case views.SecretGeneratedMsg:
+		var cmd tea.Cmd
+		m.activeView, cmd = m.activeView.Update(msg)
+		return m, tea.Batch(cmd, waitForSecretMsg(m.secretsCh))
+
 	// ── Secrets generation errored ──────────────────────────────────────────
 	case views.SecretsErrorMsg:
-		// Forward to the active view so it can render the error state.
 		var cmd tea.Cmd
 		m.activeView, cmd = m.activeView.Update(msg)
 		return m, cmd
@@ -279,6 +286,7 @@ func (m AppModel) runEnsureVault() tea.Cmd {
 // value from the user. If so it emits SecretPromptNeededMsg for the first
 // missing one. Once all prompts are satisfied it runs the batch generation.
 func (m AppModel) continueSecretsPhase() tea.Cmd {
+	ctx := context.Background()
 	for _, def := range m.bootstrapDefs {
 		if !def.Prompt {
 			continue
@@ -294,12 +302,19 @@ func (m AppModel) continueSecretsPhase() tea.Cmd {
 		if _, ok := m.promptValues[def.Key]; ok {
 			continue
 		}
+		// Already in the secret store from a previous run.
+		if existing, _ := m.installer.Secrets.Get(ctx, def.Key); existing != "" {
+			continue
+		}
 		// Need to prompt.
 		key := def.Key
 		return func() tea.Msg { return views.SecretPromptNeededMsg{Key: key} }
 	}
 	for _, def := range m.socialDefs {
 		if _, ok := m.promptValues[def.Key]; ok {
+			continue
+		}
+		if existing, _ := m.installer.Secrets.Get(ctx, def.Key); existing != "" {
 			continue
 		}
 		key := def.Key
@@ -315,22 +330,25 @@ func (m AppModel) continueSecretsPhase() tea.Cmd {
 		if _, ok := m.promptValues[def.Key]; ok {
 			continue
 		}
+		if existing, _ := m.installer.Secrets.Get(ctx, def.Key); existing != "" {
+			continue
+		}
 		key := def.Key
 		return func() tea.Msg { return views.SecretPromptNeededMsg{Key: key} }
 	}
 	// All prompts satisfied — run batch generation.
-	return m.runSecretsGeneration()
+	return m.runSecretsGeneration(m.secretsCh)
 }
 
-func (m AppModel) runSecretsGeneration() tea.Cmd {
-	// Capture values before entering the goroutine.
+func (m AppModel) runSecretsGeneration(ch chan tea.Msg) tea.Cmd {
 	configEmail := m.installer.Config.Email
 	configN8NUser := m.installer.Config.N8NUser
 	promptVals := make(map[string]string, len(m.promptValues))
 	for k, v := range m.promptValues {
 		promptVals[k] = v
 	}
-	return func() tea.Msg {
+
+	generate := func() tea.Msg {
 		ctx := context.Background()
 		err := m.installer.GenerateSecrets(ctx, func(key string) (string, error) {
 			if key == "AUTHENTIK_BOOTSTRAP_EMAIL" && configEmail != "" {
@@ -343,11 +361,23 @@ func (m AppModel) runSecretsGeneration() tea.Cmd {
 				return val, nil
 			}
 			return "", fmt.Errorf("no value provided for required secret %s", key)
-		}, nil)
+		}, func(p install.SecretProgress) {
+			ch <- views.SecretGeneratedMsg{Key: p.Key, Err: p.Err}
+		})
 		if err != nil {
-			return views.SecretsErrorMsg{Err: err}
+			ch <- views.SecretsErrorMsg{Err: err}
+		} else {
+			ch <- views.SecretsCompleteMsg{}
 		}
-		return views.SecretsCompleteMsg{}
+		return nil
+	}
+
+	return tea.Batch(generate, waitForSecretMsg(ch))
+}
+
+func waitForSecretMsg(ch chan tea.Msg) tea.Cmd {
+	return func() tea.Msg {
+		return <-ch
 	}
 }
 
@@ -376,6 +406,9 @@ func (m AppModel) runInitAndRename() tea.Cmd {
 		}
 		m.installer.InitAK(token)
 		_ = m.installer.RenameAdmin(ctx)
+		if err := m.installer.ConfigureBrand(ctx); err != nil {
+			return views.SecretsErrorMsg{Err: fmt.Errorf("configuring brand: %w", err)}
+		}
 		return adminInitDoneMsg{}
 	}
 }

@@ -73,6 +73,7 @@ type State struct {
 	ComposeDir     string
 	DryRun         bool
 	Force          bool
+	KeepEnv        bool
 
 	AdminRecoveryLink string
 	AdminPassword     string

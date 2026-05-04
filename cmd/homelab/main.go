@@ -11,7 +11,9 @@ import (
 
 	"github.com/caboose-ai/caboose-ai.io/internal/cli"
 	"github.com/caboose-ai/caboose-ai.io/internal/config"
+	"github.com/caboose-ai/caboose-ai.io/internal/docker"
 	"github.com/caboose-ai/caboose-ai.io/internal/install"
+	"github.com/caboose-ai/caboose-ai.io/internal/migrate"
 	"github.com/caboose-ai/caboose-ai.io/internal/runner"
 	"github.com/caboose-ai/caboose-ai.io/internal/secrets"
 	appTUI "github.com/caboose-ai/caboose-ai.io/internal/tui"
@@ -25,6 +27,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "\nCommands:")
 		fmt.Fprintln(os.Stderr, "  install    Bootstrap the homelab SSO stack")
 		fmt.Fprintln(os.Stderr, "  reset      Tear down everything and delete all secrets")
+		fmt.Fprintln(os.Stderr, "  migrate    Migrate host services to Docker containers")
 		os.Exit(1)
 	}
 
@@ -44,6 +47,7 @@ func main() {
 	fs.StringVar(&opts.opVault, "op-vault", "", "1Password vault name")
 	fs.StringVar(&opts.n8nUser, "n8n-user", "", "N8N admin username")
 	fs.StringVar(&opts.email, "email", "", "Admin email for Authentik bootstrap")
+	fs.BoolVar(&opts.keepEnv, "keep-env", false, "Preserve .env file during reset")
 	fs.Parse(args)
 
 	switch subcmd {
@@ -51,6 +55,8 @@ func main() {
 		os.Exit(runInstall(opts))
 	case "reset":
 		os.Exit(runReset(opts))
+	case "migrate":
+		os.Exit(runMigrate(opts))
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", subcmd)
 		os.Exit(1)
@@ -58,7 +64,7 @@ func main() {
 }
 
 func extractSubcommand(args []string) (string, []string) {
-	known := map[string]bool{"install": true, "reset": true}
+	known := map[string]bool{"install": true, "reset": true, "migrate": true}
 	if len(args) == 0 {
 		return "", nil
 	}
@@ -83,6 +89,7 @@ type cliOpts struct {
 	kubeNamespace  string
 	kubeconfig     string
 	kubeContext    string
+	keepEnv        bool
 }
 
 func runInstall(opts cliOpts) int {
@@ -184,5 +191,51 @@ func runReset(opts cliOpts) int {
 	secretStore := secrets.NewOnePasswordStore(cfg.OPVault, cmdRunner, cfg.EnvPath())
 
 	inst := install.New(cfg, secretStore, cmdRunner, httpClient)
+	inst.State.KeepEnv = opts.keepEnv
 	return cli.RunReset(context.Background(), inst)
+}
+
+func runMigrate(opts cliOpts) int {
+	var cfg *config.Config
+
+	if opts.configPath != "" {
+		var err error
+		cfg, err = config.LoadFromFile(opts.configPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
+			return 1
+		}
+	} else {
+		cfg = config.DefaultConfig()
+	}
+
+	if opts.composeDir != "" {
+		cfg.ComposeDir = opts.composeDir
+	}
+
+	cmdRunner := runner.NewLocalRunner()
+	compose := docker.NewComposeClient(cmdRunner, cfg.ComposeDir)
+	dockerExec := docker.NewExecClient(cmdRunner)
+
+	m := migrate.NewMattermost(cmdRunner, compose, dockerExec)
+	m.ProgressFn = func(s migrate.Step) {
+		switch s.Status {
+		case "running":
+			fmt.Fprintf(os.Stderr, "● %s...\n", s.Name)
+		case "done":
+			fmt.Fprintf(os.Stderr, "✓ %s\n", s.Name)
+		case "skipped":
+			fmt.Fprintf(os.Stderr, "– %s (skipped)\n", s.Name)
+		case "failed":
+			fmt.Fprintf(os.Stderr, "✗ %s: %v\n", s.Name, s.Err)
+		}
+	}
+
+	if err := m.Run(context.Background()); err != nil {
+		fmt.Fprintf(os.Stderr, "migration failed: %v\n", err)
+		return 1
+	}
+
+	fmt.Fprintln(os.Stderr, "✓ migration complete")
+	return 0
 }

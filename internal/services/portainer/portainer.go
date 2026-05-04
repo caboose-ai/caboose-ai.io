@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/caboose-ai/caboose-ai.io/internal/runner"
 	"github.com/caboose-ai/caboose-ai.io/internal/services"
@@ -16,6 +17,7 @@ import (
 type Configurator struct {
 	AK           *authentik.Client
 	HTTP         runner.HTTPClient
+	AuthHTTP     runner.HTTPClient
 	PortainerURL string
 	AdminPass    string
 	AuthentikURL string
@@ -26,6 +28,7 @@ func New(ak *authentik.Client, httpClient runner.HTTPClient, portainerURL, admin
 	return &Configurator{
 		AK:           ak,
 		HTTP:         httpClient,
+		AuthHTTP:     newNoRedirectClient(),
 		PortainerURL: portainerURL,
 		AdminPass:    adminPass,
 		AuthentikURL: authentikURL,
@@ -115,6 +118,15 @@ func (c *Configurator) initAdmin(ctx context.Context) (alreadyInit bool, err err
 	return false, nil
 }
 
+func newNoRedirectClient() *http.Client {
+	return &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+		Timeout: 30 * time.Second,
+	}
+}
+
 func (c *Configurator) getJWT(ctx context.Context) (string, error) {
 	body, err := json.Marshal(map[string]string{
 		"Username": "admin",
@@ -123,36 +135,56 @@ func (c *Configurator) getJWT(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("marshalling Portainer auth request: %w", err)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.PortainerURL+"/api/auth", bytes.NewReader(body))
-	if err != nil {
-		return "", fmt.Errorf("creating Portainer auth request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.HTTP.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("authenticating with Portainer: %w", err)
-	}
-	defer resp.Body.Close()
+	const maxRetries = 5
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.PortainerURL+"/api/auth", bytes.NewReader(body))
+		if err != nil {
+			return "", fmt.Errorf("creating Portainer auth request: %w", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
 
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("reading Portainer auth response: %w", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("Portainer auth returned HTTP %d", resp.StatusCode)
-	}
+		resp, err := c.AuthHTTP.Do(req)
+		if err != nil {
+			return "", fmt.Errorf("authenticating with Portainer: %w", err)
+		}
 
-	var result struct {
-		JWT string `json:"jwt"`
+		data, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			return "", fmt.Errorf("reading Portainer auth response: %w", err)
+		}
+
+		// If we get a 3xx redirect, Portainer is not ready yet (likely still showing setup wizard)
+		if resp.StatusCode >= 300 && resp.StatusCode < 400 {
+			if attempt < maxRetries-1 {
+				select {
+				case <-ctx.Done():
+					return "", fmt.Errorf("waiting for Portainer auth endpoint to be ready: %w", ctx.Err())
+				case <-time.After(2 * time.Second):
+					continue
+				}
+			}
+			return "", fmt.Errorf("Portainer auth endpoint still returning redirects (HTTP %d) after %d attempts", resp.StatusCode, maxRetries)
+		}
+
+		// Non-200 non-3xx response is an error
+		if resp.StatusCode != http.StatusOK {
+			return "", fmt.Errorf("Portainer auth returned HTTP %d", resp.StatusCode)
+		}
+
+		var result struct {
+			JWT string `json:"jwt"`
+		}
+		if err := json.Unmarshal(data, &result); err != nil {
+			return "", fmt.Errorf("parsing Portainer auth response: %w", err)
+		}
+		if result.JWT == "" {
+			return "", fmt.Errorf("Portainer auth returned empty JWT")
+		}
+		return result.JWT, nil
 	}
-	if err := json.Unmarshal(data, &result); err != nil {
-		return "", fmt.Errorf("parsing Portainer auth response: %w", err)
-	}
-	if result.JWT == "" {
-		return "", fmt.Errorf("Portainer auth returned empty JWT")
-	}
-	return result.JWT, nil
+	return "", fmt.Errorf("Portainer auth failed after %d attempts", maxRetries)
 }
 
 func (c *Configurator) currentOAuthClient(ctx context.Context, jwt string) (string, error) {

@@ -99,6 +99,45 @@ services:
       - apps
     restart: unless-stopped
 
+  # Mattermost — team chat with OIDC via Authentik
+  mattermost:
+    image: mattermost/mattermost-team-edition:10.6
+    container_name: mattermost
+    ports:
+      - "127.0.0.1:8065:8065"
+      - "127.0.0.1:8067:8067"
+    environment:
+      MM_SQLSETTINGS_DRIVERNAME: postgres
+      MM_SQLSETTINGS_DATASOURCE: postgres://mattermost:${MATTERMOST_DB_PASS}@mattermost-db:5432/mattermost?sslmode=disable
+      MM_SERVICESETTINGS_SITEURL: https://chat.caboose-ai.io
+      MM_SERVICESETTINGS_LISTENADDRESS: ":8065"
+      MM_METRICSSETTINGS_ENABLE: "true"
+      MM_METRICSSETTINGS_LISTENADDRESS: ":8067"
+    volumes:
+      - mattermost_data:/mattermost/data
+      - mattermost_config:/mattermost/config
+      - mattermost_logs:/mattermost/logs
+      - mattermost_plugins:/mattermost/plugins
+    depends_on:
+      - mattermost-db
+    networks:
+      - mattermost-internal
+      - apps
+    restart: unless-stopped
+
+  mattermost-db:
+    image: postgres:16.13
+    container_name: mattermost-db
+    environment:
+      POSTGRES_USER: mattermost
+      POSTGRES_PASSWORD: ${MATTERMOST_DB_PASS}
+      POSTGRES_DB: mattermost
+    volumes:
+      - mattermost_db:/var/lib/postgresql/data
+    networks:
+      - mattermost-internal
+    restart: unless-stopped
+
   prometheus:
     image: prom/prometheus:v3.11.3
     container_name: prometheus
@@ -138,6 +177,9 @@ services:
       GF_SECURITY_ALLOW_EMBEDDING: "true"
     volumes:
       - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
     networks:
       - apps
     restart: unless-stopped
@@ -186,8 +228,6 @@ services:
     image: ghcr.io/goauthentik/server:2026.2.2
     container_name: authentik-server
     command: server
-    ports:
-      - "127.0.0.1:9002:9000"
     environment:
       AUTHENTIK_REDIS__HOST: authentik-redis
       AUTHENTIK_POSTGRESQL__HOST: authentik-postgres
@@ -201,6 +241,10 @@ services:
       AUTHENTIK_BOOTSTRAP_EMAIL: "${AUTHENTIK_BOOTSTRAP_EMAIL}"
       AUTHENTIK_BOOTSTRAP_PASSWORD: "${AUTHENTIK_BOOTSTRAP_PASSWORD}"
       AUTHENTIK_BOOTSTRAP_TOKEN: "${AUTHENTIK_BOOTSTRAP_TOKEN}"
+      AUTHENTIK_LISTEN__METRICS: "0.0.0.0:9300"
+    ports:
+      - "127.0.0.1:9002:9000"
+      - "127.0.0.1:9300:9300"
     depends_on:
       - authentik-postgres
       - authentik-redis
@@ -348,7 +392,34 @@ services:
       - apps
     restart: unless-stopped
 
+  # Loki — log aggregation, queried by Grafana
+  loki:
+    image: grafana/loki:3.5.0
+    container_name: loki
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - loki_data:/loki
+    networks:
+      - apps
+    restart: unless-stopped
+
+  # Promtail — ships Docker container logs to Loki
+  promtail:
+    image: grafana/promtail:3.5.0
+    container_name: promtail
+    command: -config.file=/etc/promtail/config.yml
+    volumes:
+      - ./promtail.yml:/etc/promtail/config.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - loki
+    networks:
+      - apps
+    restart: unless-stopped
+
 volumes:
+  loki_data:
   forgejo_data:
   portainer_data:
   open_webui_data:
@@ -360,6 +431,11 @@ volumes:
   homarr_data:
   ghost_data:
   ghost_db:
+  mattermost_config:
+  mattermost_data:
+  mattermost_db:
+  mattermost_logs:
+  mattermost_plugins:
   sonarqube_data:
   sonarqube_logs:
   sonarqube_extensions:
@@ -378,6 +454,10 @@ networks:
     driver: bridge
   # Ghost DB tier — isolated from all other services.
   ghost-internal:
+    driver: bridge
+    internal: true
+  # Mattermost DB tier — isolated from all other services.
+  mattermost-internal:
     driver: bridge
     internal: true
   # SonarQube DB tier — isolated from all other services.

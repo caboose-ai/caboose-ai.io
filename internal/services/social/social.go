@@ -40,17 +40,29 @@ func (c *Configurator) CheckConfigured(ctx context.Context) (bool, error) {
 func (c *Configurator) Configure(ctx context.Context, opts services.ConfigureOpts) (*services.ConfigureResult, error) {
 	configured := 0
 
+	var authFlowPK, enrollFlowPK string
+	if !opts.DryRun {
+		if f, err := c.AK.GetFlow(ctx, "default-source-authentication"); err == nil {
+			authFlowPK = f.PK
+		}
+		if f, err := c.AK.GetFlow(ctx, "default-source-enrollment"); err == nil {
+			enrollFlowPK = f.PK
+		}
+	}
+
 	if creds := c.Social.GitHub; creds != nil && creds.ClientID != "" && creds.ClientSecret != "" {
 		if opts.DryRun {
 			configured++
 		} else {
 			err := c.AK.UpsertSource(ctx, authentik.UpsertSourceParams{
-				Name:           "GitHub",
-				Slug:           "github",
-				Enabled:        true,
-				ProviderType:   "github",
-				ConsumerKey:    creds.ClientID,
-				ConsumerSecret: creds.ClientSecret,
+				Name:               "GitHub",
+				Slug:               "github",
+				Enabled:            true,
+				ProviderType:       "github",
+				ConsumerKey:        creds.ClientID,
+				ConsumerSecret:     creds.ClientSecret,
+				AuthenticationFlow: authFlowPK,
+				EnrollmentFlow:     enrollFlowPK,
 			})
 			if err != nil {
 				return nil, err
@@ -64,12 +76,14 @@ func (c *Configurator) Configure(ctx context.Context, opts services.ConfigureOpt
 			configured++
 		} else {
 			err := c.AK.UpsertSource(ctx, authentik.UpsertSourceParams{
-				Name:           "Google",
-				Slug:           "google",
-				Enabled:        true,
-				ProviderType:   "google",
-				ConsumerKey:    creds.ClientID,
-				ConsumerSecret: creds.ClientSecret,
+				Name:               "Google",
+				Slug:               "google",
+				Enabled:            true,
+				ProviderType:       "google",
+				ConsumerKey:        creds.ClientID,
+				ConsumerSecret:     creds.ClientSecret,
+				AuthenticationFlow: authFlowPK,
+				EnrollmentFlow:     enrollFlowPK,
 			})
 			if err != nil {
 				return nil, err
@@ -82,6 +96,12 @@ func (c *Configurator) Configure(ctx context.Context, opts services.ConfigureOpt
 		return &services.ConfigureResult{Status: services.StatusSkipped, Message: "No social login credentials provided"}, nil
 	}
 
+	if !opts.DryRun {
+		if err := c.bindSourcesToLoginFlow(ctx); err != nil {
+			return nil, fmt.Errorf("binding sources to login flow: %w", err)
+		}
+	}
+
 	status := services.StatusCreated
 	if opts.DryRun {
 		status = services.StatusDryRun
@@ -90,4 +110,23 @@ func (c *Configurator) Configure(ctx context.Context, opts services.ConfigureOpt
 		Status:  status,
 		Message: fmt.Sprintf("%d social login source(s) configured", configured),
 	}, nil
+}
+
+func (c *Configurator) bindSourcesToLoginFlow(ctx context.Context) error {
+	stage, err := c.AK.GetIdentificationStage(ctx, "default-authentication-flow")
+	if err != nil || stage == nil {
+		return err
+	}
+
+	sources, err := c.AK.ListSources(ctx)
+	if err != nil {
+		return err
+	}
+
+	pks := make([]string, len(sources))
+	for i, s := range sources {
+		pks[i] = s.PK
+	}
+
+	return c.AK.SetIdentificationStageSources(ctx, stage.PK, pks)
 }

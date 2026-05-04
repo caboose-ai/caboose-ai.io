@@ -3,6 +3,7 @@ package docker
 import (
 	"context"
 	"fmt"
+	"io"
 
 	"github.com/caboose-ai/caboose-ai.io/internal/runner"
 )
@@ -23,6 +24,15 @@ func (c *ExecClient) Exec(ctx context.Context, container string, cmd ...string) 
 func (c *ExecClient) ExecAs(ctx context.Context, container, user string, cmd ...string) ([]byte, error) {
 	args := append([]string{"exec", "-u", user, container}, cmd...)
 	return c.Runner.Run(ctx, "docker", args...)
+}
+
+func (c *ExecClient) ExecWithStdin(ctx context.Context, container string, stdin io.Reader, cmd ...string) ([]byte, error) {
+	args := append([]string{"exec", "-i", container}, cmd...)
+	return c.Runner.RunWithStdin(ctx, stdin, "docker", args...)
+}
+
+func (c *ExecClient) CopyTo(ctx context.Context, src, container, dest string) ([]byte, error) {
+	return c.Runner.Run(ctx, "docker", "cp", src, container+":"+dest)
 }
 
 func (c *ExecClient) ContainerIP(ctx context.Context, container, network string) (string, error) {

@@ -49,12 +49,14 @@ func (c *Client) GetSourcePK(ctx context.Context, slug string) (string, error) {
 }
 
 type UpsertSourceParams struct {
-	Name           string `json:"name"`
-	Slug           string `json:"slug"`
-	Enabled        bool   `json:"enabled"`
-	ProviderType   string `json:"provider_type"`
-	ConsumerKey    string `json:"consumer_key"`
-	ConsumerSecret string `json:"consumer_secret"`
+	Name               string `json:"name"`
+	Slug               string `json:"slug"`
+	Enabled            bool   `json:"enabled"`
+	ProviderType       string `json:"provider_type"`
+	ConsumerKey        string `json:"consumer_key"`
+	ConsumerSecret     string `json:"consumer_secret"`
+	AuthenticationFlow string `json:"authentication_flow,omitempty"`
+	EnrollmentFlow     string `json:"enrollment_flow,omitempty"`
 }
 
 func (c *Client) UpsertSource(ctx context.Context, params UpsertSourceParams) error {
@@ -64,7 +66,7 @@ func (c *Client) UpsertSource(ctx context.Context, params UpsertSourceParams) er
 	}
 
 	if pk != "" {
-		_, err = c.Patch(ctx, fmt.Sprintf("/api/v3/sources/oauth/%s/", pk), params)
+		_, err = c.Patch(ctx, fmt.Sprintf("/api/v3/sources/oauth/%s/", url.PathEscape(params.Slug)), params)
 	} else {
 		_, err = c.Post(ctx, "/api/v3/sources/oauth/", params)
 	}

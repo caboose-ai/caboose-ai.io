@@ -77,3 +77,35 @@ func (c *Client) PatchUserWriteStage(ctx context.Context, pk string, inactive bo
 	_, err := c.Patch(ctx, fmt.Sprintf("/api/v3/stages/user_write/%s/", pk), body)
 	return err
 }
+
+type IdentificationStage struct {
+	PK      string   `json:"pk"`
+	Name    string   `json:"name"`
+	Sources []string `json:"sources"`
+}
+
+type identificationStageList struct {
+	Results []IdentificationStage `json:"results"`
+}
+
+func (c *Client) GetIdentificationStage(ctx context.Context, flowSlug string) (*IdentificationStage, error) {
+	data, err := c.Get(ctx, fmt.Sprintf("/api/v3/stages/identification/?flow=%s", url.QueryEscape(flowSlug)))
+	if err != nil {
+		return nil, err
+	}
+
+	var list identificationStageList
+	if err := json.Unmarshal(data, &list); err != nil {
+		return nil, fmt.Errorf("parsing identification stage response: %w", err)
+	}
+	if len(list.Results) == 0 {
+		return nil, nil
+	}
+	return &list.Results[0], nil
+}
+
+func (c *Client) SetIdentificationStageSources(ctx context.Context, stagePK string, sourcePKs []string) error {
+	body := map[string][]string{"sources": sourcePKs}
+	_, err := c.Patch(ctx, fmt.Sprintf("/api/v3/stages/identification/%s/", stagePK), body)
+	return err
+}
