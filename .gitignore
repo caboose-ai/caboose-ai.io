@@ -1,2 +1,3 @@
 bin/
 .claude/
+internal/smoketest/testdata/failures/
