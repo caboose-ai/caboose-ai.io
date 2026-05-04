@@ -74,6 +74,9 @@ type State struct {
 	DryRun         bool
 	Force          bool
 
+	AdminRecoveryLink string
+	AdminPassword     string
+
 	ServiceResults []ServiceResult
 	RestartNeeded  []string
 	Errors         []error
