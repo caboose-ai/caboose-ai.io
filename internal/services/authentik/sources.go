@@ -64,7 +64,7 @@ func (c *Client) UpsertSource(ctx context.Context, params UpsertSourceParams) er
 	}
 
 	if pk != "" {
-		_, err = c.Patch(ctx, fmt.Sprintf("/api/v3/sources/oauth/%s/", pk), params)
+		_, err = c.Patch(ctx, fmt.Sprintf("/api/v3/sources/oauth/%s/", url.PathEscape(params.Slug)), params)
 	} else {
 		_, err = c.Post(ctx, "/api/v3/sources/oauth/", params)
 	}
