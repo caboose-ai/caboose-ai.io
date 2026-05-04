@@ -73,14 +73,14 @@ func TestGenerateAdminRecoveryLink(t *testing.T) {
 			wantErr: "finding auth-admin user",
 		},
 		{
-			name: "GenerateRecoveryLink API error",
+			name: "recovery link unavailable returns empty",
 			httpFunc: func(req *http.Request) (*http.Response, error) {
 				if strings.Contains(req.URL.Path, "/api/v3/core/users/") && req.Method == http.MethodGet {
 					return httpResponse(200, `{"results":[{"pk":7,"username":"auth-admin"}]}`), nil
 				}
-				return httpResponse(500, "internal server error"), nil
+				return httpResponse(400, `{"non_field_errors":"No recovery flow set."}`), nil
 			},
-			wantErr: "generating recovery link",
+			wantLink: "",
 		},
 	}
 
@@ -150,7 +150,7 @@ func TestConfigureBrand(t *testing.T) {
 			name: "success",
 			httpFunc: func(req *http.Request) (*http.Response, error) {
 				if strings.Contains(req.URL.Path, "/api/v3/flows/instances/") && req.Method == http.MethodGet {
-					return httpResponse(200, `{"results":[{"pk":"flow-uuid-123","slug":"default-recovery-flow","name":"Default recovery flow"}]}`), nil
+					return httpResponse(200, `{"results":[{"pk":"flow-uuid-123","slug":"default-recovery-flow","name":"Default recovery flow","designation":"recovery"}]}`), nil
 				}
 				if strings.Contains(req.URL.Path, "/api/v3/core/brands/") && req.Method == http.MethodGet {
 					return httpResponse(200, `{"results":[{"brand_uuid":"brand-uuid-456","domain":"example.com","default":true}]}`), nil
@@ -162,20 +162,19 @@ func TestConfigureBrand(t *testing.T) {
 			},
 		},
 		{
-			name: "flow not found",
+			name: "no recovery flow skips gracefully",
 			httpFunc: func(req *http.Request) (*http.Response, error) {
 				if strings.Contains(req.URL.Path, "/api/v3/flows/instances/") && req.Method == http.MethodGet {
 					return httpResponse(200, `{"results":[]}`), nil
 				}
 				return httpResponse(404, "not found"), nil
 			},
-			wantErr: "getting recovery flow",
 		},
 		{
 			name: "brand not found",
 			httpFunc: func(req *http.Request) (*http.Response, error) {
 				if strings.Contains(req.URL.Path, "/api/v3/flows/instances/") && req.Method == http.MethodGet {
-					return httpResponse(200, `{"results":[{"pk":"flow-uuid-123","slug":"default-recovery-flow","name":"Default recovery flow"}]}`), nil
+					return httpResponse(200, `{"results":[{"pk":"flow-uuid-123","slug":"default-recovery-flow","name":"Default recovery flow","designation":"recovery"}]}`), nil
 				}
 				if strings.Contains(req.URL.Path, "/api/v3/core/brands/") && req.Method == http.MethodGet {
 					return httpResponse(200, `{"results":[]}`), nil
@@ -188,7 +187,7 @@ func TestConfigureBrand(t *testing.T) {
 			name: "patch fails",
 			httpFunc: func(req *http.Request) (*http.Response, error) {
 				if strings.Contains(req.URL.Path, "/api/v3/flows/instances/") && req.Method == http.MethodGet {
-					return httpResponse(200, `{"results":[{"pk":"flow-uuid-123","slug":"default-recovery-flow","name":"Default recovery flow"}]}`), nil
+					return httpResponse(200, `{"results":[{"pk":"flow-uuid-123","slug":"default-recovery-flow","name":"Default recovery flow","designation":"recovery"}]}`), nil
 				}
 				if strings.Contains(req.URL.Path, "/api/v3/core/brands/") && req.Method == http.MethodGet {
 					return httpResponse(200, `{"results":[{"brand_uuid":"brand-uuid-456","domain":"example.com","default":true}]}`), nil

@@ -80,9 +80,10 @@ func (c *Client) CreateProvider(ctx context.Context, params CreateProviderParams
 }
 
 type Flow struct {
-	PK   string `json:"pk"`
-	Slug string `json:"slug"`
-	Name string `json:"name"`
+	PK          string `json:"pk"`
+	Slug        string `json:"slug"`
+	Name        string `json:"name"`
+	Designation string `json:"designation"`
 }
 
 type flowList struct {
@@ -101,6 +102,22 @@ func (c *Client) GetFlow(ctx context.Context, slug string) (*Flow, error) {
 	}
 	if len(list.Results) == 0 {
 		return nil, fmt.Errorf("flow %q not found", slug)
+	}
+	return &list.Results[0], nil
+}
+
+func (c *Client) GetFlowByDesignation(ctx context.Context, designation string) (*Flow, error) {
+	data, err := c.Get(ctx, fmt.Sprintf("/api/v3/flows/instances/?designation=%s", url.QueryEscape(designation)))
+	if err != nil {
+		return nil, err
+	}
+
+	var list flowList
+	if err := json.Unmarshal(data, &list); err != nil {
+		return nil, fmt.Errorf("parsing flow response: %w", err)
+	}
+	if len(list.Results) == 0 {
+		return nil, fmt.Errorf("no flow with designation %q found", designation)
 	}
 	return &list.Results[0], nil
 }

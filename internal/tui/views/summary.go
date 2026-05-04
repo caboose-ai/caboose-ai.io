@@ -72,9 +72,11 @@ func (m SummaryModel) View() string {
 		lines = append(lines, border)
 		lines = append(lines, "  Username:  auth-admin")
 		lines = append(lines, fmt.Sprintf("  Password:  %s", m.adminPassword))
-		lines = append(lines, "")
-		lines = append(lines, "  One-time setup link (set up TOTP):")
-		lines = append(lines, fmt.Sprintf("    %s", m.recoveryLink))
+		if m.recoveryLink != "" {
+			lines = append(lines, "")
+			lines = append(lines, "  One-time setup link (set up TOTP):")
+			lines = append(lines, fmt.Sprintf("    %s", m.recoveryLink))
+		}
 		lines = append(lines, "")
 		lines = append(lines, styles.DimStyle.Render("  Stored in 1Password:"))
 		lines = append(lines, styles.DimStyle.Render(`    op read "op://Homelab/AUTHENTIK_BOOTSTRAP_PASSWORD/password"`))

@@ -134,6 +134,11 @@ func (inst *Installer) GenerateSecrets(ctx context.Context, promptFn func(key st
 	}
 	for _, def := range secrets.BootstrapSecrets() {
 		if def.Prompt {
+			existing, _ := inst.Secrets.Get(ctx, def.Key)
+			if existing != "" && !inst.State.Force {
+				progressFn(SecretProgress{Key: def.Key, Action: "exists"})
+				continue
+			}
 			progressFn(SecretProgress{Key: def.Key, Action: "prompting"})
 			val, err := promptFn(def.Key)
 			if err != nil {
