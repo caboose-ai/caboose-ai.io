@@ -40,17 +40,29 @@ func (c *Configurator) CheckConfigured(ctx context.Context) (bool, error) {
 func (c *Configurator) Configure(ctx context.Context, opts services.ConfigureOpts) (*services.ConfigureResult, error) {
 	configured := 0
 
+	var authFlowPK, enrollFlowPK string
+	if !opts.DryRun {
+		if f, err := c.AK.GetFlow(ctx, "default-source-authentication"); err == nil {
+			authFlowPK = f.PK
+		}
+		if f, err := c.AK.GetFlow(ctx, "default-source-enrollment"); err == nil {
+			enrollFlowPK = f.PK
+		}
+	}
+
 	if creds := c.Social.GitHub; creds != nil && creds.ClientID != "" && creds.ClientSecret != "" {
 		if opts.DryRun {
 			configured++
 		} else {
 			err := c.AK.UpsertSource(ctx, authentik.UpsertSourceParams{
-				Name:           "GitHub",
-				Slug:           "github",
-				Enabled:        true,
-				ProviderType:   "github",
-				ConsumerKey:    creds.ClientID,
-				ConsumerSecret: creds.ClientSecret,
+				Name:               "GitHub",
+				Slug:               "github",
+				Enabled:            true,
+				ProviderType:       "github",
+				ConsumerKey:        creds.ClientID,
+				ConsumerSecret:     creds.ClientSecret,
+				AuthenticationFlow: authFlowPK,
+				EnrollmentFlow:     enrollFlowPK,
 			})
 			if err != nil {
 				return nil, err
@@ -64,12 +76,14 @@ func (c *Configurator) Configure(ctx context.Context, opts services.ConfigureOpt
 			configured++
 		} else {
 			err := c.AK.UpsertSource(ctx, authentik.UpsertSourceParams{
-				Name:           "Google",
-				Slug:           "google",
-				Enabled:        true,
-				ProviderType:   "google",
-				ConsumerKey:    creds.ClientID,
-				ConsumerSecret: creds.ClientSecret,
+				Name:               "Google",
+				Slug:               "google",
+				Enabled:            true,
+				ProviderType:       "google",
+				ConsumerKey:        creds.ClientID,
+				ConsumerSecret:     creds.ClientSecret,
+				AuthenticationFlow: authFlowPK,
+				EnrollmentFlow:     enrollFlowPK,
 			})
 			if err != nil {
 				return nil, err
