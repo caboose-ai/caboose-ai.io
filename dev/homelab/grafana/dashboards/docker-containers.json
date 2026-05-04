@@ -73,7 +73,7 @@
       "datasource": { "type": "prometheus" },
       "targets": [
         {
-          "expr": "avg(container_memory_usage_bytes{name=~\"$container\"} / container_spec_memory_limit_bytes{name=~\"$container\"} > 0) * 100",
+          "expr": "avg(container_memory_usage_bytes{name=~\"$container\"} / (container_spec_memory_limit_bytes{name=~\"$container\"} > 0)) * 100",
           "legendFormat": "Avg Memory %",
           "refId": "A"
         }
