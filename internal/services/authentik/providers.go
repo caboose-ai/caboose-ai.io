@@ -36,7 +36,7 @@ func (c *Client) GetProvider(ctx context.Context, name string) (*Provider, error
 			return &p, nil
 		}
 	}
-	return nil, fmt.Errorf("provider %q not found in Authentik", name)
+	return nil, nil
 }
 
 func (c *Client) ListProviders(ctx context.Context) ([]Provider, error) {
