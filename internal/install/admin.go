@@ -26,3 +26,24 @@ func (inst *Installer) GenerateAdminRecoveryLink(ctx context.Context, progressFn
 	}
 	return link, nil
 }
+
+func (inst *Installer) ConfigureBrand(ctx context.Context) error {
+	if inst.State.DryRun {
+		return nil
+	}
+
+	flow, err := inst.AK.GetFlow(ctx, "default-recovery-flow")
+	if err != nil {
+		return fmt.Errorf("getting recovery flow: %w", err)
+	}
+
+	brand, err := inst.AK.GetDefaultBrand(ctx)
+	if err != nil {
+		return fmt.Errorf("getting default brand: %w", err)
+	}
+
+	if err := inst.AK.SetBrandRecoveryFlow(ctx, brand.BrandUUID, flow.PK); err != nil {
+		return fmt.Errorf("setting recovery flow: %w", err)
+	}
+	return nil
+}

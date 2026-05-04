@@ -134,3 +134,103 @@ func TestGenerateAdminRecoveryLink(t *testing.T) {
 		})
 	}
 }
+
+func TestConfigureBrand(t *testing.T) {
+	tests := []struct {
+		name     string
+		dryRun   bool
+		httpFunc func(req *http.Request) (*http.Response, error)
+		wantErr  string
+	}{
+		{
+			name:   "dry run skips",
+			dryRun: true,
+		},
+		{
+			name: "success",
+			httpFunc: func(req *http.Request) (*http.Response, error) {
+				if strings.Contains(req.URL.Path, "/api/v3/flows/instances/") && req.Method == http.MethodGet {
+					return httpResponse(200, `{"results":[{"pk":"flow-uuid-123","slug":"default-recovery-flow","name":"Default recovery flow"}]}`), nil
+				}
+				if strings.Contains(req.URL.Path, "/api/v3/core/brands/") && req.Method == http.MethodGet {
+					return httpResponse(200, `{"results":[{"brand_uuid":"brand-uuid-456","domain":"example.com","default":true}]}`), nil
+				}
+				if strings.Contains(req.URL.Path, "/api/v3/core/brands/brand-uuid-456/") && req.Method == http.MethodPatch {
+					return httpResponse(200, `{}`), nil
+				}
+				return httpResponse(404, "not found"), nil
+			},
+		},
+		{
+			name: "flow not found",
+			httpFunc: func(req *http.Request) (*http.Response, error) {
+				if strings.Contains(req.URL.Path, "/api/v3/flows/instances/") && req.Method == http.MethodGet {
+					return httpResponse(200, `{"results":[]}`), nil
+				}
+				return httpResponse(404, "not found"), nil
+			},
+			wantErr: "getting recovery flow",
+		},
+		{
+			name: "brand not found",
+			httpFunc: func(req *http.Request) (*http.Response, error) {
+				if strings.Contains(req.URL.Path, "/api/v3/flows/instances/") && req.Method == http.MethodGet {
+					return httpResponse(200, `{"results":[{"pk":"flow-uuid-123","slug":"default-recovery-flow","name":"Default recovery flow"}]}`), nil
+				}
+				if strings.Contains(req.URL.Path, "/api/v3/core/brands/") && req.Method == http.MethodGet {
+					return httpResponse(200, `{"results":[]}`), nil
+				}
+				return httpResponse(404, "not found"), nil
+			},
+			wantErr: "getting default brand",
+		},
+		{
+			name: "patch fails",
+			httpFunc: func(req *http.Request) (*http.Response, error) {
+				if strings.Contains(req.URL.Path, "/api/v3/flows/instances/") && req.Method == http.MethodGet {
+					return httpResponse(200, `{"results":[{"pk":"flow-uuid-123","slug":"default-recovery-flow","name":"Default recovery flow"}]}`), nil
+				}
+				if strings.Contains(req.URL.Path, "/api/v3/core/brands/") && req.Method == http.MethodGet {
+					return httpResponse(200, `{"results":[{"brand_uuid":"brand-uuid-456","domain":"example.com","default":true}]}`), nil
+				}
+				if req.Method == http.MethodPatch {
+					return httpResponse(500, "internal server error"), nil
+				}
+				return httpResponse(404, "not found"), nil
+			},
+			wantErr: "setting recovery flow",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := config.DefaultConfig()
+			cfg.Domain = "example.com"
+
+			inst := &Installer{
+				Config: cfg,
+				State:  NewState(),
+			}
+			inst.State.DryRun = tt.dryRun
+
+			if !tt.dryRun {
+				inst.AK = authentik.NewClient("http://localhost", "test-token", &mockHTTP{DoFunc: tt.httpFunc})
+			}
+
+			err := inst.ConfigureBrand(context.Background())
+
+			if tt.wantErr != "" {
+				if err == nil {
+					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
+				}
+				if !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
