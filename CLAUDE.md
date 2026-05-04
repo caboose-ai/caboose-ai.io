@@ -14,6 +14,8 @@ All packages under `internal/`. No public API.
 go build ./...                    # build everything
 go test ./internal/... -v         # run all tests
 go test ./internal/install/ -v    # test a specific package
+mise run sso:check                # full SSO smoke tests (requires live stack)
+mise run sso:check-quick          # API config checks only
 ```
 
 Go binary is at `/home/caboose/.local/go/bin/go`. If `go` isn't on PATH, use `PATH="/home/caboose/.local/go/bin:$PATH"`.
@@ -29,6 +31,7 @@ Go binary is at `/home/caboose/.local/go/bin/go`. If `go` isn't on PATH, use `PA
 - `internal/mcp/` — MCP server, tools, resources
 - `internal/runner/` — CommandRunner + HTTPClient interfaces for testability
 - `internal/migrate/` — Host-to-Docker migration orchestrators (e.g. Mattermost)
+- `internal/smoketest/` — Integration smoke tests (API config checks + headless browser login flows)
 - `dev/homelab/` — Docker Compose, Prometheus/Loki/Promtail config, Grafana dashboards, Authentik patches
 
 ## Conventions
@@ -50,6 +53,7 @@ Go binary is at `/home/caboose/.local/go/bin/go`. If `go` isn't on PATH, use `PA
 - Tests live next to code (`foo_test.go`)
 - Table-driven tests for multiple cases
 - Mock via interfaces (see `runner/mock.go`)
+- Integration smoke tests in `internal/smoketest/` use build tag `integration` and require a live stack
 
 ### Git
 - Never commit to main. Always branch first.

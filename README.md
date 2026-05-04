@@ -50,7 +50,11 @@ go run ./cmd/homelab migrate
 ## Testing
 
 ```bash
-go test ./internal/... -v
+go test ./internal/... -v           # unit tests
+
+# SSO smoke tests (requires live stack running)
+mise run sso:check                  # full suite: config + endpoints + browser login
+mise run sso:check-quick            # API config checks only
 ```
 
 ## Infrastructure
