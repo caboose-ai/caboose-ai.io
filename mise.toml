@@ -7,6 +7,7 @@ run = "go build ./..."
 
 [tasks.homelab]
 description = "Build and run the homelab TUI installer"
+raw = true
 run = "go build -o ./homelab ./cmd/homelab && ./homelab install"
 
 [tasks.mcp]

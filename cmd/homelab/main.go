@@ -7,6 +7,7 @@ import (
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/mattn/go-isatty"
 
 	"github.com/caboose-ai/caboose-ai.io/internal/cli"
 	"github.com/caboose-ai/caboose-ai.io/internal/config"
@@ -136,7 +137,10 @@ func runInstall(opts cliOpts) int {
 
 	inst := install.New(cfg, secretStore, cmdRunner, httpClient)
 
-	if opts.nonInteractive {
+	if opts.nonInteractive || !isatty.IsTerminal(os.Stdout.Fd()) {
+		if !opts.nonInteractive {
+			fmt.Fprintln(os.Stderr, "No TTY detected, falling back to non-interactive mode.")
+		}
 		return cli.RunInstall(context.Background(), inst)
 	}
 
