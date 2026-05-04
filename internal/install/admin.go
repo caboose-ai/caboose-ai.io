@@ -3,6 +3,8 @@ package install
 import (
 	"context"
 	"fmt"
+
+	"github.com/caboose-ai/caboose-ai.io/internal/services/authentik"
 )
 
 func (inst *Installer) GenerateAdminRecoveryLink(ctx context.Context, progressFn func(string)) (string, error) {
@@ -34,7 +36,10 @@ func (inst *Installer) ConfigureBrand(ctx context.Context) error {
 
 	flow, err := inst.AK.GetFlowByDesignation(ctx, "recovery")
 	if err != nil {
-		return nil
+		flow, err = inst.ensureRecoveryFlow(ctx)
+		if err != nil {
+			return fmt.Errorf("ensuring recovery flow: %w", err)
+		}
 	}
 
 	brand, err := inst.AK.GetDefaultBrand(ctx)
@@ -46,4 +51,34 @@ func (inst *Installer) ConfigureBrand(ctx context.Context) error {
 		return fmt.Errorf("setting recovery flow: %w", err)
 	}
 	return nil
+}
+
+func (inst *Installer) ensureRecoveryFlow(ctx context.Context) (*authentik.Flow, error) {
+	flow, err := inst.AK.CreateFlow(ctx, authentik.CreateFlowParams{
+		Name:        "Default recovery flow",
+		Slug:        "default-recovery-flow",
+		Title:       "Reset your password",
+		Designation: "recovery",
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	passwordChangeFlow, err := inst.AK.GetFlow(ctx, "default-password-change")
+	if err != nil {
+		return nil, fmt.Errorf("getting default-password-change flow for stage reuse: %w", err)
+	}
+
+	bindings, err := inst.AK.ListFlowStageBindings(ctx, passwordChangeFlow.Slug)
+	if err != nil {
+		return nil, fmt.Errorf("listing default-password-change bindings: %w", err)
+	}
+
+	for _, b := range bindings {
+		if err := inst.AK.CreateFlowStageBinding(ctx, flow.PK, b.StageObj.PK, b.Order); err != nil {
+			return nil, fmt.Errorf("binding stage %q to recovery flow: %w", b.StageObj.Name, err)
+		}
+	}
+
+	return flow, nil
 }
