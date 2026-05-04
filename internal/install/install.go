@@ -183,7 +183,6 @@ func (inst *Installer) ComposeUp(ctx context.Context) error {
 }
 
 func (inst *Installer) WaitHealthy(ctx context.Context) <-chan health.Status {
-	token, _ := inst.Secrets.Get(ctx, "AUTHENTIK_BOOTSTRAP_TOKEN")
 	urls := inst.Config.URLs()
 
 	checks := []health.Checker{
@@ -191,7 +190,6 @@ func (inst *Installer) WaitHealthy(ctx context.Context) <-chan health.Status {
 			ServiceName: "Authentik",
 			URL:         urls.Authentik + "/api/v3/root/config/",
 			Client:      inst.HTTP,
-			Headers:     map[string]string{"Authorization": "Bearer " + token},
 		},
 		&health.HTTPChecker{
 			ServiceName: "Forgejo",

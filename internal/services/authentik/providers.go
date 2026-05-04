@@ -122,6 +122,26 @@ func (c *Client) GetFlowByDesignation(ctx context.Context, designation string) (
 	return &list.Results[0], nil
 }
 
+type CreateFlowParams struct {
+	Name        string `json:"name"`
+	Slug        string `json:"slug"`
+	Title       string `json:"title"`
+	Designation string `json:"designation"`
+}
+
+func (c *Client) CreateFlow(ctx context.Context, params CreateFlowParams) (*Flow, error) {
+	data, err := c.Post(ctx, "/api/v3/flows/instances/", params)
+	if err != nil {
+		return nil, fmt.Errorf("creating flow %q: %w", params.Slug, err)
+	}
+
+	var flow Flow
+	if err := json.Unmarshal(data, &flow); err != nil {
+		return nil, fmt.Errorf("parsing created flow: %w", err)
+	}
+	return &flow, nil
+}
+
 type PropertyMapping struct {
 	PK      string `json:"pk"`
 	Name    string `json:"name"`

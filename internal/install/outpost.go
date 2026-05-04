@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/caboose-ai/caboose-ai.io/internal/config"
 	"github.com/caboose-ai/caboose-ai.io/internal/services/authentik"
 )
 
@@ -13,8 +14,7 @@ type ProxySpec struct {
 	ExternalHost string
 }
 
-func (inst *Installer) ProxySpecs() []ProxySpec {
-	urls := inst.Config.URLs()
+func DefaultProxySpecs(urls config.URLs) []ProxySpec {
 	return []ProxySpec{
 		{Name: "dashboard", Slug: "dashboard", ExternalHost: urls.Dashboard},
 		{Name: "dashboard-alias", Slug: "dashboard-alias", ExternalHost: urls.DashAlias},
@@ -22,6 +22,10 @@ func (inst *Installer) ProxySpecs() []ProxySpec {
 		{Name: "n8n-proxy", Slug: "n8n-proxy", ExternalHost: urls.N8N},
 		{Name: "openclaw-proxy", Slug: "openclaw-proxy", ExternalHost: urls.OpenClaw},
 	}
+}
+
+func (inst *Installer) ProxySpecs() []ProxySpec {
+	return DefaultProxySpecs(inst.Config.URLs())
 }
 
 type OutpostProgress struct {

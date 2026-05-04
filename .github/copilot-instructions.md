@@ -28,6 +28,7 @@ internal/
   mcp/                  MCP server, tools, resources
   cli/                  Non-interactive CLI runner
   migrate/              Host-to-Docker migration orchestrators
+  smoketest/            Integration smoke tests (API + browser, build tag: integration)
   orchestrator/         Backend abstraction (compose, kubernetes)
 ```
 
@@ -53,7 +54,9 @@ internal/
 - Tests live next to the code they test (`foo_test.go` alongside `foo.go`).
 - Use table-driven tests where there are multiple cases.
 - Mock external dependencies via interfaces (see `runner/mock.go`, test mocks in `install/social_test.go`).
+- Integration smoke tests in `internal/smoketest/` use build tag `integration` and require a live stack.
 - Run tests: `go test ./internal/... -v`
+- Run smoke tests: `mise run sso:check` (full) or `mise run sso:check-quick` (API only)
 
 ### Naming
 

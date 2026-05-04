@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/caboose-ai/caboose-ai.io/internal/config"
 	"github.com/caboose-ai/caboose-ai.io/internal/services/authentik"
 )
 
@@ -21,8 +22,7 @@ type ProviderProgress struct {
 	Err    error
 }
 
-func (inst *Installer) ProviderSpecs() []ProviderSpec {
-	urls := inst.Config.URLs()
+func DefaultProviderSpecs(urls config.URLs) []ProviderSpec {
 	return []ProviderSpec{
 		{Name: "forgejo", Slug: "forgejo", RedirectURIs: []string{urls.Forgejo + "/user/oauth2/Authentik/callback"}},
 		{Name: "grafana", Slug: "grafana", RedirectURIs: []string{urls.Grafana + "/login/generic_oauth"}},
@@ -30,6 +30,10 @@ func (inst *Installer) ProviderSpecs() []ProviderSpec {
 		{Name: "open-webui", Slug: "open-webui", RedirectURIs: []string{urls.OpenWebUI + "/oauth/oidc/callback"}},
 		{Name: "mattermost", Slug: "mattermost", RedirectURIs: []string{urls.Mattermost + "/signup/gitlab/complete"}},
 	}
+}
+
+func (inst *Installer) ProviderSpecs() []ProviderSpec {
+	return DefaultProviderSpecs(inst.Config.URLs())
 }
 
 func (inst *Installer) ProvisionProviders(ctx context.Context, progressFn func(ProviderProgress)) error {

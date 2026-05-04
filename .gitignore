@@ -1,2 +1,9 @@
 bin/
 .claude/
+.env
+.playwright-mcp/
+.superpowers/
+docs/superpowers/
+homelab
+*.png
+internal/smoketest/testdata/failures/

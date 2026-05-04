@@ -33,7 +33,7 @@ func (c *Client) GetDefaultBrand(ctx context.Context) (*Brand, error) {
 }
 
 func (c *Client) SetBrandRecoveryFlow(ctx context.Context, brandUUID, flowUUID string) error {
-	payload := map[string]string{"recovery_flow": flowUUID}
+	payload := map[string]string{"flow_recovery": flowUUID}
 	_, err := c.Patch(ctx, fmt.Sprintf("/api/v3/core/brands/%s/", brandUUID), payload)
 	if err != nil {
 		return fmt.Errorf("setting recovery flow on brand: %w", err)

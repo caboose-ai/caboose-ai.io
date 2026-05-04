@@ -25,3 +25,11 @@ run = "docker compose -f dev/homelab/docker-compose.yml down -v && go build -o .
 [tasks.down]
 description = "Stop containers (keep data)"
 run = "docker compose -f dev/homelab/docker-compose.yml down"
+
+[tasks."sso:check"]
+description = "Run SSO smoke tests against the live stack"
+run = "go test -tags integration ./internal/smoketest/ -v -timeout 5m"
+
+[tasks."sso:check-quick"]
+description = "Run SSO API config checks only"
+run = "go test -tags integration ./internal/smoketest/ -run TestSSO_Config -v"

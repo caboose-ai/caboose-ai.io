@@ -59,6 +59,14 @@ func (c *Client) CreateCaptchaStage(ctx context.Context, params CreateCaptchaSta
 	return &stage, nil
 }
 
+func (c *Client) PatchCaptchaStage(ctx context.Context, pk string, params CreateCaptchaStageParams) error {
+	_, err := c.Patch(ctx, fmt.Sprintf("/api/v3/stages/captcha/%s/", pk), params)
+	if err != nil {
+		return fmt.Errorf("patching captcha stage %q: %w", pk, err)
+	}
+	return nil
+}
+
 func (c *Client) GetUserWriteStage(ctx context.Context, pk string) (*UserWriteStage, error) {
 	data, err := c.Get(ctx, fmt.Sprintf("/api/v3/stages/user_write/%s/", pk))
 	if err != nil {
