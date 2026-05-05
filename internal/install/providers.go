@@ -9,7 +9,6 @@ import (
 	"github.com/caboose-ai/caboose-ai.io/internal/services/authentik"
 )
 
-
 type ProviderSpec struct {
 	Name         string
 	Slug         string
@@ -76,6 +75,10 @@ func (inst *Installer) ProvisionProviders(ctx context.Context, progressFn func(P
 			return fmt.Errorf("looking up provider %q: %w", spec.Name, err)
 		}
 		if existing != nil {
+			if err := inst.ensureOpenApplication(ctx, spec.Name, spec.Slug, existing.PK); err != nil {
+				progressFn(ProviderProgress{Name: spec.Name, Action: "error", Err: err})
+				return err
+			}
 			progressFn(ProviderProgress{Name: spec.Name, Action: "exists"})
 			continue
 		}
@@ -100,16 +103,9 @@ func (inst *Installer) ProvisionProviders(ctx context.Context, progressFn func(P
 			return fmt.Errorf("creating provider %q: %w", spec.Name, err)
 		}
 
-		app, err := inst.AK.GetApplication(ctx, spec.Slug)
-		if err != nil {
+		if err := inst.ensureOpenApplication(ctx, spec.Name, spec.Slug, provider.PK); err != nil {
 			progressFn(ProviderProgress{Name: spec.Name, Action: "error", Err: err})
-			return fmt.Errorf("looking up application %q: %w", spec.Slug, err)
-		}
-		if app == nil {
-			if _, err := inst.AK.CreateApplication(ctx, spec.Name, spec.Slug, provider.PK); err != nil {
-				progressFn(ProviderProgress{Name: spec.Name, Action: "error", Err: err})
-				return fmt.Errorf("creating application %q: %w", spec.Slug, err)
-			}
+			return err
 		}
 
 		progressFn(ProviderProgress{Name: spec.Name, Action: "created"})

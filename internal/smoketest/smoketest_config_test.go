@@ -38,7 +38,10 @@ func TestSSO_Config(t *testing.T) {
 				if app == nil {
 					t.Fatalf("application %q not found", spec.Slug)
 				}
-				t.Logf("application %q: pk=%s", spec.Slug, app.PK)
+				if app.PolicyEngineMode != "all" {
+					t.Errorf("application %q has policy_engine_mode=%q, want \"all\"", spec.Slug, app.PolicyEngineMode)
+				}
+				t.Logf("application %q: pk=%s policy_engine_mode=%s", spec.Slug, app.PK, app.PolicyEngineMode)
 			})
 		}
 	})
@@ -54,6 +57,17 @@ func TestSSO_Config(t *testing.T) {
 					t.Fatalf("proxy provider %q not found", spec.Name)
 				}
 				t.Logf("proxy provider %q: pk=%d mode=%s", spec.Name, proxy.PK, proxy.Mode)
+
+				app, err := s.AK.GetApplication(ctx, spec.Slug)
+				if err != nil {
+					t.Fatalf("GetApplication(%q): %v", spec.Slug, err)
+				}
+				if app == nil {
+					t.Fatalf("proxy application %q not found", spec.Slug)
+				}
+				if app.PolicyEngineMode != "all" {
+					t.Errorf("proxy application %q has policy_engine_mode=%q, want \"all\"", spec.Slug, app.PolicyEngineMode)
+				}
 			})
 		}
 	})
