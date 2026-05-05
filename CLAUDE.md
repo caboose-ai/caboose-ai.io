@@ -82,6 +82,7 @@ Go binary is at `/home/caboose/.local/go/bin/go`. If `go` isn't on PATH, use `PA
 - OAuth2 and proxy providers must have matching Authentik applications.
 - Authentik application lookups must exact-match slugs; API search responses can include broader matches.
 - Installer-created or repaired applications should use `policy_engine_mode=all` so provider-level SSO policy gates access.
+- Shared OAuth source upserts should leave `promoted` unset unless the caller intentionally owns promotion/demotion.
 
 ## Adding a New Service
 

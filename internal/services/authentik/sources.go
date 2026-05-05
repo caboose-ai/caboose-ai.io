@@ -52,7 +52,7 @@ type UpsertSourceParams struct {
 	Name               string `json:"name"`
 	Slug               string `json:"slug"`
 	Enabled            bool   `json:"enabled"`
-	Promoted           bool   `json:"promoted"`
+	Promoted           *bool  `json:"promoted,omitempty"`
 	ProviderType       string `json:"provider_type"`
 	ConsumerKey        string `json:"consumer_key"`
 	ConsumerSecret     string `json:"consumer_secret"`

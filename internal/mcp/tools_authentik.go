@@ -21,6 +21,7 @@ type authentikUpsertSourceInput struct {
 	ProviderType   string `json:"provider_type" jsonschema:"OAuth provider type (e.g. github, google-oauth2)"`
 	ConsumerKey    string `json:"consumer_key" jsonschema:"OAuth client ID"`
 	ConsumerSecret string `json:"consumer_secret" jsonschema:"OAuth client secret"`
+	Promoted       *bool  `json:"promoted,omitempty" jsonschema:"optional: whether to promote the source on the login page; omitted preserves existing state"`
 }
 
 type authentikFindUserInput struct {
@@ -125,6 +126,7 @@ func (s *Server) handleAuthentikUpsertSource(ctx context.Context, _ *sdkmcp.Call
 		Name:           input.Name,
 		Slug:           input.Slug,
 		Enabled:        true,
+		Promoted:       input.Promoted,
 		ProviderType:   input.ProviderType,
 		ConsumerKey:    input.ConsumerKey,
 		ConsumerSecret: input.ConsumerSecret,

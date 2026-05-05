@@ -20,7 +20,7 @@ Go monorepo for a self-hosted homelab infrastructure stack with SSO via Authenti
 | Prometheus | — | Metrics collection |
 | Loki + Promtail | — | Log aggregation |
 
-All services authenticate through Authentik via OAuth2/OIDC or forward-auth proxy. The installer keeps Authentik applications open (`policy_engine_mode=all`) so provider-level SSO decisions control access consistently.
+All services authenticate through Authentik via OAuth2/OIDC or forward-auth proxy. The installer keeps Authentik applications open (`policy_engine_mode=all`) so provider-level SSO decisions control access consistently. The social login configurator promotes managed GitHub and Google sources, while generic source upserts preserve the existing promotion state unless explicitly changed.
 
 ## Binaries
 
