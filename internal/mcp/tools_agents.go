@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"strings"
@@ -10,7 +11,7 @@ import (
 
 type agentInvokeInput struct {
 	Prompt       string   `json:"prompt" jsonschema:"prompt to send to the selected agent"`
-	Preferred    []string `json:"preferred,omitempty" jsonschema:"ordered providers to try: ollama, claude, copilot"`
+	Preferred    []string `json:"preferred,omitempty" jsonschema:"ordered providers to try: ollama, claude, copilot, emberfall"`
 	Model        string   `json:"model,omitempty" jsonschema:"model name for ollama (default llama3.1)"`
 	OllamaPrompt string   `json:"ollama_prompt,omitempty" jsonschema:"optional override prompt for ollama"`
 }
@@ -29,7 +30,7 @@ func (s *Server) handleAgentInvoke(ctx context.Context, _ *sdkmcp.CallToolReques
 
 	providers := input.Preferred
 	if len(providers) == 0 {
-		providers = []string{"ollama", "claude", "copilot"}
+		providers = []string{"ollama", "claude", "copilot", "emberfall"}
 	}
 
 	model := strings.TrimSpace(input.Model)
@@ -62,6 +63,8 @@ func (s *Server) invokeProvider(ctx context.Context, provider, model, prompt str
 		return s.runner.Run(ctx, "claude", "-p", prompt)
 	case "copilot":
 		return s.runner.Run(ctx, "copilot", "chat", "--prompt", prompt)
+	case "emberfall":
+		return s.runner.RunWithStdin(ctx, bytes.NewBufferString(prompt), "emberfall", "--tests", "-")
 	default:
 		return nil, fmt.Errorf("unsupported provider %q", provider)
 	}

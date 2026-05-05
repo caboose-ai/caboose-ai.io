@@ -26,6 +26,7 @@ All services authenticate through Authentik via OAuth2/OIDC or forward-auth prox
 
 - **`cmd/homelab`** — Bubbletea TUI installer that bootstraps the entire stack: generates secrets, starts containers, provisions OAuth providers, configures each service.
 - **`cmd/mcp`** — MCP server exposing homelab tools to AI assistants.
+  - Includes `agent_invoke` provider fallback across Ollama, Claude Code, Copilot CLI, and Emberfall.
 
 ## Quick start
 
