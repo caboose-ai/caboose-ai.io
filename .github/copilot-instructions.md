@@ -74,6 +74,12 @@ internal/
 - App-facing services join the `apps` network
 - Ports bind to `127.0.0.1` only — Caddy reverse proxies externally
 
+### Authentik
+
+- OAuth2 and proxy providers must have matching Authentik applications.
+- Exact-match application slugs after Authentik API searches; broad search results can include unrelated apps.
+- Installer-created or repaired applications should use `policy_engine_mode=all` so provider-level SSO policy gates access.
+
 ### Git Workflow
 
 - Never commit directly to main. Always create a feature branch.

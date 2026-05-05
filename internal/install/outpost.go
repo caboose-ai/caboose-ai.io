@@ -66,6 +66,10 @@ func (inst *Installer) ProvisionOutpost(ctx context.Context, progressFn func(Out
 			return fmt.Errorf("looking up proxy provider %q: %w", spec.Name, err)
 		}
 		if existing != nil {
+			if err := inst.ensureOpenApplication(ctx, spec.Name, spec.Slug, existing.PK); err != nil {
+				progressFn(OutpostProgress{Name: spec.Name, Action: "error", Err: err})
+				return err
+			}
 			progressFn(OutpostProgress{Name: spec.Name, Action: "exists"})
 			providerPKs = append(providerPKs, existing.PK)
 			continue
@@ -85,16 +89,9 @@ func (inst *Installer) ProvisionOutpost(ctx context.Context, progressFn func(Out
 			return fmt.Errorf("creating proxy provider %q: %w", spec.Name, err)
 		}
 
-		app, err := inst.AK.GetApplication(ctx, spec.Slug)
-		if err != nil {
+		if err := inst.ensureOpenApplication(ctx, spec.Name, spec.Slug, provider.PK); err != nil {
 			progressFn(OutpostProgress{Name: spec.Name, Action: "error", Err: err})
-			return fmt.Errorf("looking up application %q: %w", spec.Slug, err)
-		}
-		if app == nil {
-			if _, err := inst.AK.CreateApplication(ctx, spec.Name, spec.Slug, provider.PK); err != nil {
-				progressFn(OutpostProgress{Name: spec.Name, Action: "error", Err: err})
-				return fmt.Errorf("creating application %q: %w", spec.Slug, err)
-			}
+			return err
 		}
 
 		providerPKs = append(providerPKs, provider.PK)

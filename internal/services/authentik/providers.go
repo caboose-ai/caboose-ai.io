@@ -165,9 +165,10 @@ func (c *Client) ListOAuthScopeMappings(ctx context.Context) ([]PropertyMapping,
 }
 
 type Application struct {
-	PK   string `json:"pk"`
-	Slug string `json:"slug"`
-	Name string `json:"name"`
+	PK               string `json:"pk"`
+	Slug             string `json:"slug"`
+	Name             string `json:"name"`
+	PolicyEngineMode string `json:"policy_engine_mode"`
 }
 
 type applicationList struct {
@@ -175,7 +176,7 @@ type applicationList struct {
 }
 
 func (c *Client) GetApplication(ctx context.Context, slug string) (*Application, error) {
-	data, err := c.Get(ctx, fmt.Sprintf("/api/v3/core/applications/?slug=%s", url.QueryEscape(slug)))
+	data, err := c.Get(ctx, fmt.Sprintf("/api/v3/core/applications/?search=%s&page_size=100", url.QueryEscape(slug)))
 	if err != nil {
 		return nil, err
 	}
@@ -183,17 +184,36 @@ func (c *Client) GetApplication(ctx context.Context, slug string) (*Application,
 	if err := json.Unmarshal(data, &list); err != nil {
 		return nil, fmt.Errorf("parsing application response: %w", err)
 	}
-	if len(list.Results) == 0 {
-		return nil, nil
+	for _, app := range list.Results {
+		if app.Slug == slug {
+			return &app, nil
+		}
 	}
-	return &list.Results[0], nil
+	return nil, nil
+}
+
+func (c *Client) EnsureApplicationOpen(ctx context.Context, slug string) error {
+	app, err := c.GetApplication(ctx, slug)
+	if err != nil {
+		return err
+	}
+	if app == nil {
+		return fmt.Errorf("application %q not found", slug)
+	}
+	if app.PolicyEngineMode == "all" {
+		return nil
+	}
+	payload := map[string]any{"policy_engine_mode": "all"}
+	_, err = c.Patch(ctx, fmt.Sprintf("/api/v3/core/applications/%s/", url.PathEscape(slug)), payload)
+	return err
 }
 
 func (c *Client) CreateApplication(ctx context.Context, name, slug string, providerPK int) (*Application, error) {
 	payload := map[string]any{
-		"name":     name,
-		"slug":     slug,
-		"provider": providerPK,
+		"name":               name,
+		"slug":               slug,
+		"provider":           providerPK,
+		"policy_engine_mode": "all",
 	}
 	data, err := c.Post(ctx, "/api/v3/core/applications/", payload)
 	if err != nil {

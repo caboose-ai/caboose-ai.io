@@ -78,6 +78,11 @@ Go binary is at `/home/caboose/.local/go/bin/go`. If `go` isn't on PATH, use `PA
 - App networks: `apps`
 - Ports: `127.0.0.1` only — Caddy handles external
 
+### Authentik
+- OAuth2 and proxy providers must have matching Authentik applications.
+- Authentik application lookups must exact-match slugs; API search responses can include broader matches.
+- Installer-created or repaired applications should use `policy_engine_mode=all` so provider-level SSO policy gates access.
+
 ## Adding a New Service
 
 1. Compose entry in `dev/homelab/docker-compose.yml`
