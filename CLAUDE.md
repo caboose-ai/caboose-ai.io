@@ -5,6 +5,7 @@
 Go monorepo for a homelab SSO infrastructure stack. Two binaries:
 - `cmd/homelab` — Bubbletea TUI installer that bootstraps Authentik SSO + all services
 - `cmd/mcp` — MCP server exposing homelab tools to AI assistants
+  - `agent_invoke` supports provider fallback: Ollama, Claude Code, Copilot CLI, Emberfall
 
 All packages under `internal/`. No public API.
 
