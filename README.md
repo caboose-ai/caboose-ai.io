@@ -37,6 +37,9 @@ go build ./...
 # Run the installer (interactive TUI)
 go run ./cmd/homelab install --domain caboose-ai.io --compose-dir dev/homelab
 
+# Print GitHub, Google, and Turnstile setup URLs/callbacks
+go run ./cmd/homelab oauth-setup --domain caboose-ai.io
+
 # Or non-interactive
 go run ./cmd/homelab install --non-interactive --config homelab.yml
 
