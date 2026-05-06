@@ -28,6 +28,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "  install    Bootstrap the homelab SSO stack")
 		fmt.Fprintln(os.Stderr, "  reset      Tear down everything and delete all secrets")
 		fmt.Fprintln(os.Stderr, "  migrate    Migrate host services to Docker containers")
+		fmt.Fprintln(os.Stderr, "  oauth-setup Print external OAuth and Turnstile setup instructions")
 		os.Exit(1)
 	}
 
@@ -57,6 +58,8 @@ func main() {
 		os.Exit(runReset(opts))
 	case "migrate":
 		os.Exit(runMigrate(opts))
+	case "oauth-setup":
+		os.Exit(runOAuthSetup(opts))
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", subcmd)
 		os.Exit(1)
@@ -64,7 +67,7 @@ func main() {
 }
 
 func extractSubcommand(args []string) (string, []string) {
-	known := map[string]bool{"install": true, "reset": true, "migrate": true}
+	known := map[string]bool{"install": true, "reset": true, "migrate": true, "oauth-setup": true}
 	if len(args) == 0 {
 		return "", nil
 	}
@@ -112,10 +115,18 @@ func runInstall(opts cliOpts) int {
 	if opts.composeDir != "" {
 		cfg.ComposeDir = opts.composeDir
 	}
-	if opts.orchestrator != "" { cfg.Orchestrator = opts.orchestrator }
-	if opts.kubeNamespace != "" { cfg.Kubernetes.Namespace = opts.kubeNamespace }
-	if opts.kubeconfig != "" { cfg.Kubernetes.Kubeconfig = opts.kubeconfig }
-	if opts.kubeContext != "" { cfg.Kubernetes.Context = opts.kubeContext }
+	if opts.orchestrator != "" {
+		cfg.Orchestrator = opts.orchestrator
+	}
+	if opts.kubeNamespace != "" {
+		cfg.Kubernetes.Namespace = opts.kubeNamespace
+	}
+	if opts.kubeconfig != "" {
+		cfg.Kubernetes.Kubeconfig = opts.kubeconfig
+	}
+	if opts.kubeContext != "" {
+		cfg.Kubernetes.Context = opts.kubeContext
+	}
 	if opts.opVault != "" {
 		cfg.OPVault = opts.opVault
 	}
@@ -177,10 +188,18 @@ func runReset(opts cliOpts) int {
 	if opts.composeDir != "" {
 		cfg.ComposeDir = opts.composeDir
 	}
-	if opts.orchestrator != "" { cfg.Orchestrator = opts.orchestrator }
-	if opts.kubeNamespace != "" { cfg.Kubernetes.Namespace = opts.kubeNamespace }
-	if opts.kubeconfig != "" { cfg.Kubernetes.Kubeconfig = opts.kubeconfig }
-	if opts.kubeContext != "" { cfg.Kubernetes.Context = opts.kubeContext }
+	if opts.orchestrator != "" {
+		cfg.Orchestrator = opts.orchestrator
+	}
+	if opts.kubeNamespace != "" {
+		cfg.Kubernetes.Namespace = opts.kubeNamespace
+	}
+	if opts.kubeconfig != "" {
+		cfg.Kubernetes.Kubeconfig = opts.kubeconfig
+	}
+	if opts.kubeContext != "" {
+		cfg.Kubernetes.Context = opts.kubeContext
+	}
 	if opts.opVault != "" {
 		cfg.OPVault = opts.opVault
 	}
@@ -237,5 +256,31 @@ func runMigrate(opts cliOpts) int {
 	}
 
 	fmt.Fprintln(os.Stderr, "✓ migration complete")
+	return 0
+}
+
+func runOAuthSetup(opts cliOpts) int {
+	var cfg *config.Config
+
+	if opts.configPath != "" {
+		var err error
+		cfg, err = config.LoadFromFile(opts.configPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
+			return 1
+		}
+	} else {
+		cfg = config.DefaultConfig()
+	}
+
+	if opts.domain != "" {
+		cfg.Domain = opts.domain
+	}
+	if cfg.Domain == "" {
+		fmt.Fprintln(os.Stderr, "Config validation error: domain is required")
+		return 1
+	}
+
+	cli.PrintOAuthSetup(os.Stdout, cfg)
 	return 0
 }

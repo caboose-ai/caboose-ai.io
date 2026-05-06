@@ -80,6 +80,7 @@ internal/
 - Exact-match application slugs after Authentik API searches; broad search results can include unrelated apps.
 - Installer-created or repaired applications should use `policy_engine_mode=all` so provider-level SSO policy gates access.
 - Shared OAuth source upserts should leave `promoted` unset unless the caller intentionally owns promotion/demotion.
+- Use `homelab oauth-setup --domain <domain>` to print GitHub/Google OAuth callback URLs, Turnstile hostname, and expected secret keys.
 
 ### Git Workflow
 
@@ -117,6 +118,7 @@ internal/
 ### Running the installer
 
 ```bash
+go run ./cmd/homelab oauth-setup --domain caboose-ai.io
 go run ./cmd/homelab install --domain caboose-ai.io --compose-dir dev/homelab
 ```
 

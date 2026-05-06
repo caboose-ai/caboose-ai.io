@@ -15,6 +15,7 @@ All packages under `internal/`. No public API.
 go build ./...                    # build everything
 go test ./internal/... -v         # run all tests
 go test ./internal/install/ -v    # test a specific package
+go run ./cmd/homelab oauth-setup --domain caboose-ai.io  # print external OAuth/Turnstile setup
 mise run sso:check                # full SSO smoke tests (requires live stack)
 mise run sso:check-quick          # API config checks only
 ```
@@ -83,6 +84,7 @@ Go binary is at `/home/caboose/.local/go/bin/go`. If `go` isn't on PATH, use `PA
 - Authentik application lookups must exact-match slugs; API search responses can include broader matches.
 - Installer-created or repaired applications should use `policy_engine_mode=all` so provider-level SSO policy gates access.
 - Shared OAuth source upserts should leave `promoted` unset unless the caller intentionally owns promotion/demotion.
+- Use `homelab oauth-setup --domain <domain>` to print GitHub/Google OAuth callback URLs, Turnstile hostname, and expected secret keys.
 
 ## Adding a New Service
 
