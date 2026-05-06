@@ -40,6 +40,10 @@ go run ./cmd/homelab install --domain caboose-ai.io --compose-dir dev/homelab
 # Print GitHub, Google, and Turnstile setup URLs/callbacks
 go run ./cmd/homelab oauth-setup --domain caboose-ai.io
 
+# Create a Cloudflare Turnstile widget via API, then print all setup values
+CLOUDFLARE_ACCOUNT_ID=... CLOUDFLARE_API_TOKEN=... \
+  go run ./cmd/homelab oauth-setup --domain caboose-ai.io --create-turnstile
+
 # Or non-interactive
 go run ./cmd/homelab install --non-interactive --config homelab.yml
 
