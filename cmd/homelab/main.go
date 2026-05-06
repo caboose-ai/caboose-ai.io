@@ -28,7 +28,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "  install    Bootstrap the homelab SSO stack")
 		fmt.Fprintln(os.Stderr, "  reset      Tear down everything and delete all secrets")
 		fmt.Fprintln(os.Stderr, "  migrate    Migrate host services to Docker containers")
-		fmt.Fprintln(os.Stderr, "  oauth-setup Print external OAuth and Turnstile setup instructions")
+		fmt.Fprintln(os.Stderr, "  oauth-setup Print external OAuth setup and optionally create Turnstile")
 		os.Exit(1)
 	}
 
@@ -49,6 +49,10 @@ func main() {
 	fs.StringVar(&opts.n8nUser, "n8n-user", "", "N8N admin username")
 	fs.StringVar(&opts.email, "email", "", "Admin email for Authentik bootstrap")
 	fs.BoolVar(&opts.keepEnv, "keep-env", false, "Preserve .env file during reset")
+	fs.BoolVar(&opts.createTurnstile, "create-turnstile", false, "Create a Cloudflare Turnstile widget via API")
+	fs.StringVar(&opts.cloudflareAccountID, "cloudflare-account-id", "", "Cloudflare account ID (or CLOUDFLARE_ACCOUNT_ID)")
+	fs.StringVar(&opts.cloudflareAPIToken, "cloudflare-api-token", "", "Cloudflare API token (or CLOUDFLARE_API_TOKEN)")
+	fs.StringVar(&opts.turnstileWidgetName, "turnstile-widget-name", "", "Cloudflare Turnstile widget name")
 	fs.Parse(args)
 
 	switch subcmd {
@@ -93,6 +97,11 @@ type cliOpts struct {
 	kubeconfig     string
 	kubeContext    string
 	keepEnv        bool
+
+	createTurnstile     bool
+	cloudflareAccountID string
+	cloudflareAPIToken  string
+	turnstileWidgetName string
 }
 
 func runInstall(opts cliOpts) int {
@@ -281,6 +290,22 @@ func runOAuthSetup(opts cliOpts) int {
 		return 1
 	}
 
-	cli.PrintOAuthSetup(os.Stdout, cfg)
+	if opts.cloudflareAccountID == "" {
+		opts.cloudflareAccountID = os.Getenv("CLOUDFLARE_ACCOUNT_ID")
+	}
+	if opts.cloudflareAPIToken == "" {
+		opts.cloudflareAPIToken = os.Getenv("CLOUDFLARE_API_TOKEN")
+	}
+
+	_, err := cli.RunOAuthSetup(context.Background(), os.Stdout, cfg, cli.OAuthSetupOptions{
+		CreateTurnstile:     opts.createTurnstile,
+		CloudflareAccountID: opts.cloudflareAccountID,
+		CloudflareAPIToken:  opts.cloudflareAPIToken,
+		TurnstileWidgetName: opts.turnstileWidgetName,
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "oauth setup failed: %v\n", err)
+		return 1
+	}
 	return 0
 }
