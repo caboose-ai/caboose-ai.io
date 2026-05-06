@@ -79,6 +79,7 @@ internal/
 - OAuth2 and proxy providers must have matching Authentik applications.
 - Exact-match application slugs after Authentik API searches; broad search results can include unrelated apps.
 - Installer-created or repaired applications should use `policy_engine_mode=all` so provider-level SSO policy gates access.
+- Shared OAuth source upserts should leave `promoted` unset unless the caller intentionally owns promotion/demotion.
 
 ### Git Workflow
 

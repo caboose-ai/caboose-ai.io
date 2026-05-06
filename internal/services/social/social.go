@@ -39,6 +39,7 @@ func (c *Configurator) CheckConfigured(ctx context.Context) (bool, error) {
 
 func (c *Configurator) Configure(ctx context.Context, opts services.ConfigureOpts) (*services.ConfigureResult, error) {
 	configured := 0
+	promoted := true
 
 	var authFlowPK, enrollFlowPK string
 	if !opts.DryRun {
@@ -58,7 +59,7 @@ func (c *Configurator) Configure(ctx context.Context, opts services.ConfigureOpt
 				Name:               "GitHub",
 				Slug:               "github",
 				Enabled:            true,
-				Promoted:           true,
+				Promoted:           &promoted,
 				ProviderType:       "github",
 				ConsumerKey:        creds.ClientID,
 				ConsumerSecret:     creds.ClientSecret,
@@ -80,7 +81,7 @@ func (c *Configurator) Configure(ctx context.Context, opts services.ConfigureOpt
 				Name:               "Google",
 				Slug:               "google",
 				Enabled:            true,
-				Promoted:           true,
+				Promoted:           &promoted,
 				ProviderType:       "google",
 				ConsumerKey:        creds.ClientID,
 				ConsumerSecret:     creds.ClientSecret,
