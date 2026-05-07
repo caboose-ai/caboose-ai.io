@@ -35,13 +35,13 @@ func (m *mockSecrets) EnsureVault(_ context.Context) error { return nil }
 
 func TestSetupCaptcha(t *testing.T) {
 	tests := []struct {
-		name       string
-		dryRun     bool
-		secrets    map[string]string
-		httpFunc   func(req *http.Request) (*http.Response, error)
-		wantErr    string
-		wantCalls  int // minimum number of progress calls expected
-		noCalls    bool
+		name      string
+		dryRun    bool
+		secrets   map[string]string
+		httpFunc  func(req *http.Request) (*http.Response, error)
+		wantErr   string
+		wantCalls int // minimum number of progress calls expected
+		noCalls   bool
 	}{
 		{
 			name:    "no creds skips everything",
@@ -63,8 +63,8 @@ func TestSetupCaptcha(t *testing.T) {
 			name:   "dry run skips everything",
 			dryRun: true,
 			secrets: map[string]string{
-				"TURNSTILE_SITE_KEY":    "site123",
-				"TURNSTILE_SECRET_KEY":  "secret456",
+				"TURNSTILE_SITE_KEY":   "site123",
+				"TURNSTILE_SECRET_KEY": "secret456",
 			},
 			noCalls: true,
 		},
@@ -85,7 +85,7 @@ func TestSetupCaptcha(t *testing.T) {
 				}
 				// GetFlowStageBinding — binding exists
 				if strings.Contains(req.URL.Path, "/api/v3/flows/bindings/") && req.Method == http.MethodGet {
-					return httpResponse(200, `{"results":[{"pk":"bind-pk-1","stage_obj":{"pk":"stage-pk-1","name":"turnstile-captcha","component":"ak-stage-captcha"},"order":0}]}`), nil
+					return httpResponse(200, `{"results":[{"pk":"bind-pk-1","target":"flow-pk-1","stage":"stage-pk-1","stage_obj":{"pk":"stage-pk-1","name":"turnstile-captcha","component":"ak-stage-captcha"},"order":0}]}`), nil
 				}
 				return httpResponse(404, "not found"), nil
 			},
@@ -201,6 +201,15 @@ func TestSetupCaptcha(t *testing.T) {
 }
 
 func TestSetupInactiveEnrollment(t *testing.T) {
+	oldWait := authentikDefaultFlowWait
+	oldPoll := authentikDefaultFlowPoll
+	authentikDefaultFlowWait = 20_000_000
+	authentikDefaultFlowPoll = 1_000_000
+	t.Cleanup(func() {
+		authentikDefaultFlowWait = oldWait
+		authentikDefaultFlowPoll = oldPoll
+	})
+
 	tests := []struct {
 		name     string
 		dryRun   bool
@@ -209,18 +218,21 @@ func TestSetupInactiveEnrollment(t *testing.T) {
 		noCalls  bool
 	}{
 		{
-			name:   "dry run skips everything",
-			dryRun: true,
+			name:    "dry run skips everything",
+			dryRun:  true,
 			noCalls: true,
 		},
 		{
 			name: "finds user-write stage and patches",
 			httpFunc: func(req *http.Request) (*http.Response, error) {
+				if strings.Contains(req.URL.Path, "/api/v3/flows/instances/") && req.Method == http.MethodGet {
+					return httpResponse(200, `{"results":[{"pk":"enrollment-flow-pk","slug":"default-source-enrollment","name":"Enrollment"}]}`), nil
+				}
 				// ListFlowStageBindings
 				if strings.Contains(req.URL.Path, "/api/v3/flows/bindings/") && req.Method == http.MethodGet {
 					return httpResponse(200, `{"results":[
-						{"pk":"b1","stage_obj":{"pk":"s1","name":"prompt","component":"ak-stage-prompt"},"order":0},
-						{"pk":"b2","stage_obj":{"pk":"s2","name":"enrollment-write","component":"ak-stage-user-write-form"},"order":1}
+						{"pk":"b1","target":"enrollment-flow-pk","stage":"s1","stage_obj":{"pk":"s1","name":"prompt","component":"ak-stage-prompt"},"order":0},
+						{"pk":"b2","target":"enrollment-flow-pk","stage":"s2","stage_obj":{"pk":"s2","name":"enrollment-write","component":"ak-stage-user-write-form"},"order":1}
 					]}`), nil
 				}
 				// PatchUserWriteStage
@@ -231,11 +243,39 @@ func TestSetupInactiveEnrollment(t *testing.T) {
 			},
 		},
 		{
+			name: "enrollment flow appears after blueprint lag",
+			httpFunc: func() func(req *http.Request) (*http.Response, error) {
+				flowLookups := 0
+				return func(req *http.Request) (*http.Response, error) {
+					if strings.Contains(req.URL.Path, "/api/v3/flows/instances/") && req.Method == http.MethodGet {
+						flowLookups++
+						if flowLookups == 1 {
+							return httpResponse(200, `{"results":[]}`), nil
+						}
+						return httpResponse(200, `{"results":[{"pk":"enrollment-flow-pk","slug":"default-source-enrollment","name":"Enrollment"}]}`), nil
+					}
+					if strings.Contains(req.URL.Path, "/api/v3/flows/bindings/") && req.Method == http.MethodGet {
+						return httpResponse(200, `{"results":[
+							{"pk":"b1","target":"enrollment-flow-pk","stage":"s1","stage_obj":{"pk":"s1","name":"prompt","component":"ak-stage-prompt"},"order":0},
+							{"pk":"b2","target":"enrollment-flow-pk","stage":"s2","stage_obj":{"pk":"s2","name":"enrollment-write","component":"ak-stage-user-write-form"},"order":1}
+						]}`), nil
+					}
+					if strings.Contains(req.URL.Path, "/api/v3/stages/user_write/s2/") && req.Method == http.MethodPatch {
+						return httpResponse(200, `{"pk":"s2","name":"enrollment-write","create_users_as_inactive":true}`), nil
+					}
+					return httpResponse(404, "not found"), nil
+				}
+			}(),
+		},
+		{
 			name: "no user-write stage returns error",
 			httpFunc: func(req *http.Request) (*http.Response, error) {
+				if strings.Contains(req.URL.Path, "/api/v3/flows/instances/") && req.Method == http.MethodGet {
+					return httpResponse(200, `{"results":[{"pk":"enrollment-flow-pk","slug":"default-source-enrollment","name":"Enrollment"}]}`), nil
+				}
 				if strings.Contains(req.URL.Path, "/api/v3/flows/bindings/") && req.Method == http.MethodGet {
 					return httpResponse(200, `{"results":[
-						{"pk":"b1","stage_obj":{"pk":"s1","name":"prompt","component":"ak-stage-prompt"},"order":0}
+						{"pk":"b1","target":"enrollment-flow-pk","stage":"s1","stage_obj":{"pk":"s1","name":"prompt","component":"ak-stage-prompt"},"order":0}
 					]}`), nil
 				}
 				return httpResponse(404, "not found"), nil

@@ -2,33 +2,34 @@ package cli
 
 import (
 	"context"
-	"os"
-
-	clog "github.com/charmbracelet/log"
 
 	"github.com/caboose-ai/caboose-ai.io/internal/install"
 )
 
 func RunReset(ctx context.Context, inst *install.Installer) int {
-	logger := clog.NewWithOptions(os.Stderr, clog.Options{ReportTimestamp: true})
+	console := NewConsole()
+	console.Banner("Homelab Reset", inst.Config.Domain)
 
 	if inst.Config.DryRun {
-		logger.Info("[dry-run] would stop all containers and remove volumes")
-		logger.Info("[dry-run] would delete all bootstrap and derived OAuth secrets from 1Password")
-		logger.Info("[dry-run] would delete .env file")
-		logger.Info("[dry-run] reset complete (no changes made)")
+		console.Phase("Dry Run")
+		console.Run("would stop all containers and remove volumes")
+		console.Run("would delete all bootstrap and derived OAuth secrets from 1Password")
+		console.Run("would delete .env file")
+		console.Success("reset dry run complete")
 		return 0
 	}
 
-	logger.Info("resetting homelab — this will destroy all data and secrets")
+	console.Phase("Reset")
+	console.Warn("resetting homelab; this will destroy all data and dynamic secrets")
 
 	if err := inst.Reset(ctx, func(step, detail string) {
-		logger.Info(detail, "step", step)
+		console.Run(detail, "step", step)
 	}); err != nil {
-		logger.Error("reset failed", "error", err)
+		console.Error("reset failed", "error", err)
 		return 1
 	}
 
-	logger.Info("reset complete — run 'homelab install' to bootstrap from scratch")
+	console.Phase("Complete")
+	console.Success("reset complete; run 'homelab install' to bootstrap from scratch")
 	return 0
 }

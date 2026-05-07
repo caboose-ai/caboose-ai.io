@@ -89,17 +89,11 @@ func TestSSO_Endpoints(t *testing.T) {
 	})
 
 	t.Run("ProxyRedirects", func(t *testing.T) {
-		proxyURLs := map[string]string{
-			"dashboard": s.URLs.Dashboard,
-			"ci":        s.URLs.CI,
-			"n8n":       s.URLs.N8N,
-		}
-
-		for name, url := range proxyURLs {
-			t.Run(name, func(t *testing.T) {
-				resp, err := s.get(url + "/")
+		for _, flow := range ProxyFlows(s.URLs) {
+			t.Run(flow.Name, func(t *testing.T) {
+				resp, err := s.get(flow.URL + "/")
 				if err != nil {
-					t.Fatalf("GET %s: %v", name, err)
+					t.Fatalf("GET %s: %v", flow.Name, err)
 				}
 				defer resp.Body.Close()
 
@@ -107,17 +101,17 @@ func TestSSO_Endpoints(t *testing.T) {
 				case http.StatusFound, http.StatusMovedPermanently, http.StatusTemporaryRedirect:
 					loc := resp.Header.Get("Location")
 					if !strings.Contains(loc, "auth."+s.Domain) {
-						t.Errorf("redirect for %s goes to %s, expected auth.%s", name, loc, s.Domain)
+						t.Errorf("redirect for %s goes to %s, expected auth.%s", flow.Name, loc, s.Domain)
 					}
 				case http.StatusOK:
 					body, _ := io.ReadAll(resp.Body)
 					if !strings.Contains(string(body), "authentik") &&
 						!strings.Contains(string(body), "Authentik") &&
 						!strings.Contains(string(body), "auth."+s.Domain) {
-						t.Errorf("200 response for %s doesn't appear to be Authentik login page", name)
+						t.Errorf("200 response for %s doesn't appear to be Authentik login page", flow.Name)
 					}
 				default:
-					t.Errorf("expected redirect or Authentik login for %s, got %d", name, resp.StatusCode)
+					t.Errorf("expected redirect or Authentik login for %s, got %d", flow.Name, resp.StatusCode)
 				}
 			})
 		}

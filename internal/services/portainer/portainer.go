@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/caboose-ai/caboose-ai.io/internal/runner"
@@ -18,17 +19,19 @@ type Configurator struct {
 	AK           *authentik.Client
 	HTTP         runner.HTTPClient
 	AuthHTTP     runner.HTTPClient
+	Runner       runner.CommandRunner
 	PortainerURL string
 	AdminPass    string
 	AuthentikURL string
 	RedirectURI  string
 }
 
-func New(ak *authentik.Client, httpClient runner.HTTPClient, portainerURL, adminPass, authentikURL, redirectURI string) *Configurator {
+func New(ak *authentik.Client, httpClient runner.HTTPClient, commandRunner runner.CommandRunner, portainerURL, adminPass, authentikURL, redirectURI string) *Configurator {
 	return &Configurator{
 		AK:           ak,
 		HTTP:         httpClient,
 		AuthHTTP:     newNoRedirectClient(),
+		Runner:       commandRunner,
 		PortainerURL: portainerURL,
 		AdminPass:    adminPass,
 		AuthentikURL: authentikURL,
@@ -63,7 +66,15 @@ func (c *Configurator) Configure(ctx context.Context, opts services.ConfigureOpt
 
 	alreadyInit, err := c.initAdmin(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("Portainer admin init: %w", err)
+		if isAdminInitTimeout(err) && c.Runner != nil {
+			if restartErr := c.restartForAdminInit(ctx); restartErr != nil {
+				return nil, restartErr
+			}
+			alreadyInit, err = c.initAdmin(ctx)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("Portainer admin init: %w", err)
+		}
 	}
 
 	jwt, err := c.getJWT(ctx)
@@ -88,6 +99,27 @@ func (c *Configurator) Configure(ctx context.Context, opts services.ConfigureOpt
 	return &services.ConfigureResult{Status: services.StatusCreated, Message: "Portainer OAuth configured"}, nil
 }
 
+func isAdminInitTimeout(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "AdminInitTimeout") ||
+		strings.Contains(msg, "Administrator initialization timeout")
+}
+
+func (c *Configurator) restartForAdminInit(ctx context.Context) error {
+	if _, err := c.Runner.Run(ctx, "docker", "restart", "portainer"); err != nil {
+		return fmt.Errorf("restarting Portainer after admin init timeout: %w", err)
+	}
+	select {
+	case <-ctx.Done():
+		return fmt.Errorf("waiting for Portainer restart: %w", ctx.Err())
+	case <-time.After(3 * time.Second):
+		return nil
+	}
+}
+
 // initAdmin posts to Portainer's admin init endpoint. It returns (true, nil)
 // when Portainer was already initialized (HTTP 409), (false, nil) on fresh
 // initialization, and (false, err) on any other failure.
@@ -107,10 +139,17 @@ func (c *Configurator) initAdmin(ctx context.Context) (alreadyInit bool, err err
 		return false, fmt.Errorf("initializing Portainer admin: %w", err)
 	}
 	defer resp.Body.Close()
-	io.ReadAll(resp.Body)
+	data, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode == http.StatusConflict {
 		return true, nil
+	}
+	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
+		reason := resp.Header.Get("Redirect-Reason")
+		if reason != "" {
+			reason = " " + reason
+		}
+		return false, fmt.Errorf("Portainer admin init redirected HTTP %d%s: %s", resp.StatusCode, reason, strings.TrimSpace(string(data)))
 	}
 	if resp.StatusCode >= 400 {
 		return false, fmt.Errorf("Portainer admin init returned HTTP %d", resp.StatusCode)
@@ -157,6 +196,9 @@ func (c *Configurator) getJWT(ctx context.Context) (string, error) {
 
 		// If we get a 3xx redirect, Portainer is not ready yet (likely still showing setup wizard)
 		if resp.StatusCode >= 300 && resp.StatusCode < 400 {
+			if reason := resp.Header.Get("Redirect-Reason"); reason == "AdminInitTimeout" {
+				return "", fmt.Errorf("Portainer auth redirected HTTP %d %s: %s", resp.StatusCode, reason, strings.TrimSpace(string(data)))
+			}
 			if attempt < maxRetries-1 {
 				select {
 				case <-ctx.Done():

@@ -45,7 +45,8 @@ func main() {
 	fs.StringVar(&opts.kubeNamespace, "kube-namespace", "", "Kubernetes namespace for homelab resources (default: homelab)")
 	fs.StringVar(&opts.kubeconfig, "kubeconfig", "", "Path to kubeconfig file for kubectl")
 	fs.StringVar(&opts.kubeContext, "kube-context", "", "Kubernetes context name for kubectl")
-	fs.StringVar(&opts.opVault, "op-vault", "", "1Password vault name")
+	fs.StringVar(&opts.opVault, "op-vault", "", "1Password dynamic vault name")
+	fs.StringVar(&opts.opStaticVault, "op-static-vault", "", "1Password static vault name")
 	fs.StringVar(&opts.n8nUser, "n8n-user", "", "N8N admin username")
 	fs.StringVar(&opts.email, "email", "", "Admin email for Authentik bootstrap")
 	fs.BoolVar(&opts.keepEnv, "keep-env", false, "Preserve .env file during reset")
@@ -90,6 +91,7 @@ type cliOpts struct {
 	domain         string
 	composeDir     string
 	opVault        string
+	opStaticVault  string
 	n8nUser        string
 	email          string
 	orchestrator   string
@@ -139,6 +141,9 @@ func runInstall(opts cliOpts) int {
 	if opts.opVault != "" {
 		cfg.OPVault = opts.opVault
 	}
+	if opts.opStaticVault != "" {
+		cfg.OPStaticVault = opts.opStaticVault
+	}
 	if opts.n8nUser != "" {
 		cfg.N8NUser = opts.n8nUser
 	}
@@ -160,7 +165,7 @@ func runInstall(opts cliOpts) int {
 
 	cmdRunner := runner.NewLocalRunner()
 	httpClient := runner.NewHTTPClient()
-	secretStore := secrets.NewOnePasswordStore(cfg.OPVault, cmdRunner, cfg.EnvPath())
+	secretStore := secrets.NewSplitOnePasswordStore(cfg.OPStaticVault, cfg.OPVault, cmdRunner, cfg.EnvPath())
 
 	inst := install.New(cfg, secretStore, cmdRunner, httpClient)
 
@@ -212,11 +217,14 @@ func runReset(opts cliOpts) int {
 	if opts.opVault != "" {
 		cfg.OPVault = opts.opVault
 	}
+	if opts.opStaticVault != "" {
+		cfg.OPStaticVault = opts.opStaticVault
+	}
 	cfg.DryRun = opts.dryRun
 
 	cmdRunner := runner.NewLocalRunner()
 	httpClient := runner.NewHTTPClient()
-	secretStore := secrets.NewOnePasswordStore(cfg.OPVault, cmdRunner, cfg.EnvPath())
+	secretStore := secrets.NewSplitOnePasswordStore(cfg.OPStaticVault, cfg.OPVault, cmdRunner, cfg.EnvPath())
 
 	inst := install.New(cfg, secretStore, cmdRunner, httpClient)
 	inst.State.KeepEnv = opts.keepEnv

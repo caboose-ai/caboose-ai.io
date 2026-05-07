@@ -37,8 +37,8 @@ func (c *Configurator) CheckConfigured(ctx context.Context) (bool, error) {
 	if err != nil {
 		return false, nil
 	}
-	gl := cfg.gitLabSettings()
-	id, _ := gl["Id"].(string)
+	oidc := cfg.openIDSettings()
+	id, _ := oidc["Id"].(string)
 	return id != "", nil
 }
 
@@ -62,21 +62,25 @@ func (c *Configurator) Configure(ctx context.Context, opts services.ConfigureOpt
 	}
 
 	if !opts.Force {
-		gl := cfg.gitLabSettings()
-		if id, _ := gl["Id"].(string); id == provider.ClientID {
-			return &services.ConfigureResult{Status: services.StatusAlreadyConfigured, Message: "Mattermost OIDC already configured"}, nil
+		oidc := cfg.openIDSettings()
+		if id, _ := oidc["Id"].(string); id == provider.ClientID {
+			if discovery, _ := oidc["DiscoveryEndpoint"].(string); discovery != "" {
+				return &services.ConfigureResult{Status: services.StatusAlreadyConfigured, Message: "Mattermost OIDC already configured"}, nil
+			}
 		}
 	}
 
-	gl := cfg.gitLabSettings()
-	gl["Enable"] = true
-	gl["Id"] = provider.ClientID
-	gl["Secret"] = provider.ClientSecret
-	gl["AuthEndpoint"] = c.AuthentikURL + "/application/o/authorize/"
-	gl["TokenEndpoint"] = c.AuthentikURL + "/application/o/token/"
-	gl["UserAPIEndpoint"] = c.AuthentikURL + "/application/o/userinfo/"
-	gl["Scope"] = "openid email profile"
-	cfg["GitLabSettings"] = gl
+	oidc := cfg.openIDSettings()
+	oidc["Enable"] = true
+	oidc["Id"] = provider.ClientID
+	oidc["Secret"] = provider.ClientSecret
+	oidc["AuthEndpoint"] = c.AuthentikURL + "/application/o/authorize/"
+	oidc["TokenEndpoint"] = c.AuthentikURL + "/application/o/token/"
+	oidc["UserAPIEndpoint"] = c.AuthentikURL + "/application/o/userinfo/"
+	oidc["DiscoveryEndpoint"] = c.AuthentikURL + "/application/o/mattermost/.well-known/openid-configuration"
+	oidc["Scope"] = "openid email profile"
+	oidc["ButtonText"] = "Authentik"
+	cfg["OpenIdSettings"] = oidc
 
 	if err := c.writeConfig(ctx, cfg); err != nil {
 		return nil, fmt.Errorf("patching Mattermost config: %w", err)
@@ -92,12 +96,12 @@ func (c *Configurator) Configure(ctx context.Context, opts services.ConfigureOpt
 
 type mmConfig map[string]any
 
-func (m mmConfig) gitLabSettings() map[string]any {
-	gl, ok := m["GitLabSettings"].(map[string]any)
+func (m mmConfig) openIDSettings() map[string]any {
+	oidc, ok := m["OpenIdSettings"].(map[string]any)
 	if !ok {
-		gl = make(map[string]any)
+		oidc = make(map[string]any)
 	}
-	return gl
+	return oidc
 }
 
 func (c *Configurator) readConfig(ctx context.Context) (mmConfig, error) {

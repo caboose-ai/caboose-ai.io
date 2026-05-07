@@ -19,7 +19,7 @@ func TestListFlowStageBindings(t *testing.T) {
 		{
 			name:      "found bindings",
 			status:    200,
-			body:      `{"results":[{"pk":"b1","stage_obj":{"pk":"s1","name":"stage-1","component":"ak-stage"},"order":0},{"pk":"b2","stage_obj":{"pk":"s2","name":"stage-2","component":"ak-stage"},"order":1}]}`,
+			body:      `{"results":[{"pk":"b1","target":"flow-pk","stage":"s1","stage_obj":{"pk":"s1","name":"stage-1","component":"ak-stage"},"order":0},{"pk":"b2","target":"other-flow-pk","stage":"s2","stage_obj":{"pk":"s2","name":"stage-2","component":"ak-stage"},"order":1},{"pk":"b3","target":"flow-pk","stage":"s3","stage_obj":{"pk":"s3","name":"stage-3","component":"ak-stage"},"order":2}]}`,
 			wantCount: 2,
 		},
 		{
@@ -43,6 +43,9 @@ func TestListFlowStageBindings(t *testing.T) {
 				Token:   "test-token",
 				HTTP: &mockHTTPClient{
 					DoFunc: func(req *http.Request) (*http.Response, error) {
+						if strings.Contains(req.URL.Path, "/api/v3/flows/instances/") {
+							return mockResponse(200, `{"results":[{"pk":"flow-pk","slug":"enrollment","name":"Enrollment","designation":"enrollment"}]}`), nil
+						}
 						if !strings.Contains(req.URL.String(), "flow_slug=enrollment") {
 							t.Errorf("expected flow_slug query param, got %s", req.URL.String())
 						}
@@ -81,7 +84,7 @@ func TestGetFlowStageBinding(t *testing.T) {
 		{
 			name:   "found",
 			status: 200,
-			body:   `{"results":[{"pk":"b1","stage_obj":{"pk":"s1","name":"captcha","component":"ak-stage-captcha"},"order":5}]}`,
+			body:   `{"results":[{"pk":"wrong-flow","target":"other-flow-pk","stage":"s1","stage_obj":{"pk":"s1","name":"captcha","component":"ak-stage-captcha"},"order":5},{"pk":"wrong-stage","target":"flow-pk","stage":"s2","stage_obj":{"pk":"s2","name":"other","component":"ak-stage"},"order":6},{"pk":"b1","target":"flow-pk","stage":"s1","stage_obj":{"pk":"s1","name":"captcha","component":"ak-stage-captcha"},"order":5}]}`,
 			wantPK: "b1",
 		},
 		{
@@ -106,6 +109,9 @@ func TestGetFlowStageBinding(t *testing.T) {
 					DoFunc: func(req *http.Request) (*http.Response, error) {
 						if tt.httpErr != nil {
 							return nil, tt.httpErr
+						}
+						if strings.Contains(req.URL.Path, "/api/v3/flows/instances/") {
+							return mockResponse(200, `{"results":[{"pk":"flow-pk","slug":"enrollment","name":"Enrollment","designation":"enrollment"}]}`), nil
 						}
 						return mockResponse(tt.status, tt.body), nil
 					},

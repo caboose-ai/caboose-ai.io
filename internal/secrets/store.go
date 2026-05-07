@@ -38,6 +38,7 @@ func BootstrapSecrets() []SecretDef {
 		{Key: "SONAR_DB_PASS", Length: 32, Opts: GenerateOpts{Recipe: "letters,digits,32"}},
 		{Key: "GHOST_DB_PASS", Length: 32, Opts: GenerateOpts{Recipe: "letters,digits,32"}},
 		{Key: "MATTERMOST_DB_PASS", Length: 32, Opts: GenerateOpts{Recipe: "letters,digits,32"}},
+		{Key: "HOMARR_SECRET_ENCRYPTION_KEY", Length: 64, Opts: GenerateOpts{Recipe: "hex"}},
 	}
 }
 
@@ -50,10 +51,24 @@ func DerivedSecretKeys() []string {
 		"GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET",
 		"OPEN_WEBUI_OAUTH_CLIENT_ID",
 		"OPEN_WEBUI_OAUTH_CLIENT_SECRET",
+		"HOMARR_OIDC_CLIENT_ID",
+		"HOMARR_OIDC_CLIENT_SECRET",
 		"WOODPECKER_GITEA_CLIENT",
 		"WOODPECKER_GITEA_SECRET",
+	}
+}
+
+func StaticSecretKeys() []string {
+	return []string{
+		"GITHUB_OAUTH_CLIENT_ID",
+		"GITHUB_OAUTH_CLIENT_SECRET",
+		"GOOGLE_OAUTH_CLIENT_ID",
+		"GOOGLE_OAUTH_CLIENT_SECRET",
 		"TURNSTILE_SITE_KEY",
 		"TURNSTILE_SECRET_KEY",
+		"CLOUDFLARE_ACCOUNT_ID",
+		"CLOUDFLARE_API_TOKEN",
+		"CLOUDFLARE_ZONE_ID",
 	}
 }
 

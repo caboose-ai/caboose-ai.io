@@ -16,8 +16,14 @@ type SecretsCompleteMsg struct{}
 
 // SecretGeneratedMsg is emitted by the app for each auto-generated secret.
 type SecretGeneratedMsg struct {
-	Key string
-	Err error
+	Key    string
+	Action string
+	Err    error
+}
+
+type SecretLoadedMsg struct {
+	Key    string
+	Source string
 }
 
 // SecretPromptNeededMsg is emitted by the app when a prompted secret has no config value.
@@ -35,7 +41,7 @@ type SecretsErrorMsg struct{ Err error }
 type SecretsModel struct {
 	defs      []secrets.SecretDef
 	defByKey  map[string]secrets.SecretDef
-	statuses  map[string]string // "done", "generating", "prompting", "error"
+	statuses  map[string]string // "done", "generating", "prompting", "loaded", "skipped", "error"
 	errors    map[string]error
 	spinner   spinner.Model
 	input     textinput.Model
@@ -52,6 +58,7 @@ func NewSecrets() SecretsModel {
 	ti.CharLimit = 100
 	ti.Width = 40
 	defs := append(secrets.BootstrapSecrets(), secrets.SocialSecrets()...)
+	defs = append(defs, secrets.TurnstileSecrets()...)
 	defByKey := make(map[string]secrets.SecretDef, len(defs))
 	for _, def := range defs {
 		defByKey[def.Key] = def
@@ -70,15 +77,26 @@ func (m SecretsModel) Init() tea.Cmd {
 	return m.spinner.Tick
 }
 
+func (m SecretsModel) HasStatus(key string) bool {
+	_, ok := m.statuses[key]
+	return ok
+}
+
 func (m SecretsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case SecretGeneratedMsg:
 		if msg.Err != nil {
 			m.statuses[msg.Key] = "error"
 			m.errors[msg.Key] = msg.Err
+		} else if msg.Action != "" {
+			m.statuses[msg.Key] = msg.Action
 		} else {
 			m.statuses[msg.Key] = "done"
 		}
+		return m, nil
+
+	case SecretLoadedMsg:
+		m.statuses[msg.Key] = "loaded"
 		return m, nil
 
 	case SecretPromptNeededMsg:
@@ -103,7 +121,11 @@ func (m SecretsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			def, ok := m.defByKey[m.prompting]
 			if val != "" || (ok && def.Optional) {
 				key := m.prompting
-				m.statuses[key] = "done"
+				if val == "" && ok && def.Optional {
+					m.statuses[key] = "skipped"
+				} else {
+					m.statuses[key] = "done"
+				}
 				m.prompting = ""
 				m.input.SetValue("")
 				m.input.Blur()
@@ -126,7 +148,7 @@ func (m SecretsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m SecretsModel) View() string {
 	if m.hasError {
 		return styles.ContentStyle.Render(
-			styles.FailStyle.Render("✗ Secret generation failed:\n\n  ") +
+			styles.FailStyle.Render("✗ Installer failed:\n\n  ") +
 				m.err.Error() + "\n\n" +
 				styles.DimStyle.Render("Press q to quit"),
 		)
@@ -136,8 +158,12 @@ func (m SecretsModel) View() string {
 	for _, def := range m.defs {
 		status := m.statuses[def.Key]
 		switch status {
-		case "done":
+		case "done", "stored":
 			lines = append(lines, styles.SuccessStyle.Render("  ✓ ")+def.Key)
+		case "loaded", "exists":
+			lines = append(lines, styles.SuccessStyle.Render("  ✓ ")+def.Key+styles.DimStyle.Render(" (loaded)"))
+		case "skipped":
+			lines = append(lines, styles.DimStyle.Render("  – ")+styles.DimStyle.Render(def.Key+" (skipped)"))
 		case "generating":
 			lines = append(lines, fmt.Sprintf("  %s %s", m.spinner.View(), def.Key))
 		case "prompting":

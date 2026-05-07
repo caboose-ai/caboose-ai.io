@@ -286,15 +286,27 @@ services:
     restart: unless-stopped
 
   homarr:
-    image: ghcr.io/ajnart/homarr:latest  # archived project — no v0.16.0 tag on GHCR; migrate to ghcr.io/homarr-labs/homarr when ready
+    image: ghcr.io/homarr-labs/homarr:latest
     container_name: homarr
     ports:
       - "127.0.0.1:7575:7575"
     healthcheck:
       disable: true
+    environment:
+      SECRET_ENCRYPTION_KEY: ${HOMARR_SECRET_ENCRYPTION_KEY:-0000000000000000000000000000000000000000000000000000000000000000}
+      BASE_URL: ${HOMARR_BASE_URL:-https://caboose-ai.io}
+      NEXTAUTH_URL: ${HOMARR_BASE_URL:-https://caboose-ai.io}
+      AUTH_PROVIDERS: oidc
+      AUTH_OIDC_CLIENT_ID: ${HOMARR_OIDC_CLIENT_ID:-homarr-pending}
+      AUTH_OIDC_CLIENT_SECRET: ${HOMARR_OIDC_CLIENT_SECRET:-homarr-pending}
+      AUTH_OIDC_ISSUER: ${HOMARR_OIDC_ISSUER:-https://auth.caboose-ai.io/application/o/homarr/}
+      AUTH_OIDC_CLIENT_NAME: authentik
+      AUTH_OIDC_SCOPE_OVERWRITE: "openid email profile groups"
+      AUTH_OIDC_GROUPS_ATTRIBUTE: groups
+      AUTH_OIDC_AUTO_LOGIN: "true"
+      AUTH_LOGOUT_REDIRECT_URL: ${HOMARR_LOGOUT_REDIRECT_URL:-https://auth.caboose-ai.io/application/o/homarr/end-session/}
     volumes:
-      - homarr_data:/app/data/configs
-      - ./homarr-default.json:/app/data/configs/default.json:ro
+      - homarr_data:/appdata
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - apps

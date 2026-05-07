@@ -9,10 +9,11 @@ import (
 )
 
 type Provider struct {
-	PK           int    `json:"pk"`
-	Name         string `json:"name"`
-	ClientID     string `json:"client_id"`
-	ClientSecret string `json:"client_secret"`
+	PK           int           `json:"pk"`
+	Name         string        `json:"name"`
+	ClientID     string        `json:"client_id"`
+	ClientSecret string        `json:"client_secret"`
+	RedirectURIs []RedirectURI `json:"redirect_uris"`
 }
 
 type providerList struct {
@@ -63,6 +64,7 @@ type CreateProviderParams struct {
 	InvalidationFlow  string        `json:"invalidation_flow"`
 	ClientType        string        `json:"client_type"`
 	RedirectURIs      []RedirectURI `json:"redirect_uris"`
+	SigningKey        string        `json:"signing_key,omitempty"`
 	PropertyMappings  []string      `json:"property_mappings,omitempty"`
 }
 
@@ -77,6 +79,18 @@ func (c *Client) CreateProvider(ctx context.Context, params CreateProviderParams
 		return nil, fmt.Errorf("parsing created provider: %w", err)
 	}
 	return &p, nil
+}
+
+func (c *Client) UpdateProviderOIDCSettings(ctx context.Context, pk int, redirectURIs []RedirectURI, signingKey string) error {
+	body := map[string]any{"redirect_uris": redirectURIs}
+	if signingKey != "" {
+		body["signing_key"] = signingKey
+	}
+	_, err := c.Patch(ctx, fmt.Sprintf("/api/v3/providers/oauth2/%d/", pk), body)
+	if err != nil {
+		return fmt.Errorf("updating provider %d OIDC settings: %w", pk, err)
+	}
+	return nil
 }
 
 type Flow struct {

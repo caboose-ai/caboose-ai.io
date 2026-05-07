@@ -8,10 +8,12 @@ echo "=== Fix Social OAuth Credentials ==="
 echo ""
 
 # Current state
-GITHUB_ID=$(op item get GITHUB_OAUTH_CLIENT_ID --vault Homelab --fields password --reveal 2>/dev/null || echo "")
-GITHUB_SECRET=$(op item get GITHUB_OAUTH_CLIENT_SECRET --vault Homelab --fields password --reveal 2>/dev/null || echo "")
-GOOGLE_ID=$(op item get GOOGLE_OAUTH_CLIENT_ID --vault Homelab --fields password --reveal 2>/dev/null || echo "")
-GOOGLE_SECRET=$(op item get GOOGLE_OAUTH_CLIENT_SECRET --vault Homelab --fields password --reveal 2>/dev/null || echo "")
+STATIC_VAULT="${OP_STATIC_VAULT:-Homelab - Static}"
+
+GITHUB_ID=$(op item get GITHUB_OAUTH_CLIENT_ID --vault "$STATIC_VAULT" --fields password --reveal 2>/dev/null || echo "")
+GITHUB_SECRET=$(op item get GITHUB_OAUTH_CLIENT_SECRET --vault "$STATIC_VAULT" --fields password --reveal 2>/dev/null || echo "")
+GOOGLE_ID=$(op item get GOOGLE_OAUTH_CLIENT_ID --vault "$STATIC_VAULT" --fields password --reveal 2>/dev/null || echo "")
+GOOGLE_SECRET=$(op item get GOOGLE_OAUTH_CLIENT_SECRET --vault "$STATIC_VAULT" --fields password --reveal 2>/dev/null || echo "")
 
 echo "Current credentials in 1Password:"
 echo "  GitHub ID:     ${GITHUB_ID:-(empty)}"
@@ -27,7 +29,7 @@ else
     echo "✗ GitHub Client ID looks wrong (expected Ov23li... prefix)"
     read -rp "  Enter correct GitHub Client ID (or press Enter to skip): " new_id
     if [[ -n "$new_id" ]]; then
-        op item edit GITHUB_OAUTH_CLIENT_ID --vault Homelab "password=$new_id" >/dev/null
+        op item edit GITHUB_OAUTH_CLIENT_ID --vault "$STATIC_VAULT" "password=$new_id" >/dev/null
         GITHUB_ID="$new_id"
         echo "  ✓ Updated"
     fi
@@ -43,7 +45,7 @@ else
     echo ""
     read -rp "  Paste your Google OAuth Client ID: " new_id
     if [[ -n "$new_id" ]]; then
-        op item edit GOOGLE_OAUTH_CLIENT_ID --vault Homelab "password=$new_id" >/dev/null
+        op item edit GOOGLE_OAUTH_CLIENT_ID --vault "$STATIC_VAULT" "password=$new_id" >/dev/null
         GOOGLE_ID="$new_id"
         echo "  ✓ Updated"
     else
@@ -58,7 +60,7 @@ else
     echo "✗ Google Client Secret looks wrong (expected GOCSPX-... prefix)"
     read -rp "  Enter correct Google Client Secret (or press Enter to skip): " new_secret
     if [[ -n "$new_secret" ]]; then
-        op item edit GOOGLE_OAUTH_CLIENT_SECRET --vault Homelab "password=$new_secret" >/dev/null
+        op item edit GOOGLE_OAUTH_CLIENT_SECRET --vault "$STATIC_VAULT" "password=$new_secret" >/dev/null
         GOOGLE_SECRET="$new_secret"
         echo "  ✓ Updated"
     fi

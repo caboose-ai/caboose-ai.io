@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/caboose-ai/caboose-ai.io/internal/runner"
 )
@@ -47,7 +48,7 @@ func (c *Client) doJSON(ctx context.Context, method, path string, body any) ([]b
 	if err != nil {
 		return nil, fmt.Errorf("marshaling request body: %w", err)
 	}
-	c.log().Debug("authentik request", "method", method, "path", path, "body", string(data))
+	c.log().Debug("authentik request", "method", method, "path", path, "body", redactJSONForLog(data))
 	return c.do(ctx, method, path, bytes.NewReader(data))
 }
 
@@ -83,4 +84,41 @@ func (c *Client) do(ctx context.Context, method, path string, body io.Reader) ([
 		return nil, fmt.Errorf("%s %s returned HTTP %d: %s", method, path, resp.StatusCode, string(data))
 	}
 	return data, nil
+}
+
+func redactJSONForLog(data []byte) string {
+	var value any
+	if err := json.Unmarshal(data, &value); err != nil {
+		return "[unparseable json]"
+	}
+	redactValue(value)
+	redacted, err := json.Marshal(value)
+	if err != nil {
+		return "[unparseable json]"
+	}
+	return string(redacted)
+}
+
+func redactValue(value any) {
+	switch v := value.(type) {
+	case map[string]any:
+		for key, nested := range v {
+			if isSensitiveField(key) {
+				v[key] = "[REDACTED]"
+				continue
+			}
+			redactValue(nested)
+		}
+	case []any:
+		for _, nested := range v {
+			redactValue(nested)
+		}
+	}
+}
+
+func isSensitiveField(key string) bool {
+	key = strings.ToLower(key)
+	return strings.Contains(key, "secret") ||
+		strings.Contains(key, "password") ||
+		strings.Contains(key, "token")
 }

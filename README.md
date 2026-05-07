@@ -15,6 +15,7 @@ Go monorepo for a self-hosted homelab infrastructure stack with SSO via Authenti
 | n8n | `n8n.caboose-ai.io` | Workflow automation |
 | SonarQube | `sonar.caboose-ai.io` | Code quality & security |
 | Mattermost | `chat.caboose-ai.io` | Team chat |
+| OpenClaw | `openclaw.caboose-ai.io` | OpenClaw app behind Authentik forward auth |
 | Ghost | `blog.caboose-ai.io` | Blog |
 | Homarr | `caboose-ai.io` | Dashboard / homepage |
 | Prometheus | — | Metrics collection |
@@ -32,27 +33,38 @@ All services authenticate through Authentik via OAuth2/OIDC or forward-auth prox
 
 ```bash
 # Build
-go build ./...
+mise run build
 
-# Run the installer (interactive TUI)
-go run ./cmd/homelab install --domain caboose-ai.io --compose-dir dev/homelab
+# Build the homelab CLI
+mise run homelab:build
+
+# Run the verified non-interactive installer
+mise run install
+
+# Run the interactive TUI installer
+mise run homelab
+
+# Reset everything while preserving static external credentials
+mise run reset
+
+# Reset, then run the verified non-interactive installer
+mise run reinstall
 
 # Print GitHub, Google, and Turnstile setup URLs/callbacks
-go run ./cmd/homelab oauth-setup --domain caboose-ai.io
+mise run homelab:oauth-setup
 
 # Create a Cloudflare Turnstile widget via API, then print all setup values
-CLOUDFLARE_ACCOUNT_ID=... CLOUDFLARE_API_TOKEN=... \
-  go run ./cmd/homelab oauth-setup --domain caboose-ai.io --create-turnstile
-
-# Or non-interactive
-go run ./cmd/homelab install --non-interactive --config homelab.yml
-
-# Reset everything
-go run ./cmd/homelab reset          # full reset
-go run ./cmd/homelab reset --keep-env  # keep .env file
+mise run homelab:create-turnstile
 
 # Migrate host Mattermost to Docker
 go run ./cmd/homelab migrate
+```
+
+The homelab tasks default to `HOMELAB_DOMAIN=caboose-ai.io` and `HOMELAB_COMPOSE_DIR=/opt/homelab`.
+Override either variable inline when needed, for example:
+
+```bash
+HOMELAB_COMPOSE_DIR=dev/homelab mise run install
 ```
 
 ## Testing
@@ -63,7 +75,14 @@ go test ./internal/... -v           # unit tests
 # SSO smoke tests (requires live stack running)
 mise run sso:check                  # full suite: config + endpoints + browser login
 mise run sso:check-quick            # API config checks only
+mise run sso:e2e                    # browser SSO with click/input screenshot evidence
+mise run homelab:e2e-reset          # destructive reset + install + E2E evidence
 ```
+
+Browser E2E runs write an action log and screenshots under
+`internal/smoketest/testdata/evidence/`. Each action records the page URL and
+whether the test opened a page, clicked a control, entered text, or reached a
+service. Password values are redacted from the evidence log.
 
 ## Infrastructure
 

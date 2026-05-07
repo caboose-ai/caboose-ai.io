@@ -6,15 +6,9 @@ import (
 	"strings"
 	"testing"
 	"time"
-)
 
-type serviceFlow struct {
-	Name        string
-	LoginURL    string
-	SSOSelector string
-	LandingHost string
-	PreClick    string
-}
+	"github.com/go-rod/rod"
+)
 
 func TestSSO_BrowserFlows(t *testing.T) {
 	s := NewSuite(t)
@@ -22,36 +16,8 @@ func TestSSO_BrowserFlows(t *testing.T) {
 	s.InitBrowser(t)
 	s.SetupAdminPassword(t)
 
-	services := []serviceFlow{
-		{
-			Name:        "forgejo",
-			LoginURL:    s.URLs.Forgejo + "/user/login",
-			SSOSelector: `a[href*="oauth2/Authentik"]`,
-			LandingHost: hostFromURL(s.URLs.Forgejo),
-		},
-		{
-			Name:        "grafana",
-			LoginURL:    s.URLs.Grafana + "/login",
-			SSOSelector: "",
-			LandingHost: hostFromURL(s.URLs.Grafana),
-		},
-		{
-			Name:        "portainer",
-			LoginURL:    s.URLs.Portainer + "/#!/auth",
-			SSOSelector: `button[ng-click*="oAuthLogin"], button[data-cy*="oauth"], a[data-cy*="oauth"]`,
-			LandingHost: hostFromURL(s.URLs.Portainer),
-		},
-		{
-			Name:        "mattermost",
-			LoginURL:    s.URLs.Mattermost + "/login",
-			SSOSelector: `#gitlab, button[class*="gitlab"], a[href*="/oauth/gitlab"]`,
-			LandingHost: hostFromURL(s.URLs.Mattermost),
-			PreClick:    `a.btn-tertiary`,
-		},
-	}
-
 	t.Run("OAuthFlows", func(t *testing.T) {
-		for _, svc := range services {
+		for _, svc := range OAuthServiceFlows(s.URLs) {
 			t.Run(svc.Name, func(t *testing.T) {
 				testOAuthFlow(t, s, svc)
 			})
@@ -59,17 +25,7 @@ func TestSSO_BrowserFlows(t *testing.T) {
 	})
 
 	t.Run("ProxyFlows", func(t *testing.T) {
-		proxyServices := []struct {
-			Name       string
-			URL        string
-			TargetHost string
-		}{
-			{"dashboard", s.URLs.Dashboard, hostFromURL(s.URLs.Dashboard)},
-			{"ci", s.URLs.CI, hostFromURL(s.URLs.CI)},
-			{"n8n", s.URLs.N8N, hostFromURL(s.URLs.N8N)},
-		}
-
-		for _, svc := range proxyServices {
+		for _, svc := range ProxyFlows(s.URLs) {
 			t.Run(svc.Name, func(t *testing.T) {
 				testProxyFlow(t, s, svc.Name, svc.TargetHost, svc.URL)
 			})
@@ -77,7 +33,7 @@ func TestSSO_BrowserFlows(t *testing.T) {
 	})
 }
 
-func testOAuthFlow(t *testing.T, s *Suite, svc serviceFlow) {
+func testOAuthFlow(t *testing.T, s *Suite, svc ServiceFlow) {
 	t.Helper()
 
 	basePage := s.Browser.MustPage(svc.LoginURL)
@@ -87,29 +43,38 @@ func testOAuthFlow(t *testing.T, s *Suite, svc serviceFlow) {
 	}()
 
 	page := basePage.Timeout(60 * time.Second)
-	page.MustWaitStable()
+	s.WaitStable(t, page, svc.Name+" login page")
+	s.Record(t, page, "open", svc.Name+" login URL", map[string]string{"url": svc.LoginURL})
 
 	if svc.PreClick != "" {
 		if pre, err := page.Element(svc.PreClick); err == nil {
-			pre.MustClick()
-			page.MustWaitStable()
+			s.Click(t, page, pre, svc.Name+" pre-login control")
+			s.WaitStable(t, page, svc.Name+" pre-login transition")
 		}
 	}
 
 	currentURL := page.MustInfo().URL
 
-	if strings.Contains(currentURL, svc.LandingHost) && !strings.Contains(currentURL, "/login") {
+	if isLoggedInURL(currentURL, svc.LandingHost) {
 		t.Logf("%s: already authenticated, at %s", svc.Name, currentURL)
+		s.Record(t, page, "landed", svc.Name, map[string]string{"url": currentURL})
 		return
 	}
 
 	if svc.SSOSelector != "" && !strings.Contains(currentURL, "auth."+s.Domain) {
 		el, err := page.Element(svc.SSOSelector)
+		if err != nil && svc.SSOText != "" {
+			if s.ClickText(t, page, svc.SSOText, svc.Name+" SSO button") {
+				err = nil
+			}
+		}
 		if err != nil {
 			t.Fatalf("SSO button not found for %s (selector: %s): %v", svc.Name, svc.SSOSelector, err)
 		}
-		el.MustClick()
-		page.MustWaitStable()
+		if el != nil {
+			s.Click(t, page, el, svc.Name+" SSO button")
+		}
+		s.WaitStable(t, page, svc.Name+" SSO redirect")
 		currentURL = page.MustInfo().URL
 	}
 
@@ -117,13 +82,39 @@ func testOAuthFlow(t *testing.T, s *Suite, svc serviceFlow) {
 		s.LoginToAuthentik(t, page)
 	}
 
-	page.MustWaitStable()
+	s.WaitStable(t, page, svc.Name+" landing page")
 	finalURL := page.MustInfo().URL
+	if svc.Name == "forgejo" && strings.Contains(finalURL, "/user/link_account") {
+		linkForgejoAccount(t, s, page)
+		finalURL = page.MustInfo().URL
+	}
 
 	if !strings.Contains(finalURL, svc.LandingHost) {
 		t.Errorf("expected to land on %s, got %s", svc.LandingHost, finalURL)
 	}
+	if !isLoggedInURL(finalURL, svc.LandingHost) {
+		t.Errorf("expected %s to finish logged in, got %s", svc.Name, finalURL)
+	}
+	s.Record(t, page, "landed", svc.Name, map[string]string{"url": finalURL})
 	t.Logf("%s: landed on %s", svc.Name, finalURL)
+}
+
+func linkForgejoAccount(t *testing.T, s *Suite, page *rod.Page) {
+	t.Helper()
+	password := s.Secret(t, "GITEA_ADMIN_PASSWORD")
+
+	pw, err := page.Element(`input[name="password"]`)
+	if err != nil {
+		t.Fatalf("forgejo link account password input not found: %v", err)
+	}
+	s.Input(t, page, pw, "forgejo local password", password, true)
+
+	submit, err := page.Element(`button[type="submit"]`)
+	if err != nil {
+		t.Fatalf("forgejo link account submit not found: %v", err)
+	}
+	s.Click(t, page, submit, "forgejo link account")
+	s.WaitStable(t, page, "forgejo linked account landing")
 }
 
 func testProxyFlow(t *testing.T, s *Suite, name, targetHost, url string) {
@@ -136,58 +127,39 @@ func testProxyFlow(t *testing.T, s *Suite, name, targetHost, url string) {
 	}()
 
 	page := basePage.Timeout(60 * time.Second)
-	page.MustWaitStable()
+	s.WaitStable(t, page, name+" proxy page")
+	s.Record(t, page, "open", name+" proxy URL", map[string]string{"url": url})
 
 	currentURL := page.MustInfo().URL
 
 	if strings.Contains(currentURL, "auth."+s.Domain) {
 		s.LoginToAuthentik(t, page)
-		page.MustWaitStable()
+		s.WaitStable(t, page, name+" proxy landing page")
 		currentURL = page.MustInfo().URL
 	}
 
 	if !strings.Contains(currentURL, targetHost) {
 		t.Errorf("expected to reach %s, got %s", targetHost, currentURL)
 	}
+	s.Record(t, page, "reached", name, map[string]string{"url": currentURL})
 	t.Logf("%s: reached %s", name, currentURL)
 }
 
-func hostFromURL(u string) string {
-	u = strings.TrimPrefix(u, "https://")
-	u = strings.TrimPrefix(u, "http://")
-	if idx := strings.Index(u, "/"); idx >= 0 {
-		u = u[:idx]
+func isLoggedInURL(currentURL, host string) bool {
+	if !strings.Contains(currentURL, host) {
+		return false
 	}
-	return u
-}
-
-// openWebUIFlow handles OpenWebUI's auto-redirect OIDC flow separately
-// since it doesn't have a click-to-login button.
-func TestSSO_BrowserFlows_OpenWebUI(t *testing.T) {
-	s := NewSuite(t)
-	skipIfNoBrowser(t)
-	s.InitBrowser(t)
-	s.SetupAdminPassword(t)
-
-	page := s.Browser.MustPage(s.URLs.OpenWebUI)
-	defer func() {
-		s.ScreenshotOnFailure(t, page)
-		page.MustClose()
-	}()
-
-	page.Timeout(30 * time.Second)
-	page.MustWaitStable()
-
-	currentURL := page.MustInfo().URL
-	if strings.Contains(currentURL, "auth."+s.Domain) {
-		s.LoginToAuthentik(t, page)
-		page.MustWaitStable()
+	failMarkers := []string{
+		"/login",
+		"/auth",
+		"/error",
+		"/user/link_account",
+		"#!/auth",
 	}
-
-	finalURL := page.MustInfo().URL
-	expected := hostFromURL(s.URLs.OpenWebUI)
-	if !strings.Contains(finalURL, expected) {
-		t.Errorf("expected to land on %s, got %s", expected, finalURL)
+	for _, marker := range failMarkers {
+		if strings.Contains(currentURL, marker) {
+			return false
+		}
 	}
-	t.Logf("open-webui: landed on %s", finalURL)
+	return true
 }

@@ -114,6 +114,19 @@ func TestSSO_Config(t *testing.T) {
 	})
 
 	t.Run("SocialSources", func(t *testing.T) {
+		stage, err := s.AK.GetIdentificationStage(ctx, "default-authentication-flow")
+		if err != nil {
+			t.Fatalf("GetIdentificationStage(default-authentication-flow): %v", err)
+		}
+		if stage == nil {
+			t.Fatal("default-authentication-flow identification stage not found")
+		}
+
+		boundSources := make(map[string]bool, len(stage.Sources))
+		for _, pk := range stage.Sources {
+			boundSources[pk] = true
+		}
+
 		for _, slug := range []string{"github", "google"} {
 			t.Run(slug, func(t *testing.T) {
 				pk, err := s.AK.GetSourcePK(ctx, slug)
@@ -122,6 +135,9 @@ func TestSSO_Config(t *testing.T) {
 				}
 				if pk == "" {
 					t.Skipf("social source %q not configured", slug)
+				}
+				if !boundSources[pk] {
+					t.Fatalf("source %q exists but is not bound to default-authentication-flow", slug)
 				}
 				t.Logf("source %q: pk=%s", slug, pk)
 			})

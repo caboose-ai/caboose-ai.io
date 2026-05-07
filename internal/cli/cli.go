@@ -3,20 +3,20 @@ package cli
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
-	clog "github.com/charmbracelet/log"
-
+	"github.com/caboose-ai/caboose-ai.io/internal/config"
 	"github.com/caboose-ai/caboose-ai.io/internal/health"
 	"github.com/caboose-ai/caboose-ai.io/internal/install"
 )
 
 func RunInstall(ctx context.Context, inst *install.Installer) int {
-	logger := clog.NewWithOptions(os.Stderr, clog.Options{ReportTimestamp: true})
+	console := NewConsole()
 	dryRun := inst.Config.DryRun
 
-	logger.Info("checking prerequisites")
+	console.Banner("Homelab SSO Install", inst.Config.Domain)
+	console.Phase("Prerequisites")
+	console.Run("checking host tools")
 	results, err := inst.CheckPrereqs(ctx)
 	for _, r := range results {
 		if r.Found {
@@ -24,49 +24,55 @@ func RunInstall(ctx context.Context, inst *install.Installer) int {
 			if len(ver) > 60 {
 				ver = ver[:60]
 			}
-			logger.Info("  ✓ "+r.Name, "version", ver)
+			console.Success(r.Name, "version", ver)
 		} else {
-			logger.Error("  ✗ "+r.Name, "error", r.Err)
+			console.Error(r.Name, "error", r.Err)
 		}
 	}
 	if err != nil {
-		logger.Error("prerequisite check failed")
+		console.Error("prerequisite check failed")
 		return 1
 	}
-	logger.Info("prerequisites OK")
+	console.Success("prerequisites OK")
 
 	if dryRun {
-		logger.Info("[dry-run] would ensure 1Password vault", "vault", inst.Config.OPVault)
-		logger.Info("[dry-run] would generate secrets")
+		console.Phase("Dry Run")
+		console.Run("would ensure 1Password vaults", "static", inst.Config.OPStaticVault, "dynamic", inst.Config.OPVault)
+		console.Run("would generate secrets")
 		for _, def := range inst.State.BootstrapDefs() {
 			if def.Prompt {
-				logger.Info("  [dry-run] would prompt", "key", def.Key)
+				console.Info("  ? would prompt", "key", def.Key)
 			} else {
-				logger.Info("  [dry-run] would generate", "key", def.Key, "length", def.Length)
+				console.Info("  ● would generate", "key", def.Key, "length", def.Length)
 			}
 		}
-		logger.Info("[dry-run] would apply homelab backend", "orchestrator", inst.Backend.Name(), "dir", inst.Config.ComposeDir)
-		logger.Info("[dry-run] would resolve optional social OAuth credentials from config/1Password")
-		logger.Info("[dry-run] would wait for services to be healthy")
-		logger.Info("[dry-run] would rename akadmin → auth-admin")
-		logger.Info("[dry-run] would initialize Forgejo admin user")
-		logger.Info("[dry-run] would provision OAuth2 providers")
+		console.Run("would apply homelab backend", "orchestrator", inst.Backend.Name(), "dir", inst.Config.ComposeDir)
+		console.Run("would resolve optional social OAuth credentials from config/1Password")
+		console.Run("would wait for services to be healthy")
+		console.Run("would rename akadmin to auth-admin")
+		console.Run("would configure Authentik brand recovery flow")
+		console.Run("would generate admin recovery link")
+		console.Run("would configure Turnstile captcha stage")
+		console.Run("would configure inactive-user enrollment")
+		console.Run("would initialize Forgejo admin user")
+		console.Run("would provision OAuth2 providers")
 		for _, spec := range inst.ProviderSpecs() {
-			logger.Info("  [dry-run] would ensure provider", "name", spec.Name, "slug", spec.Slug)
+			console.Info("  ● would ensure provider", "name", spec.Name, "slug", spec.Slug)
 		}
-		logger.Info("[dry-run] would configure all services")
-		logger.Info("[dry-run] install complete (no changes made)")
+		console.Run("would configure all services")
+		console.Success("install dry run complete")
 		return 0
 	}
 
-	logger.Info("ensuring 1Password vault", "vault", inst.Config.OPVault)
+	console.Phase("Secrets")
+	console.Run("ensuring 1Password vaults", "static", inst.Config.OPStaticVault, "dynamic", inst.Config.OPVault)
 	if err := inst.EnsureVault(ctx); err != nil {
-		logger.Error("vault setup failed", "error", err)
+		console.Error("vault setup failed", "error", err)
 		return 2
 	}
-	logger.Info("vault ready")
+	console.Success("vaults ready")
 
-	logger.Info("generating secrets")
+	console.Run("generating and loading secrets")
 	if err := inst.GenerateSecrets(ctx, func(key string) (string, error) {
 		if key == "AUTHENTIK_BOOTSTRAP_EMAIL" && inst.Config.Email != "" {
 			return inst.Config.Email, nil
@@ -78,179 +84,264 @@ func RunInstall(ctx context.Context, inst *install.Installer) int {
 	}, func(p install.SecretProgress) {
 		switch p.Action {
 		case "generating":
-			logger.Info("  ● generating", "key", p.Key)
+			console.Run("generating secret", "key", p.Key)
 		case "exists":
-			logger.Info("  ✓ exists", "key", p.Key)
+			console.Success("secret loaded", "key", p.Key)
 		case "prompting":
-			logger.Info("  ? prompting", "key", p.Key)
+			console.Info("  ? prompting", "key", p.Key)
 		case "stored":
-			logger.Info("  ✓ stored", "key", p.Key)
+			console.Success("secret stored", "key", p.Key)
 		case "error":
-			logger.Error("  ✗ failed", "key", p.Key, "error", p.Err)
+			console.Error("secret failed", "key", p.Key, "error", p.Err)
 		}
 	}); err != nil {
-		logger.Error("secret generation failed", "error", err)
+		console.Error("secret generation failed", "error", err)
 		return 2
 	}
-	logger.Info("secrets ready")
+	console.Success("secrets ready")
 
-	logger.Info("resolving optional social OAuth credentials (GitHub/Google)")
+	console.Run("resolving optional social OAuth credentials", "providers", "GitHub,Google")
 	if err := inst.ResolveSocialCredentials(ctx, nil); err != nil {
-		logger.Error("social credential resolution failed", "error", err)
+		console.Error("social credential resolution failed", "error", err)
 		return 2
 	}
-	logger.Info("social credential resolution complete")
+	console.Success("social credentials ready")
 
-	logger.Info("starting homelab backend", "orchestrator", inst.Backend.Name(), "dir", inst.Config.ComposeDir)
+	console.Phase("Compose")
+	console.Run("starting homelab backend", "orchestrator", inst.Backend.Name(), "dir", inst.Config.ComposeDir)
 	if err := inst.ComposeUp(ctx); err != nil {
-		logger.Error("backend apply failed", "orchestrator", inst.Backend.Name(), "error", err)
+		console.Error("backend apply failed", "orchestrator", inst.Backend.Name(), "error", err)
 		return 3
 	}
-	logger.Info("backend started", "orchestrator", inst.Backend.Name())
+	console.Success("backend started", "orchestrator", inst.Backend.Name())
 
-	logger.Info("waiting for services to be healthy (timeout 5m)")
+	console.Run("waiting for services to be healthy", "timeout", "5m")
 	healthOK := true
 	for status := range inst.WaitHealthy(ctx) {
 		if status.Healthy {
-			logger.Info("  ✓ healthy", "service", status.Name, "elapsed", status.Elapsed)
+			console.Success("healthy", "service", status.Name, "elapsed", status.Elapsed)
 		} else {
-			logger.Warn("  ● polling", "service", status.Name, "error", status.Err)
+			console.Warn("polling", "service", status.Name, "error", status.Err)
 			if status.Err == context.DeadlineExceeded {
 				healthOK = false
 			}
 		}
 	}
 	if !healthOK {
-		logger.Error("health check timed out — one or more services did not become ready")
+		console.Error("health check timed out; one or more services did not become ready")
 		return 3
 	}
 
+	console.Phase("Authentik")
 	token, err := inst.Secrets.Get(ctx, "AUTHENTIK_BOOTSTRAP_TOKEN")
 	if err != nil {
-		logger.Error("retrieving Authentik bootstrap token", "error", err)
+		console.Error("retrieving Authentik bootstrap token", "error", err)
 		return 3
 	}
 	inst.InitAK(token)
 
-	logger.Info("initializing Forgejo admin user")
+	console.Phase("Forgejo")
+	console.Run("initializing Forgejo admin user")
 	if err := inst.InitForgejo(ctx); err != nil {
-		logger.Error("Forgejo init failed", "error", err)
+		console.Error("Forgejo init failed", "error", err)
 		return 3
 	}
-	logger.Info("Forgejo admin user ready")
+	console.Success("Forgejo admin user ready")
 
-	logger.Info("building service configurators")
-	if err := inst.BuildServices(ctx); err != nil {
-		logger.Error("failed to build service configurators", "error", err)
-		return 3
-	}
-
-	logger.Info("renaming admin user", "from", "akadmin", "to", "auth-admin")
+	console.Phase("SSO Bootstrap")
+	console.Run("renaming admin user", "from", "akadmin", "to", "auth-admin")
 	if err := inst.RenameAdmin(ctx); err != nil {
-		logger.Error("admin rename failed", "error", err)
+		if install.IsAuthentikTokenError(err) {
+			console.Warn("Authentik bootstrap token is invalid; recovering from running container")
+			if recoverErr := inst.RecoverAuthentikBootstrapToken(ctx); recoverErr != nil {
+				console.Error("admin token recovery failed", "error", recoverErr)
+				return 3
+			}
+			err = inst.RenameAdmin(ctx)
+		}
+		if err != nil {
+			console.Error("admin rename failed", "error", err)
+		} else {
+			console.Success("admin user renamed")
+		}
 	} else {
-		logger.Info("admin user renamed")
+		console.Success("admin user renamed")
 	}
 
-	logger.Info("provisioning OAuth2 providers in Authentik")
+	console.Run("configuring Authentik brand recovery flow")
+	if err := inst.ConfigureBrand(ctx); err != nil {
+		if install.IsAuthentikTokenError(err) {
+			console.Warn("Authentik bootstrap token is invalid; recovering from running container")
+			if recoverErr := inst.RecoverAuthentikBootstrapToken(ctx); recoverErr != nil {
+				console.Error("admin token recovery failed", "error", recoverErr)
+				return 3
+			}
+			err = inst.ConfigureBrand(ctx)
+		}
+		if err != nil {
+			console.Error("brand recovery flow setup failed", "error", err)
+			return 3
+		}
+	}
+	console.Success("brand recovery flow ready")
+
+	console.Run("generating admin recovery link")
+	recoveryLink, err := inst.GenerateAdminRecoveryLink(ctx, nil)
+	if err != nil {
+		if install.IsAuthentikTokenError(err) {
+			console.Warn("Authentik bootstrap token is invalid; recovering from running container")
+			if recoverErr := inst.RecoverAuthentikBootstrapToken(ctx); recoverErr != nil {
+				console.Error("admin token recovery failed", "error", recoverErr)
+				return 3
+			}
+			recoveryLink, err = inst.GenerateAdminRecoveryLink(ctx, nil)
+		}
+		if err != nil {
+			console.Error("admin recovery link generation failed", "error", err)
+			return 3
+		}
+	}
+	inst.State.AdminRecoveryLink = recoveryLink
+	if recoveryLink != "" {
+		console.Link("admin recovery link", recoveryLink)
+	} else {
+		console.Warn("admin recovery link unavailable")
+	}
+
+	console.Run("configuring Turnstile captcha stage")
+	if err := inst.SetupCaptcha(ctx, nil); err != nil {
+		console.Error("captcha setup failed", "error", err)
+		return 3
+	}
+	console.Success("Turnstile captcha stage ready")
+
+	console.Run("configuring inactive-user enrollment")
+	if err := inst.SetupInactiveEnrollment(ctx, nil); err != nil {
+		console.Error("enrollment setup failed", "error", err)
+		return 3
+	}
+	console.Success("inactive-user enrollment ready")
+
+	console.Phase("Providers")
+	console.Run("provisioning OAuth2 providers in Authentik")
 	if err := inst.ProvisionProviders(ctx, func(p install.ProviderProgress) {
 		switch p.Action {
 		case "exists":
-			logger.Info("  ✓ exists", "provider", p.Name)
+			console.Success("provider exists", "provider", p.Name)
 		case "creating":
-			logger.Info("  ● creating", "provider", p.Name)
+			console.Run("creating provider", "provider", p.Name)
 		case "created":
-			logger.Info("  ✓ created", "provider", p.Name)
+			console.Success("provider created", "provider", p.Name)
 		case "error":
-			logger.Error("  ✗ failed", "provider", p.Name, "error", p.Err)
+			console.Error("provider failed", "provider", p.Name, "error", p.Err)
 		}
 	}); err != nil {
-		logger.Error("provider provisioning failed", "error", err)
+		console.Error("provider provisioning failed", "error", err)
 		return 3
 	}
-	logger.Info("providers ready")
+	console.Success("providers ready")
 
-	logger.Info("provisioning proxy providers and outpost in Authentik")
+	console.Run("provisioning proxy providers and outpost in Authentik")
 	if err := inst.ProvisionOutpost(ctx, func(p install.OutpostProgress) {
 		switch p.Action {
 		case "exists":
-			logger.Info("  ✓ exists", "provider", p.Name)
+			console.Success("provider exists", "provider", p.Name)
 		case "creating":
-			logger.Info("  ● creating", "provider", p.Name)
+			console.Run("creating provider", "provider", p.Name)
 		case "created":
-			logger.Info("  ✓ created", "provider", p.Name)
+			console.Success("provider created", "provider", p.Name)
 		case "binding":
-			logger.Info("  ● binding providers to outpost")
+			console.Run("binding providers to outpost")
 		case "bound":
-			logger.Info("  ✓ outpost updated")
+			console.Success("outpost updated")
 		case "error":
-			logger.Error("  ✗ failed", "provider", p.Name, "error", p.Err)
+			console.Error("provider failed", "provider", p.Name, "error", p.Err)
 		}
 	}); err != nil {
-		logger.Error("outpost provisioning failed", "error", err)
+		console.Error("outpost provisioning failed", "error", err)
 		return 3
 	}
-	logger.Info("outpost ready")
+	console.Success("outpost ready")
 
-	logger.Info("configuring services")
+	console.Phase("Services")
+	console.Run("building service configurators")
+	if err := inst.BuildServices(ctx); err != nil {
+		console.Error("failed to build service configurators", "error", err)
+		return 3
+	}
+
+	console.Run("configuring downstream services")
 	svcResults := inst.ConfigureServices(ctx, func(name string, done bool) {
 		if !done {
-			logger.Info("  ● configuring", "service", name)
+			console.Run("configuring service", "service", name)
 		}
 	})
 
 	hasErrors := false
 	for _, r := range svcResults {
 		if r.Err != nil {
-			logger.Error("  ✗ failed", "service", r.Name, "error", r.Err)
+			console.Error("service failed", "service", r.Name, "error", r.Err)
 			hasErrors = true
 		} else if r.Result != nil {
 			switch r.Result.Status.String() {
 			case "skipped":
-				logger.Warn("  – skipped", "service", r.Name, "reason", r.Result.Message)
+				console.Skip("service skipped", "service", r.Name, "reason", r.Result.Message)
 			case "already configured":
-				logger.Info("  ✓ already configured", "service", r.Name)
+				console.Success("service already configured", "service", r.Name)
 			default:
-				logger.Info("  ✓ "+r.Result.Status.String(), "service", r.Name, "message", r.Result.Message)
+				console.Success("service "+r.Result.Status.String(), "service", r.Name, "message", r.Result.Message)
 			}
 		}
 	}
 
 	if len(inst.State.RestartNeeded) > 0 {
-		logger.Info("restarting services", "services", inst.State.RestartNeeded)
+		console.Run("restarting services", "services", inst.State.RestartNeeded)
 		if err := inst.RestartServices(ctx); err != nil {
-			logger.Error("restart failed", "error", err)
+			console.Error("restart failed", "error", err)
 		} else {
-			logger.Info("services restarted")
+			console.Success("services restarted")
 		}
 	}
 
-	logger.Info("final health check")
+	console.Phase("Final Health")
+	console.Run("running final health check")
 	finalHealthOK := true
 	for status := range inst.WaitHealthy(ctx) {
-		logHealth(logger, status)
+		logHealth(console, status)
 		if status.Err == context.DeadlineExceeded {
 			finalHealthOK = false
 		}
 	}
 
 	if !finalHealthOK {
-		logger.Warn("one or more services remain unhealthy after restart")
+		console.Warn("one or more services remain unhealthy after restart")
 		return 4
 	}
 
 	if hasErrors {
-		logger.Warn("install completed with errors")
+		console.Warn("install completed with errors")
 		return 4
 	}
-	logger.Info("install complete")
+	console.Phase("Complete")
+	console.Success("install complete")
+	if inst.State.AdminRecoveryLink != "" {
+		console.Link("admin recovery link", inst.State.AdminRecoveryLink)
+	}
+	logServiceLinks(console, inst.Config.URLs())
 	return 0
 }
 
-func logHealth(logger *clog.Logger, status health.Status) {
+func logServiceLinks(console *Console, urls config.URLs) {
+	console.Info("Service URLs")
+	for _, link := range urls.ServiceLinks() {
+		console.Link(link.Name, link.URL)
+	}
+}
+
+func logHealth(console *Console, status health.Status) {
 	if status.Healthy {
-		logger.Info("  ✓ healthy", "service", status.Name)
+		console.Success("healthy", "service", status.Name)
 	} else {
-		logger.Warn("  ● polling", "service", status.Name, "error", status.Err)
+		console.Warn("polling", "service", status.Name, "error", status.Err)
 	}
 }

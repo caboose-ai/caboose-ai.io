@@ -148,6 +148,8 @@ func TestInitAdmin(t *testing.T) {
 	tests := []struct {
 		name        string
 		status      int
+		header      http.Header
+		body        string
 		wantAlready bool
 		wantErr     string
 	}{
@@ -162,6 +164,15 @@ func TestInitAdmin(t *testing.T) {
 			wantAlready: true,
 		},
 		{
+			name:   "admin init timeout redirect",
+			status: 303,
+			header: http.Header{
+				"Redirect-Reason": []string{"AdminInitTimeout"},
+			},
+			body:    `{"message":"Administrator initialization timeout"}`,
+			wantErr: "AdminInitTimeout",
+		},
+		{
 			name:    "server error",
 			status:  500,
 			wantErr: "Portainer admin init returned HTTP 500",
@@ -174,7 +185,13 @@ func TestInitAdmin(t *testing.T) {
 				PortainerURL: "http://localhost:9000",
 				AdminPass:    "test-pass",
 				HTTP: &mockHTTP{DoFunc: func(req *http.Request) (*http.Response, error) {
-					return httpResponse(tt.status, "{}"), nil
+					body := tt.body
+					if body == "" {
+						body = "{}"
+					}
+					resp := httpResponse(tt.status, body)
+					resp.Header = tt.header
+					return resp, nil
 				}},
 			}
 
