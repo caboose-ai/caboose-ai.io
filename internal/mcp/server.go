@@ -20,9 +20,11 @@ import (
 	"github.com/caboose-ai/caboose-ai.io/internal/services/forgejo"
 	"github.com/caboose-ai/caboose-ai.io/internal/services/grafana"
 	"github.com/caboose-ai/caboose-ai.io/internal/services/mattermost"
+	"github.com/caboose-ai/caboose-ai.io/internal/services/n8n"
 	"github.com/caboose-ai/caboose-ai.io/internal/services/openwebui"
 	"github.com/caboose-ai/caboose-ai.io/internal/services/portainer"
 	"github.com/caboose-ai/caboose-ai.io/internal/services/social"
+	"github.com/caboose-ai/caboose-ai.io/internal/services/sonarqube"
 	"github.com/caboose-ai/caboose-ai.io/internal/services/woodpecker"
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -170,12 +172,18 @@ func (s *Server) buildServices(ctx context.Context) {
 
 	giteaAdminPass, _ := s.secrets.Get(ctx, "GITEA_ADMIN_PASSWORD")
 	portainerAdminPass, _ := s.secrets.Get(ctx, "PORTAINER_ADMIN_PASSWORD")
+	n8nPass, _ := s.secrets.Get(ctx, "N8N_PASSWORD")
+	sonarAdminPass, _ := s.secrets.Get(ctx, "SONAR_ADMIN_PASSWORD")
 	if portainerAdminPass == "" {
 		portainerAdminPass = "admin"
 	}
 	portainerAPIURL := urls.Portainer
+	n8nAPIURL := urls.N8N
+	sonarAPIURL := urls.SonarQube
 	if s.cfg.Orchestrator == "compose" {
 		portainerAPIURL = "http://127.0.0.1:9000"
+		n8nAPIURL = "http://127.0.0.1:5678"
+		sonarAPIURL = "http://127.0.0.1:9005"
 	}
 
 	s.services = []services.ServiceConfigurator{
@@ -184,7 +192,9 @@ func (s *Server) buildServices(ctx context.Context) {
 		portainer.New(s.ak, s.http, s.runner, portainerAPIURL, portainerAdminPass, urls.Authentik, urls.Portainer+"/"),
 		grafana.New(s.ak, s.secrets),
 		openwebui.New(s.ak, s.secrets),
-		mattermost.New(s.ak, s.dockerExec, "mattermost", urls.Authentik),
+		n8n.New(n8nAPIURL, s.http, s.cfg.Email, n8nPass),
+		sonarqube.New(sonarAPIURL, s.http, sonarAdminPass),
+		mattermost.New(s.dockerExec, s.secrets, "mattermost", s.cfg.Email),
 		social.New(s.ak, s.cfg.Social),
 	}
 }

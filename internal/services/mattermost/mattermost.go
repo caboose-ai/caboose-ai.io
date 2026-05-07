@@ -1,45 +1,49 @@
 package mattermost
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/caboose-ai/caboose-ai.io/internal/docker"
+	"github.com/caboose-ai/caboose-ai.io/internal/secrets"
 	"github.com/caboose-ai/caboose-ai.io/internal/services"
-	"github.com/caboose-ai/caboose-ai.io/internal/services/authentik"
 )
 
-const configPath = "/mattermost/config/config.json"
-
 type Configurator struct {
-	AK           *authentik.Client
-	Docker       *docker.ExecClient
-	Container    string
-	AuthentikURL string
+	Docker        *docker.ExecClient
+	Secrets       secrets.SecretStore
+	Container     string
+	AdminUsername string
+	AdminEmail    string
+	TeamName      string
+	TeamDisplay   string
 }
 
-func New(ak *authentik.Client, d *docker.ExecClient, container, authentikURL string) *Configurator {
+func New(d *docker.ExecClient, s secrets.SecretStore, container, adminEmail string) *Configurator {
 	return &Configurator{
-		AK:           ak,
-		Docker:       d,
-		Container:    container,
-		AuthentikURL: authentikURL,
+		Docker:        d,
+		Secrets:       s,
+		Container:     container,
+		AdminUsername: "auth-admin",
+		AdminEmail:    adminEmail,
+		TeamName:      "caboose",
+		TeamDisplay:   "Caboose",
 	}
 }
 
-func (c *Configurator) Name() string { return "Mattermost OIDC" }
+func (c *Configurator) Name() string { return "Mattermost local admin" }
 func (c *Configurator) Slug() string { return "mattermost" }
 
 func (c *Configurator) CheckConfigured(ctx context.Context) (bool, error) {
-	cfg, err := c.readConfig(ctx)
+	if !c.containerExists(ctx) {
+		return false, nil
+	}
+	out, err := c.Docker.Exec(ctx, c.Container, "/mattermost/bin/mmctl", "--local", "user", "search", c.AdminUsername, "--json")
 	if err != nil {
 		return false, nil
 	}
-	oidc := cfg.openIDSettings()
-	id, _ := oidc["Id"].(string)
-	return id != "", nil
+	return strings.Contains(string(out), `"username": "`+c.AdminUsername+`"`), nil
 }
 
 func (c *Configurator) Configure(ctx context.Context, opts services.ConfigureOpts) (*services.ConfigureResult, error) {
@@ -47,84 +51,50 @@ func (c *Configurator) Configure(ctx context.Context, opts services.ConfigureOpt
 		return &services.ConfigureResult{Status: services.StatusSkipped, Message: "Mattermost container not found"}, nil
 	}
 
-	provider, err := c.AK.GetProvider(ctx, "mattermost")
-	if err != nil {
-		return nil, fmt.Errorf("fetching Mattermost provider from Authentik: %w", err)
-	}
-
 	if opts.DryRun {
-		return &services.ConfigureResult{Status: services.StatusDryRun, Message: "would patch Mattermost config.json"}, nil
+		return &services.ConfigureResult{Status: services.StatusDryRun, Message: "would create Mattermost local admin and default team"}, nil
 	}
 
-	cfg, err := c.readConfig(ctx)
+	adminPass, err := c.Secrets.Get(ctx, "MATTERMOST_ADMIN_PASSWORD")
 	if err != nil {
-		return nil, fmt.Errorf("reading Mattermost config: %w", err)
+		return nil, fmt.Errorf("retrieving MATTERMOST_ADMIN_PASSWORD: %w", err)
 	}
 
-	if !opts.Force {
-		oidc := cfg.openIDSettings()
-		if id, _ := oidc["Id"].(string); id == provider.ClientID {
-			if discovery, _ := oidc["DiscoveryEndpoint"].(string); discovery != "" {
-				return &services.ConfigureResult{Status: services.StatusAlreadyConfigured, Message: "Mattermost OIDC already configured"}, nil
-			}
+	created := false
+	if ok, _ := c.CheckConfigured(ctx); !ok || opts.Force {
+		_, err := c.Docker.Exec(ctx, c.Container,
+			"/mattermost/bin/mmctl", "--local", "user", "create",
+			"--email", c.AdminEmail,
+			"--username", c.AdminUsername,
+			"--password", adminPass,
+			"--system-admin",
+			"--email-verified",
+			"--disable-welcome-email",
+		)
+		if err != nil && !strings.Contains(err.Error(), "already exists") {
+			return nil, fmt.Errorf("creating Mattermost admin user: %w", err)
 		}
+		created = true
 	}
 
-	oidc := cfg.openIDSettings()
-	oidc["Enable"] = true
-	oidc["Id"] = provider.ClientID
-	oidc["Secret"] = provider.ClientSecret
-	oidc["AuthEndpoint"] = c.AuthentikURL + "/application/o/authorize/"
-	oidc["TokenEndpoint"] = c.AuthentikURL + "/application/o/token/"
-	oidc["UserAPIEndpoint"] = c.AuthentikURL + "/application/o/userinfo/"
-	oidc["DiscoveryEndpoint"] = c.AuthentikURL + "/application/o/mattermost/.well-known/openid-configuration"
-	oidc["Scope"] = "openid email profile"
-	oidc["ButtonText"] = "Authentik"
-	cfg["OpenIdSettings"] = oidc
-
-	if err := c.writeConfig(ctx, cfg); err != nil {
-		return nil, fmt.Errorf("patching Mattermost config: %w", err)
+	if _, err := c.Docker.Exec(ctx, c.Container,
+		"/mattermost/bin/mmctl", "--local", "team", "create",
+		"--name", c.TeamName,
+		"--display-name", c.TeamDisplay,
+	); err != nil && !strings.Contains(err.Error(), "already exists") {
+		return nil, fmt.Errorf("creating Mattermost team: %w", err)
 	}
 
-	return &services.ConfigureResult{
-		Status:          services.StatusCreated,
-		Message:         "Mattermost OIDC configured",
-		RestartRequired: true,
-		Services:        []string{"mattermost"},
-	}, nil
-}
-
-type mmConfig map[string]any
-
-func (m mmConfig) openIDSettings() map[string]any {
-	oidc, ok := m["OpenIdSettings"].(map[string]any)
-	if !ok {
-		oidc = make(map[string]any)
+	if _, err := c.Docker.Exec(ctx, c.Container,
+		"/mattermost/bin/mmctl", "--local", "team", "users", "add", c.TeamName, c.AdminUsername,
+	); err != nil && !strings.Contains(err.Error(), "already") {
+		return nil, fmt.Errorf("adding Mattermost admin to team: %w", err)
 	}
-	return oidc
-}
 
-func (c *Configurator) readConfig(ctx context.Context) (mmConfig, error) {
-	out, err := c.Docker.Exec(ctx, c.Container, "cat", configPath)
-	if err != nil {
-		return nil, err
+	if !created && !opts.Force {
+		return &services.ConfigureResult{Status: services.StatusAlreadyConfigured, Message: "Mattermost local admin already configured"}, nil
 	}
-	var cfg mmConfig
-	if err := json.Unmarshal(out, &cfg); err != nil {
-		return nil, fmt.Errorf("parsing config.json: %w", err)
-	}
-	return cfg, nil
-}
-
-func (c *Configurator) writeConfig(ctx context.Context, cfg mmConfig) error {
-	data, err := json.MarshalIndent(cfg, "", "    ")
-	if err != nil {
-		return fmt.Errorf("marshaling config: %w", err)
-	}
-	_, err = c.Docker.ExecWithStdin(ctx, c.Container, bytes.NewReader(data),
-		"sh", "-c", "cat > "+configPath,
-	)
-	return err
+	return &services.ConfigureResult{Status: services.StatusCreated, Message: "Mattermost local admin and team configured"}, nil
 }
 
 func (c *Configurator) containerExists(ctx context.Context) bool {

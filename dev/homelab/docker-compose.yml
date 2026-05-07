@@ -29,6 +29,8 @@ services:
       WOODPECKER_GITEA_CLIENT: "${WOODPECKER_GITEA_CLIENT}"
       WOODPECKER_GITEA_SECRET: "${WOODPECKER_GITEA_SECRET}"
       WOODPECKER_AGENT_SECRET: "${WOODPECKER_AGENT_SECRET:-changeme-set-in-env}"
+    volumes:
+      - woodpecker_data:/var/lib/woodpecker
     networks:
       - apps
     restart: unless-stopped
@@ -99,7 +101,7 @@ services:
       - apps
     restart: unless-stopped
 
-  # Mattermost — team chat with OIDC via Authentik
+  # Mattermost — team chat with local admin bootstrap
   mattermost:
     image: mattermost/mattermost-team-edition:10.6
     container_name: mattermost
@@ -111,6 +113,8 @@ services:
       MM_SQLSETTINGS_DATASOURCE: postgres://mattermost:${MATTERMOST_DB_PASS}@mattermost-db:5432/mattermost?sslmode=disable
       MM_SERVICESETTINGS_SITEURL: https://chat.caboose-ai.io
       MM_SERVICESETTINGS_LISTENADDRESS: ":8065"
+      MM_SERVICESETTINGS_ENABLELOCALMODE: "true"
+      MM_SERVICESETTINGS_LOCALMODESOCKETLOCATION: "/var/tmp/mattermost_local.socket"
       MM_METRICSSETTINGS_ENABLE: "true"
       MM_METRICSSETTINGS_LISTENADDRESS: ":8067"
     volumes:
@@ -432,6 +436,7 @@ services:
 
 volumes:
   loki_data:
+  woodpecker_data:
   forgejo_data:
   portainer_data:
   open_webui_data:
