@@ -90,6 +90,11 @@ fi
 require_cmd curl
 require_cmd jq
 
+if [[ -z "${AUTHENTIK_TOKEN:-}" ]]; then
+  AUTHENTIK_TOKEN="$(secret_get AUTHENTIK_BOOTSTRAP_TOKEN)"
+  export AUTHENTIK_TOKEN
+fi
+
 if [[ "$DRY_RUN" == "true" ]]; then
   log_warn "Dry-run mode — no changes will be made"
 fi
