@@ -1,14 +1,59 @@
 [tools]
 go = "latest"
 
+[env]
+HOMELAB_DOMAIN = "caboose-ai.io"
+HOMELAB_COMPOSE_DIR = "/opt/homelab"
+
 [tasks.build]
 description = "Build all binaries"
 run = "go build ./..."
 
+[tasks."homelab:build"]
+description = "Build the homelab CLI binary"
+run = "go build -o ./homelab ./cmd/homelab"
+
 [tasks.homelab]
-description = "Build and run the homelab TUI installer"
+description = "Build and run the homelab TUI installer against the configured stack"
 raw = true
-run = "go build -o ./homelab ./cmd/homelab && ./homelab install"
+run = "go build -o ./homelab ./cmd/homelab && ./homelab install --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
+
+[tasks.install]
+description = "Run the verified non-interactive homelab install"
+run = "go run ./cmd/homelab install --non-interactive --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
+
+[tasks."homelab:install"]
+description = "Run the verified non-interactive homelab install"
+run = "go run ./cmd/homelab install --non-interactive --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
+
+[tasks."homelab:install-tui"]
+description = "Build and run the interactive homelab TUI installer"
+raw = true
+run = "go build -o ./homelab ./cmd/homelab && ./homelab install --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
+
+[tasks.reset]
+description = "Run the verified homelab reset while preserving static external credentials"
+run = "go run ./cmd/homelab reset --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
+
+[tasks."homelab:reset"]
+description = "Run the verified homelab reset while preserving static external credentials"
+run = "go run ./cmd/homelab reset --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
+
+[tasks.reinstall]
+description = "Run reset followed by the verified non-interactive install"
+run = "go run ./cmd/homelab reset --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" && go run ./cmd/homelab install --non-interactive --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
+
+[tasks."homelab:reinstall"]
+description = "Run reset followed by the verified non-interactive install"
+run = "go run ./cmd/homelab reset --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" && go run ./cmd/homelab install --non-interactive --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
+
+[tasks."homelab:oauth-setup"]
+description = "Print external OAuth and Turnstile setup values"
+run = "go run ./cmd/homelab oauth-setup --domain \"$HOMELAB_DOMAIN\""
+
+[tasks."homelab:create-turnstile"]
+description = "Create or verify the Cloudflare Turnstile widget via API"
+run = "go run ./cmd/homelab oauth-setup --domain \"$HOMELAB_DOMAIN\" --create-turnstile"
 
 [tasks.mcp]
 description = "Build and run the MCP server"
@@ -18,13 +63,9 @@ run = "go build -o ./mcp-server ./cmd/mcp && ./mcp-server"
 description = "Run all tests"
 run = "go test ./internal/... -v"
 
-[tasks.reset]
-description = "Stop containers and remove volumes, then rebuild"
-run = "docker compose -f dev/homelab/docker-compose.yml down -v && go build -o ./homelab ./cmd/homelab && ./homelab reset"
-
 [tasks.down]
 description = "Stop containers (keep data)"
-run = "docker compose -f dev/homelab/docker-compose.yml down"
+run = "docker compose -f \"$HOMELAB_COMPOSE_DIR/docker-compose.yml\" down"
 
 [tasks."sso:check"]
 description = "Run SSO smoke tests against the live stack"
@@ -33,3 +74,11 @@ run = "go test -tags integration ./internal/smoketest/ -v -timeout 5m"
 [tasks."sso:check-quick"]
 description = "Run SSO API config checks only"
 run = "go test -tags integration ./internal/smoketest/ -run TestSSO_Config -v"
+
+[tasks."sso:e2e"]
+description = "Run browser SSO flows with click/input screenshot evidence"
+run = "SMOKETEST_EVIDENCE=1 go test -tags integration ./internal/smoketest/ -run TestSSO_BrowserFlows -v -timeout 10m"
+
+[tasks."homelab:e2e-reset"]
+description = "Destructive reset, install, then browser SSO evidence test"
+run = "go run ./cmd/homelab reset --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" && go run ./cmd/homelab install --non-interactive --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" && SMOKETEST_EVIDENCE=1 go test -tags integration ./internal/smoketest/ -run 'TestSSO_Config|TestSSO_Endpoints|TestSSO_BrowserFlows' -v -timeout 15m"

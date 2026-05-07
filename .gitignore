@@ -7,3 +7,4 @@ docs/superpowers/
 homelab
 *.png
 internal/smoketest/testdata/failures/
+internal/smoketest/testdata/evidence/

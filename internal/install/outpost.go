@@ -47,14 +47,9 @@ func (inst *Installer) ProvisionOutpost(ctx context.Context, progressFn func(Out
 		return nil
 	}
 
-	authFlow, err := inst.AK.GetFlow(ctx, "default-provider-authorization-implicit-consent")
+	flows, err := inst.ensureProviderFlows(ctx)
 	if err != nil {
-		return fmt.Errorf("looking up authorization flow: %w", err)
-	}
-
-	invalidationFlow, err := inst.AK.GetFlow(ctx, "default-provider-invalidation-flow")
-	if err != nil {
-		return fmt.Errorf("looking up invalidation flow: %w", err)
+		return fmt.Errorf("ensuring provider flows: %w", err)
 	}
 
 	var providerPKs []int
@@ -79,8 +74,8 @@ func (inst *Installer) ProvisionOutpost(ctx context.Context, progressFn func(Out
 
 		provider, err := inst.AK.CreateProxyProvider(ctx, authentik.CreateProxyProviderParams{
 			Name:              spec.Name,
-			AuthorizationFlow: authFlow.PK,
-			InvalidationFlow:  invalidationFlow.PK,
+			AuthorizationFlow: flows.Authorization.PK,
+			InvalidationFlow:  flows.Invalidation.PK,
 			Mode:              "forward_single",
 			ExternalHost:      spec.ExternalHost,
 		})

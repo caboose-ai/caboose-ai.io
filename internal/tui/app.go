@@ -121,6 +121,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.activeView, cmd = m.activeView.Update(msg)
 		return m, tea.Batch(cmd, waitForSecretMsg(m.secretsCh))
 
+	case views.SecretLoadedMsg:
+		var cmd tea.Cmd
+		m.activeView, cmd = m.activeView.Update(msg)
+		return m, tea.Batch(cmd, m.continueSecretsPhase())
+
 	// ── Secrets generation errored ──────────────────────────────────────────
 	case views.SecretsErrorMsg:
 		var cmd tea.Cmd
@@ -282,56 +287,72 @@ func (m AppModel) runEnsureVault() tea.Cmd {
 	}
 }
 
-// continueSecretsPhase checks whether any Prompt:true secrets still need a
-// value from the user. If so it emits SecretPromptNeededMsg for the first
-// missing one. Once all prompts are satisfied it runs the batch generation.
+func (m AppModel) alreadyReportedSecret(key string) bool {
+	if model, ok := m.activeView.(views.SecretsModel); ok {
+		return model.HasStatus(key)
+	}
+	return false
+}
+
 func (m AppModel) continueSecretsPhase() tea.Cmd {
 	ctx := context.Background()
 	for _, def := range m.bootstrapDefs {
+		if m.alreadyReportedSecret(def.Key) {
+			continue
+		}
 		if !def.Prompt {
 			continue
 		}
-		// Config file may already supply the value.
 		if def.Key == "AUTHENTIK_BOOTSTRAP_EMAIL" && m.installer.Config.Email != "" {
-			continue
+			key := def.Key
+			return func() tea.Msg { return views.SecretLoadedMsg{Key: key, Source: "config"} }
 		}
 		if def.Key == "N8N_USER" && m.installer.Config.N8NUser != "" {
-			continue
+			key := def.Key
+			return func() tea.Msg { return views.SecretLoadedMsg{Key: key, Source: "config"} }
 		}
-		// Already entered interactively.
 		if _, ok := m.promptValues[def.Key]; ok {
 			continue
 		}
-		// Already in the secret store from a previous run.
 		if existing, _ := m.installer.Secrets.Get(ctx, def.Key); existing != "" {
-			continue
+			key := def.Key
+			return func() tea.Msg { return views.SecretLoadedMsg{Key: key, Source: "secret store"} }
 		}
-		// Need to prompt.
 		key := def.Key
 		return func() tea.Msg { return views.SecretPromptNeededMsg{Key: key} }
 	}
 	for _, def := range m.socialDefs {
+		if m.alreadyReportedSecret(def.Key) {
+			continue
+		}
 		if _, ok := m.promptValues[def.Key]; ok {
 			continue
 		}
 		if existing, _ := m.installer.Secrets.Get(ctx, def.Key); existing != "" {
-			continue
+			key := def.Key
+			return func() tea.Msg { return views.SecretLoadedMsg{Key: key, Source: "secret store"} }
 		}
 		key := def.Key
 		return func() tea.Msg { return views.SecretPromptNeededMsg{Key: key} }
 	}
 	for _, def := range m.turnstileDefs {
-		if inst := m.installer; inst.Config.Turnstile.SiteKey != "" && def.Key == "TURNSTILE_SITE_KEY" {
-			continue
-		}
-		if inst := m.installer; inst.Config.Turnstile.SecretKey != "" && def.Key == "TURNSTILE_SECRET_KEY" {
+		if m.alreadyReportedSecret(def.Key) {
 			continue
 		}
 		if _, ok := m.promptValues[def.Key]; ok {
 			continue
 		}
+		if inst := m.installer; inst.Config.Turnstile.SiteKey != "" && def.Key == "TURNSTILE_SITE_KEY" {
+			key := def.Key
+			return func() tea.Msg { return views.SecretLoadedMsg{Key: key, Source: "config"} }
+		}
+		if inst := m.installer; inst.Config.Turnstile.SecretKey != "" && def.Key == "TURNSTILE_SECRET_KEY" {
+			key := def.Key
+			return func() tea.Msg { return views.SecretLoadedMsg{Key: key, Source: "config"} }
+		}
 		if existing, _ := m.installer.Secrets.Get(ctx, def.Key); existing != "" {
-			continue
+			key := def.Key
+			return func() tea.Msg { return views.SecretLoadedMsg{Key: key, Source: "secret store"} }
 		}
 		key := def.Key
 		return func() tea.Msg { return views.SecretPromptNeededMsg{Key: key} }
@@ -362,7 +383,7 @@ func (m AppModel) runSecretsGeneration(ch chan tea.Msg) tea.Cmd {
 			}
 			return "", fmt.Errorf("no value provided for required secret %s", key)
 		}, func(p install.SecretProgress) {
-			ch <- views.SecretGeneratedMsg{Key: p.Key, Err: p.Err}
+			ch <- views.SecretGeneratedMsg{Key: p.Key, Action: p.Action, Err: p.Err}
 		})
 		if err != nil {
 			ch <- views.SecretsErrorMsg{Err: err}
@@ -405,8 +426,23 @@ func (m AppModel) runInitAndRename() tea.Cmd {
 			return views.SecretsErrorMsg{Err: fmt.Errorf("retrieving Authentik bootstrap token: %w", err)}
 		}
 		m.installer.InitAK(token)
-		_ = m.installer.RenameAdmin(ctx)
+		if err := m.installer.RenameAdmin(ctx); err != nil && install.IsAuthentikTokenError(err) {
+			if recoverErr := m.installer.RecoverAuthentikBootstrapToken(ctx); recoverErr != nil {
+				return views.SecretsErrorMsg{Err: fmt.Errorf("recovering Authentik bootstrap token: %w", recoverErr)}
+			}
+			_ = m.installer.RenameAdmin(ctx)
+		}
 		if err := m.installer.ConfigureBrand(ctx); err != nil {
+			if install.IsAuthentikTokenError(err) {
+				if recoverErr := m.installer.RecoverAuthentikBootstrapToken(ctx); recoverErr != nil {
+					return views.SecretsErrorMsg{Err: fmt.Errorf("recovering Authentik bootstrap token: %w", recoverErr)}
+				}
+				if retryErr := m.installer.ConfigureBrand(ctx); retryErr == nil {
+					return adminInitDoneMsg{}
+				} else {
+					err = retryErr
+				}
+			}
 			return views.SecretsErrorMsg{Err: fmt.Errorf("configuring brand: %w", err)}
 		}
 		return adminInitDoneMsg{}

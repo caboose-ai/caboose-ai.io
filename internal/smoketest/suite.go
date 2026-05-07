@@ -3,19 +3,25 @@ package smoketest
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/caboose-ai/caboose-ai.io/internal/config"
+	"github.com/caboose-ai/caboose-ai.io/internal/docker"
+	"github.com/caboose-ai/caboose-ai.io/internal/runner"
 	"github.com/caboose-ai/caboose-ai.io/internal/secrets"
 	"github.com/caboose-ai/caboose-ai.io/internal/services/authentik"
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/launcher"
+	"github.com/go-rod/rod/lib/proto"
 )
 
 const defaultDomain = "caboose-ai.io"
@@ -28,6 +34,7 @@ type Suite struct {
 	HTTP      *http.Client
 	Browser   *rod.Browser
 	AdminPass string
+	Evidence  *EvidenceRecorder
 }
 
 func NewSuite(t *testing.T) *Suite {
@@ -70,6 +77,14 @@ func NewSuite(t *testing.T) *Suite {
 	}
 
 	ak := authentik.NewClient(urls.Authentik, token, httpClient)
+	if !authentikTokenWorks(context.Background(), ak) {
+		recovered, err := recoverAuthentikTokenFromContainer(context.Background())
+		if err != nil {
+			t.Fatalf("AUTHENTIK_TOKEN is invalid and token recovery failed: %v", err)
+		}
+		token = recovered
+		ak = authentik.NewClient(urls.Authentik, token, httpClient)
+	}
 
 	return &Suite{
 		Domain: domain,
@@ -78,6 +93,59 @@ func NewSuite(t *testing.T) *Suite {
 		URLs:   urls,
 		HTTP:   httpClient,
 	}
+}
+
+func authentikTokenWorks(ctx context.Context, ak *authentik.Client) bool {
+	_, err := ak.Get(ctx, "/api/v3/admin/version/")
+	return err == nil
+}
+
+func recoverAuthentikTokenFromContainer(ctx context.Context) (string, error) {
+	type recoveryResult struct {
+		Token string `json:"token"`
+		Error string `json:"error"`
+	}
+
+	script := strings.Join([]string{
+		"import json",
+		"import traceback",
+		"try:",
+		"    from authentik.core.models import Group, Token, TokenIntents, User, UserTypes, default_token_key",
+		"    u = User.objects.filter(username='auth-admin').first() or User.objects.filter(username='akadmin').first()",
+		"    if u is None:",
+		"        u = User.objects.create(username='auth-admin', name='authentik Default Admin', type=UserTypes.INTERNAL)",
+		"    u.is_active = True",
+		"    u.save()",
+		"    g, _ = Group.objects.get_or_create(name='authentik Admins', defaults={'is_superuser': True})",
+		"    if not g.is_superuser:",
+		"        g.is_superuser = True",
+		"        g.save(update_fields=['is_superuser'])",
+		"    g.users.add(u)",
+		"    t, _ = Token.objects.update_or_create(identifier='authentik-bootstrap-token', defaults={'intent': TokenIntents.INTENT_API, 'user': u, 'expiring': False, 'key': default_token_key()})",
+		"    print(json.dumps({'token': t.key}))",
+		"except Exception as exc:",
+		"    print(json.dumps({'error': ''.join(traceback.format_exception_only(type(exc), exc)).strip()}))",
+	}, "\n")
+
+	execClient := docker.NewExecClient(runner.NewLocalRunner())
+	out, err := execClient.Exec(ctx, "authentik-server", "sh", "-c", "PATH=/ak-root/.venv/bin:$PATH /lifecycle/ak shell -c \"$1\"", "homelab-smoketest-recover-token", script)
+	if err != nil {
+		return "", fmt.Errorf("creating Authentik bootstrap token in container: %w", err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	rawResult := strings.TrimSpace(lines[len(lines)-1])
+	var result recoveryResult
+	if err := json.Unmarshal([]byte(rawResult), &result); err != nil {
+		return "", fmt.Errorf("unexpected recovery output")
+	}
+	if result.Error != "" {
+		return "", errors.New(result.Error)
+	}
+	if result.Token == "" {
+		return "", fmt.Errorf("empty token")
+	}
+	return result.Token, nil
 }
 
 const (
@@ -109,6 +177,7 @@ func (s *Suite) InitBrowser(t *testing.T) {
 	browser.MustIgnoreCertErrors(true)
 
 	s.Browser = browser
+	s.Evidence = NewEvidenceRecorder(t)
 
 	t.Cleanup(func() {
 		browser.MustClose()
@@ -131,6 +200,10 @@ func (s *Suite) swapCaptchaToTestKeys(t *testing.T) {
 			store := secrets.NewEnvFileStore(envPath)
 			origSecret, _ = store.Get(ctx, "TURNSTILE_SECRET_KEY")
 		}
+	}
+	if origSecret == "" {
+		store := secrets.NewSplitOnePasswordStore("Homelab - Static", "Homelab - Dynamic", runner.NewLocalRunner(), findEnvFile())
+		origSecret, _ = store.Get(ctx, "TURNSTILE_SECRET_KEY")
 	}
 
 	err = s.AK.PatchCaptchaStage(ctx, stage.PK, authentik.CreateCaptchaStageParams{
@@ -158,6 +231,10 @@ func (s *Suite) swapCaptchaToTestKeys(t *testing.T) {
 				store := secrets.NewEnvFileStore(envPath)
 				origSiteKey, _ = store.Get(context.Background(), "TURNSTILE_SITE_KEY")
 			}
+		}
+		if origSiteKey == "" {
+			store := secrets.NewSplitOnePasswordStore("Homelab - Static", "Homelab - Dynamic", runner.NewLocalRunner(), findEnvFile())
+			origSiteKey, _ = store.Get(context.Background(), "TURNSTILE_SITE_KEY")
 		}
 		if origSiteKey == "" {
 			t.Logf("warning: TURNSTILE_SITE_KEY not available, cannot restore production captcha keys")
@@ -198,9 +275,11 @@ func (s *Suite) SetupAdminPassword(t *testing.T) string {
 
 	page := s.Browser.MustPage(link)
 	defer page.Close()
+	s.Record(t, page, "open", "admin recovery link", nil)
 
 	timedPage := page.Timeout(30 * time.Second)
-	timedPage.MustWaitStable()
+	s.WaitStable(t, timedPage, "admin recovery page")
+	s.Record(t, page, "wait", "admin recovery page stable", nil)
 
 	password := "smoketest-admin-" + fmt.Sprintf("%d", time.Now().Unix())
 
@@ -209,11 +288,11 @@ func (s *Suite) SetupAdminPassword(t *testing.T) string {
 		s.ScreenshotOnFailure(t, page)
 		t.Fatalf("waiting for password input on recovery page: %v (url: %s)", err, page.MustInfo().URL)
 	}
-	el.MustInput(password)
+	s.Input(t, page, el, "new admin password", password, true)
 
 	els, err := timedPage.ElementsByJS(deepQueryAll(`input[type='password']`))
 	if err == nil && len(els) > 1 {
-		els[1].MustInput(password)
+		s.Input(t, page, els[1], "confirm admin password", password, true)
 	}
 
 	submit, err := timedPage.ElementByJS(deepQueryOne(`button[type='submit']`))
@@ -221,8 +300,9 @@ func (s *Suite) SetupAdminPassword(t *testing.T) string {
 		s.ScreenshotOnFailure(t, page)
 		t.Fatalf("waiting for submit button on recovery page: %v", err)
 	}
-	submit.MustClick()
-	timedPage.MustWaitStable()
+	s.Click(t, page, submit, "submit admin password reset")
+	s.WaitStable(t, timedPage, "admin password reset")
+	s.Record(t, page, "wait", "admin password reset complete", nil)
 
 	s.AdminPass = password
 	return password
@@ -231,33 +311,93 @@ func (s *Suite) SetupAdminPassword(t *testing.T) string {
 func (s *Suite) LoginToAuthentik(t *testing.T, page *rod.Page) {
 	t.Helper()
 
-	page.MustWaitStable()
+	s.WaitStable(t, page, "authentik login page")
 
 	uid, err := page.ElementByJS(deepQueryOne(`input[name='uidField']`))
 	if err != nil {
 		t.Fatalf("waiting for uidField: %v", err)
 	}
-	uid.MustInput("auth-admin")
+	s.Input(t, page, uid, "authentik username", "auth-admin", false)
 
 	submitBtn, err := page.ElementByJS(deepQueryOne(`button[type='submit']`))
 	if err != nil {
 		t.Fatalf("waiting for submit after uid: %v", err)
 	}
-	submitBtn.MustClick()
-	page.MustWaitStable()
+	s.Click(t, page, submitBtn, "submit username")
+	s.WaitStable(t, page, "authentik password stage")
 
 	pw, err := page.ElementByJS(deepQueryOne(`input[name='password']`))
 	if err != nil {
 		t.Fatalf("waiting for password field: %v", err)
 	}
-	pw.MustInput(s.AdminPass)
+	s.Input(t, page, pw, "authentik password", s.AdminPass, true)
 
 	submitBtn2, err := page.ElementByJS(deepQueryOne(`button[type='submit']`))
 	if err != nil {
 		t.Fatalf("waiting for submit after password: %v", err)
 	}
-	submitBtn2.MustClick()
-	page.MustWaitStable()
+	s.Click(t, page, submitBtn2, "submit password")
+	s.WaitStable(t, page, "authentik login completion")
+	s.Record(t, page, "wait", "authentik login complete", nil)
+}
+
+func (s *Suite) WaitStable(t *testing.T, page *rod.Page, label string) {
+	t.Helper()
+	if err := page.WaitStable(time.Second); err != nil {
+		s.ScreenshotOnFailure(t, page)
+		t.Fatalf("waiting for %s to stabilize: %v", label, err)
+	}
+}
+
+func (s *Suite) Record(t *testing.T, page *rod.Page, action, label string, details map[string]string) {
+	t.Helper()
+	if s.Evidence != nil {
+		s.Evidence.Record(t, page, action, label, details)
+	}
+}
+
+func (s *Suite) Click(t *testing.T, page *rod.Page, el *rod.Element, label string) {
+	t.Helper()
+	s.Record(t, page, "before_click", label, nil)
+	if err := el.Click(proto.InputMouseButtonLeft, 1); err != nil {
+		s.ScreenshotOnFailure(t, page)
+		t.Fatalf("clicking %s: %v", label, err)
+	}
+	s.Record(t, page, "after_click", label, nil)
+}
+
+func (s *Suite) ClickText(t *testing.T, page *rod.Page, text, label string) bool {
+	t.Helper()
+	el, err := page.ElementByJS(deepQueryText(`button, a`, text))
+	if err != nil {
+		return false
+	}
+	s.Click(t, page, el, label)
+	return true
+}
+
+func (s *Suite) Input(t *testing.T, page *rod.Page, el *rod.Element, label, value string, secret bool) {
+	t.Helper()
+	details := map[string]string{"value": value}
+	if secret {
+		details["value"] = "[REDACTED]"
+	}
+	s.Record(t, page, "before_input", label, details)
+	if err := el.Input(value); err != nil {
+		s.ScreenshotOnFailure(t, page)
+		t.Fatalf("entering %s: %v", label, err)
+	}
+	s.Record(t, page, "after_input", label, details)
+}
+
+func (s *Suite) Secret(t *testing.T, key string) string {
+	t.Helper()
+	store := secrets.NewSplitOnePasswordStore("Homelab - Static", "Homelab - Dynamic", runner.NewLocalRunner(), findEnvFile())
+	value, err := store.Get(context.Background(), key)
+	if err != nil || value == "" {
+		t.Fatalf("reading secret %s: %v", key, err)
+	}
+	return value
 }
 
 func (s *Suite) ScreenshotOnFailure(t *testing.T, page *rod.Page) {
@@ -270,7 +410,7 @@ func (s *Suite) ScreenshotOnFailure(t *testing.T, page *rod.Page) {
 	dir := filepath.Join(testdataDir(), "failures")
 	os.MkdirAll(dir, 0755)
 
-	name := fmt.Sprintf("%s-%d.png", t.Name(), time.Now().Unix())
+	name := fmt.Sprintf("%s-%d.png", safeName(t.Name()), time.Now().Unix())
 	path := filepath.Join(dir, name)
 	data := page.MustScreenshot()
 	os.WriteFile(path, data, 0644)
@@ -366,4 +506,25 @@ func deepQueryAll(selector string) *rod.EvalOptions {
 		deepQueryAll(document, selector);
 		return results;
 	}`, selector)
+}
+
+func deepQueryText(selector, text string) *rod.EvalOptions {
+	return rod.Eval(`(selector, text) => {
+		function visibleText(el) {
+			return (el.innerText || el.textContent || '').trim();
+		}
+		function deepQuery(root, sel, needle) {
+			for (const el of root.querySelectorAll(sel)) {
+				if (visibleText(el).includes(needle)) return el;
+			}
+			for (const child of root.querySelectorAll('*')) {
+				if (child.shadowRoot) {
+					const el = deepQuery(child.shadowRoot, sel, needle);
+					if (el) return el;
+				}
+			}
+			return null;
+		}
+		return deepQuery(document, selector, text);
+	}`, selector, text)
 }

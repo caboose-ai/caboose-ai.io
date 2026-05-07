@@ -10,34 +10,63 @@ import (
 )
 
 type OnePasswordStore struct {
-	Vault  string
-	Runner runner.CommandRunner
-	Env    *EnvFileStore
+	Vault        string
+	StaticVault  string
+	DynamicVault string
+	Runner       runner.CommandRunner
+	Env          *EnvFileStore
 }
 
 func NewOnePasswordStore(vault string, r runner.CommandRunner, envPath string) *OnePasswordStore {
+	return NewSplitOnePasswordStore(vault, vault, r, envPath)
+}
+
+func NewSplitOnePasswordStore(staticVault, dynamicVault string, r runner.CommandRunner, envPath string) *OnePasswordStore {
+	if staticVault == "" {
+		staticVault = dynamicVault
+	}
+	if dynamicVault == "" {
+		dynamicVault = staticVault
+	}
 	return &OnePasswordStore{
-		Vault:  vault,
-		Runner: r,
-		Env:    NewEnvFileStore(envPath),
+		Vault:        dynamicVault,
+		StaticVault:  staticVault,
+		DynamicVault: dynamicVault,
+		Runner:       r,
+		Env:          NewEnvFileStore(envPath),
 	}
 }
 
 func (s *OnePasswordStore) EnsureVault(ctx context.Context) error {
-	_, err := s.Runner.Run(ctx, "op", "vault", "get", s.Vault, "--format=json")
+	seen := map[string]bool{}
+	for _, vault := range []string{s.StaticVault, s.DynamicVault} {
+		if vault == "" || seen[vault] {
+			continue
+		}
+		seen[vault] = true
+		if err := s.ensureVault(ctx, vault); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *OnePasswordStore) ensureVault(ctx context.Context, vault string) error {
+	_, err := s.Runner.Run(ctx, "op", "vault", "get", vault, "--format=json")
 	if err == nil {
 		return nil
 	}
-	_, err = s.Runner.Run(ctx, "op", "vault", "create", s.Vault)
+	_, err = s.Runner.Run(ctx, "op", "vault", "create", vault)
 	if err != nil {
-		return fmt.Errorf("creating 1Password vault %q: %w", s.Vault, err)
+		return fmt.Errorf("creating 1Password vault %q: %w", vault, err)
 	}
 	return nil
 }
 
 func (s *OnePasswordStore) Get(ctx context.Context, key string) (string, error) {
+	vault := s.vaultForKey(key)
 	out, err := s.Runner.Run(ctx, "op", "item", "get", key,
-		"--vault", s.Vault,
+		"--vault", vault,
 		"--fields", "password",
 		"--format=json",
 	)
@@ -64,13 +93,14 @@ func (s *OnePasswordStore) Put(ctx context.Context, key, value string) error {
 		return err
 	}
 
+	vault := s.vaultForKey(key)
 	existing, _ := s.Runner.Run(ctx, "op", "item", "get", key,
-		"--vault", s.Vault, "--format=json")
+		"--vault", vault, "--format=json")
 
 	if existing != nil {
 		_, err := s.Runner.Run(ctx, "op", "item", "edit", key,
 			"password="+value,
-			"--vault", s.Vault,
+			"--vault", vault,
 		)
 		return err
 	}
@@ -78,7 +108,7 @@ func (s *OnePasswordStore) Put(ctx context.Context, key, value string) error {
 	_, err := s.Runner.Run(ctx, "op", "item", "create",
 		"--category=password",
 		"--title="+key,
-		"--vault="+s.Vault,
+		"--vault="+vault,
 		"password="+value,
 	)
 	return err
@@ -109,11 +139,15 @@ func (s *OnePasswordStore) Generate(ctx context.Context, key string, length int,
 	out, err := s.Runner.Run(ctx, "op", "item", "create",
 		"--category=password",
 		"--title="+key,
-		"--vault="+s.Vault,
+		"--vault="+s.DynamicVault,
 		fmt.Sprintf("--generate-password=%s", recipe),
 		"--format=json",
 	)
 	if err != nil {
+		existing, getErr := s.Get(ctx, key)
+		if getErr == nil && existing != "" {
+			return existing, nil
+		}
 		return "", fmt.Errorf("generating secret %s via op: %w", key, err)
 	}
 
@@ -130,10 +164,38 @@ func (s *OnePasswordStore) Generate(ctx context.Context, key string, length int,
 }
 
 func (s *OnePasswordStore) Delete(ctx context.Context, key string) error {
-	if _, err := s.Runner.Run(ctx, "op", "item", "delete", key, "--vault", s.Vault); err != nil {
+	vault := s.vaultForKey(key)
+	existing, err := s.Runner.Run(ctx, "op", "item", "get", key,
+		"--vault", vault,
+		"--format=json",
+	)
+	if err != nil {
+		return s.Env.Delete(ctx, key)
+	}
+
+	var item struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(existing, &item); err != nil {
+		return fmt.Errorf("parsing 1Password item %q before delete: %w", key, err)
+	}
+	if item.ID == "" {
+		return fmt.Errorf("1Password item %q response omitted id", key)
+	}
+
+	if _, err := s.Runner.Run(ctx, "op", "item", "delete", item.ID, "--vault", vault); err != nil {
 		return fmt.Errorf("deleting 1Password item %q: %w", key, err)
 	}
 	return s.Env.Delete(ctx, key)
+}
+
+func (s *OnePasswordStore) vaultForKey(key string) string {
+	for _, staticKey := range StaticSecretKeys() {
+		if key == staticKey {
+			return s.StaticVault
+		}
+	}
+	return s.DynamicVault
 }
 
 func extractPassword(opJSON []byte) (string, error) {

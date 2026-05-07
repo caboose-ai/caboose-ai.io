@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/caboose-ai/caboose-ai.io/internal/config"
@@ -18,6 +19,7 @@ import (
 	"github.com/caboose-ai/caboose-ai.io/internal/services/authentik"
 	"github.com/caboose-ai/caboose-ai.io/internal/services/forgejo"
 	"github.com/caboose-ai/caboose-ai.io/internal/services/grafana"
+	"github.com/caboose-ai/caboose-ai.io/internal/services/homarr"
 	"github.com/caboose-ai/caboose-ai.io/internal/services/mattermost"
 	"github.com/caboose-ai/caboose-ai.io/internal/services/openwebui"
 	"github.com/caboose-ai/caboose-ai.io/internal/services/portainer"
@@ -91,12 +93,18 @@ func (inst *Installer) BuildServices(ctx context.Context) error {
 		return fmt.Errorf("retrieving PORTAINER_ADMIN_PASSWORD: %w", err)
 	}
 
+	portainerAPIURL := urls.Portainer
+	if inst.Config.Orchestrator == "compose" {
+		portainerAPIURL = "http://127.0.0.1:9000"
+	}
+
 	inst.Services = []services.ServiceConfigurator{
 		forgejo.New(inst.AK, inst.DockerExec, inst.Secrets, "forgejo", "auth-admin", urls.Authentik),
 		woodpecker.New(inst.DockerExec, inst.HTTP, inst.Secrets, "woodpecker-server", "auth-admin", giteaAdminPass, urls.Woodpecker+"/authorize"),
-		portainer.New(inst.AK, inst.HTTP, urls.Portainer, portainerAdminPass, urls.Authentik, urls.Portainer+"/"),
+		portainer.New(inst.AK, inst.HTTP, inst.Runner, portainerAPIURL, portainerAdminPass, urls.Authentik, urls.Portainer+"/"),
 		grafana.New(inst.AK, inst.Secrets),
 		openwebui.New(inst.AK, inst.Secrets),
+		homarr.New(inst.AK, inst.Secrets),
 		mattermost.New(inst.AK, inst.DockerExec, "mattermost", urls.Authentik),
 		social.New(inst.AK, inst.Config.Social),
 	}
@@ -193,7 +201,7 @@ func (inst *Installer) WaitHealthy(ctx context.Context) <-chan health.Status {
 		},
 		&health.HTTPChecker{
 			ServiceName: "Forgejo",
-			URL:         "http://127.0.0.1:3000/api/v1/settings/api",
+			URL:         "http://127.0.0.1:3000/",
 			Client:      inst.HTTP,
 		},
 	}
@@ -257,15 +265,47 @@ func (inst *Installer) Reset(ctx context.Context, progressFn func(step, detail s
 	if inst.State.KeepEnv {
 		progressFn("env", "keeping .env file (--keep-env)")
 	} else {
-		progressFn("env", "removing .env file")
+		progressFn("env", "removing .env file while preserving static external credentials")
 		envPath := inst.Config.EnvPath()
-		if err := os.Remove(envPath); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("removing %s: %w", envPath, err)
+		preserved, err := preservedStaticEnvLines(envPath)
+		if err != nil {
+			return err
+		}
+		if len(preserved) == 0 {
+			if err := os.Remove(envPath); err != nil && !os.IsNotExist(err) {
+				return fmt.Errorf("removing %s: %w", envPath, err)
+			}
+		} else if err := os.WriteFile(envPath, []byte(strings.Join(preserved, "\n")+"\n"), 0600); err != nil {
+			return fmt.Errorf("rewriting %s with preserved static credentials: %w", envPath, err)
 		}
 	}
 
 	progressFn("done", "reset complete — run 'homelab install' to start fresh")
 	return nil
+}
+
+func preservedStaticEnvLines(path string) ([]string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("reading %s before reset: %w", path, err)
+	}
+
+	static := map[string]bool{}
+	for _, key := range secrets.StaticSecretKeys() {
+		static[key] = true
+	}
+
+	var preserved []string
+	for _, line := range strings.Split(string(data), "\n") {
+		key, _, ok := strings.Cut(line, "=")
+		if ok && static[key] {
+			preserved = append(preserved, line)
+		}
+	}
+	return preserved, nil
 }
 
 func (inst *Installer) RestartServices(ctx context.Context) error {

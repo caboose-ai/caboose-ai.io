@@ -53,7 +53,7 @@ func (inst *Installer) SetupCaptcha(ctx context.Context, progressFn func(string)
 
 	progressFn("Binding captcha to authentication flow...")
 
-	flow, err := inst.AK.GetFlow(ctx, "default-authentication-flow")
+	flow, err := inst.waitForDefaultFlow(ctx, "default-authentication-flow")
 	if err != nil {
 		return fmt.Errorf("getting authentication flow: %w", err)
 	}
@@ -82,7 +82,12 @@ func (inst *Installer) SetupInactiveEnrollment(ctx context.Context, progressFn f
 
 	progressFn("Configuring enrollment flow for inactive users...")
 
-	bindings, err := inst.AK.ListFlowStageBindings(ctx, "default-source-enrollment")
+	flow, err := inst.waitForDefaultFlow(ctx, "default-source-enrollment")
+	if err != nil {
+		return fmt.Errorf("getting enrollment flow: %w", err)
+	}
+
+	bindings, err := inst.AK.ListFlowStageBindings(ctx, flow.Slug)
 	if err != nil {
 		return fmt.Errorf("listing enrollment flow bindings: %w", err)
 	}

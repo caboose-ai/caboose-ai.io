@@ -51,7 +51,7 @@ func New(cfg *config.Config) *Server {
 		http:       httpClient,
 		compose:    docker.NewComposeClient(r, cfg.ComposeDir),
 		dockerExec: docker.NewExecClient(r),
-		secrets:    secrets.NewOnePasswordStore(cfg.OPVault, r, cfg.EnvPath()),
+		secrets:    secrets.NewSplitOnePasswordStore(cfg.OPStaticVault, cfg.OPVault, r, cfg.EnvPath()),
 		mcpServer: sdkmcp.NewServer(
 			&sdkmcp.Implementation{Name: "homelab", Version: "v1.0.0"},
 			&sdkmcp.ServerOptions{
@@ -173,11 +173,15 @@ func (s *Server) buildServices(ctx context.Context) {
 	if portainerAdminPass == "" {
 		portainerAdminPass = "admin"
 	}
+	portainerAPIURL := urls.Portainer
+	if s.cfg.Orchestrator == "compose" {
+		portainerAPIURL = "http://127.0.0.1:9000"
+	}
 
 	s.services = []services.ServiceConfigurator{
 		forgejo.New(s.ak, s.dockerExec, s.secrets, "forgejo", "auth-admin", urls.Authentik),
 		woodpecker.New(s.dockerExec, s.http, s.secrets, "woodpecker-server", "auth-admin", giteaAdminPass, urls.Woodpecker+"/authorize"),
-		portainer.New(s.ak, s.http, urls.Portainer, portainerAdminPass, urls.Authentik, urls.Portainer+"/"),
+		portainer.New(s.ak, s.http, s.runner, portainerAPIURL, portainerAdminPass, urls.Authentik, urls.Portainer+"/"),
 		grafana.New(s.ak, s.secrets),
 		openwebui.New(s.ak, s.secrets),
 		mattermost.New(s.ak, s.dockerExec, "mattermost", urls.Authentik),

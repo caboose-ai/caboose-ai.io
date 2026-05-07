@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/caboose-ai/caboose-ai.io/internal/config"
 	"github.com/caboose-ai/caboose-ai.io/internal/install"
 	"github.com/caboose-ai/caboose-ai.io/internal/tui/styles"
 )
@@ -79,17 +80,15 @@ func (m SummaryModel) View() string {
 		}
 		lines = append(lines, "")
 		lines = append(lines, styles.DimStyle.Render("  Stored in 1Password:"))
-		lines = append(lines, styles.DimStyle.Render(`    op read "op://Homelab/AUTHENTIK_BOOTSTRAP_PASSWORD/password"`))
+		lines = append(lines, styles.DimStyle.Render(`    op read "op://Homelab - Dynamic/AUTHENTIK_BOOTSTRAP_PASSWORD/password"`))
 		lines = append(lines, border)
 	}
 
 	lines = append(lines, "")
 	lines = append(lines, "Service URLs:")
-	lines = append(lines, fmt.Sprintf("  Authentik:  https://auth.%s", m.domain))
-	lines = append(lines, fmt.Sprintf("  Forgejo:    https://git.%s", m.domain))
-	lines = append(lines, fmt.Sprintf("  Portainer:  https://docker.%s", m.domain))
-	lines = append(lines, fmt.Sprintf("  Grafana:    https://grafana.%s", m.domain))
-	lines = append(lines, fmt.Sprintf("  Woodpecker: https://ci.%s", m.domain))
+	for _, link := range config.DeriveURLs(m.domain).ServiceLinks() {
+		lines = append(lines, fmt.Sprintf("  %-13s %s", link.Name+":", link.URL))
+	}
 	lines = append(lines, "")
 	lines = append(lines, styles.DimStyle.Render("Press q or enter to exit"))
 
