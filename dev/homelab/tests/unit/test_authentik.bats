@@ -111,3 +111,38 @@ setup() {
   [ "$status" -ne 0 ]
   [[ "$output" == *"Cannot reach"* ]]
 }
+
+@test "ak_health_check: recovers stale bootstrap token and retries" {
+  TEST_ENV=$(mktemp)
+  export HOMELAB_ENV="$TEST_ENV"
+  export AUTHENTIK_TOKEN="stale-token"
+
+  curl() {
+    case "$*" in
+      *"Bearer stale-token"*)
+        return 22
+        ;;
+      *"Bearer recovered-token"*root/config*)
+        echo '{"version_current":"2026.2.2"}'
+        ;;
+      *"Bearer recovered-token"*providers/oauth2*)
+        echo '{"results":[{"name":"forgejo","client_id":"abc"}]}'
+        ;;
+    esac
+  }
+  docker() {
+    echo 'shell banner'
+    echo '{"token":"recovered-token"}'
+  }
+  export -f curl
+  export -f docker
+
+  run ak_health_check
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Recovered"* ]]
+  [[ "$output" == *"healthy"* ]]
+  run grep "^AUTHENTIK_BOOTSTRAP_TOKEN=recovered-token$" "$TEST_ENV"
+  [ "$status" -eq 0 ]
+  rm -f "$TEST_ENV"
+}

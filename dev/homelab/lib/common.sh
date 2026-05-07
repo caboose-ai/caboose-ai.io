@@ -12,7 +12,12 @@ DOMAIN="${DOMAIN:?Set DOMAIN to your homelab domain (e.g. example.com)}"
 FORGEJO_ADMIN_USERNAME="${FORGEJO_ADMIN_USERNAME:-admin}"
 FORGEJO_CONTAINER="${FORGEJO_CONTAINER:-forgejo}"
 HOMELAB_DIR="${HOMELAB_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-HOMELAB_ENV="${HOMELAB_ENV:-${HOMELAB_DIR}/.env}"
+REPO_ROOT="${REPO_ROOT:-$(cd "${HOMELAB_DIR}/../.." && pwd)}"
+if [[ -z "${HOMELAB_ENV:-}" && -f "${REPO_ROOT}/.env" ]]; then
+  HOMELAB_ENV="${REPO_ROOT}/.env"
+else
+  HOMELAB_ENV="${HOMELAB_ENV:-${HOMELAB_DIR}/.env}"
+fi
 
 # ── Derived URLs ────────────────────────────────────────────────────────────
 AUTHENTIK_URL="https://auth.${DOMAIN}"
@@ -79,11 +84,19 @@ if command -v fnox &>/dev/null; then
   HAS_FNOX="true"
 fi
 
+fnox_cmd() {
+  if [[ -n "${FNOX_CONFIG:-}" || -f "fnox.toml" || ! -f "${HOME}/fnox.toml" ]]; then
+    fnox "$@"
+  else
+    (cd "${HOME}" && fnox "$@")
+  fi
+}
+
 secret_get() {
   local key="$1"
   if [[ "$HAS_FNOX" == "true" ]]; then
     local val
-    val=$(fnox get "$key" --if-missing ignore 2>/dev/null) || true
+    val=$(fnox_cmd get "$key" --if-missing ignore 2>/dev/null) || true
     if [[ -n "$val" ]]; then
       echo "$val"
       return 0
@@ -96,7 +109,7 @@ secret_put() {
   local key="$1" value="$2"
   upsert_env_var "$HOMELAB_ENV" "$key" "$value"
   if [[ "$HAS_FNOX" == "true" && "$DRY_RUN" != "true" ]]; then
-    echo "$value" | fnox set "$key" 2>/dev/null && \
+    echo "$value" | fnox_cmd set "$key" >/dev/null 2>&1 && \
       log_info "  ↳ backed up ${key} to fnox" || \
       log_warn "  ↳ fnox set ${key} failed (non-fatal)"
   fi
