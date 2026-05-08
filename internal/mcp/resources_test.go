@@ -10,7 +10,7 @@ import (
 	"github.com/caboose-ai/caboose-ai.io/internal/config"
 	"github.com/caboose-ai/caboose-ai.io/internal/docker"
 	"github.com/caboose-ai/caboose-ai.io/internal/health"
-	"github.com/caboose-ai/caboose-ai.io/internal/services"
+	"github.com/caboose-ai/caboose-ai.io/internal/service"
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -32,13 +32,46 @@ func TestExtractServiceFromURI(t *testing.T) {
 	}
 }
 
+func TestExtractServiceManifestFromURI(t *testing.T) {
+	got := extractServiceManifestFromURI("homelab://services/forgejo/manifest")
+	if got != "forgejo" {
+		t.Fatalf("extractServiceManifestFromURI = %q, want forgejo", got)
+	}
+}
+
+func TestHandleServiceManifestResource(t *testing.T) {
+	s := &Server{
+		registry: service.NewRegistry(map[string]service.Manifest{
+			"forgejo": {
+				Slug:            "forgejo",
+				DisplayName:     "Forgejo",
+				ComposeServices: []string{"forgejo"},
+				Configurator:    "forgejo",
+			},
+		}, nil),
+	}
+
+	req := &sdkmcp.ReadResourceRequest{
+		Params: &sdkmcp.ReadResourceParams{URI: "homelab://services/forgejo/manifest"},
+	}
+
+	result, err := s.handleServiceManifestResource(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	text := result.Contents[0].Text
+	if !strings.Contains(text, `"slug": "forgejo"`) {
+		t.Fatalf("manifest response missing slug: %q", text)
+	}
+}
+
 func TestHandleServiceStatusResource(t *testing.T) {
 	r := &mockRunner{output: []byte(`[{"Name":"forgejo","State":"running"}]`)}
 	s := &Server{
 		compose:  docker.NewComposeClient(r, "/test"),
 		checkers: []health.Checker{&mockChecker{name: "Forgejo", err: nil}},
-		services: []services.ServiceConfigurator{
-			&mockServiceConfigurator{slug: "forgejo", name: "Forgejo", result: &services.ConfigureResult{Status: services.StatusAlreadyConfigured}},
+		services: []service.ServiceConfigurator{
+			&mockServiceConfigurator{slug: "forgejo", name: "Forgejo", result: &service.ConfigureResult{Status: service.StatusAlreadyConfigured}},
 		},
 	}
 
@@ -94,8 +127,8 @@ func TestHandleFullStackReportPrompt(t *testing.T) {
 	s := &Server{
 		compose:  docker.NewComposeClient(r, "/test"),
 		checkers: []health.Checker{&mockChecker{name: "Forgejo", err: nil}},
-		services: []services.ServiceConfigurator{
-			&mockServiceConfigurator{slug: "forgejo", name: "Forgejo", result: &services.ConfigureResult{Status: services.StatusAlreadyConfigured}},
+		services: []service.ServiceConfigurator{
+			&mockServiceConfigurator{slug: "forgejo", name: "Forgejo", result: &service.ConfigureResult{Status: service.StatusAlreadyConfigured}},
 		},
 	}
 

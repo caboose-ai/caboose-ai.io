@@ -33,7 +33,7 @@ func (s *EnvFileStore) Get(_ context.Context, key string) (string, error) {
 	for scanner.Scan() {
 		line := scanner.Text()
 		if strings.HasPrefix(line, prefix) {
-			return strings.TrimPrefix(line, prefix), nil
+			return parseEnvValue(strings.TrimPrefix(line, prefix)), nil
 		}
 	}
 	return "", scanner.Err()
@@ -102,16 +102,31 @@ func upsertEnvVar(path, key, value string) error {
 	found := false
 	for i, line := range lines {
 		if strings.HasPrefix(line, prefix) {
-			lines[i] = prefix + value
+			lines[i] = prefix + formatEnvValue(value)
 			found = true
 			break
 		}
 	}
 	if !found {
-		lines = append(lines, prefix+value)
+		lines = append(lines, prefix+formatEnvValue(value))
 	}
 
 	return writeLines(path, lines)
+}
+
+func formatEnvValue(value string) string {
+	if value == "" || strings.ContainsAny(value, " \t#'\"$\\`") {
+		return "'" + strings.ReplaceAll(value, "'", "\\'") + "'"
+	}
+	return value
+}
+
+func parseEnvValue(value string) string {
+	if len(value) >= 2 && strings.HasPrefix(value, "'") && strings.HasSuffix(value, "'") {
+		inner := strings.TrimSuffix(strings.TrimPrefix(value, "'"), "'")
+		return strings.ReplaceAll(inner, "\\'", "'")
+	}
+	return value
 }
 
 func readLines(path string) ([]string, error) {

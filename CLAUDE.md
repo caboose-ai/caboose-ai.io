@@ -7,15 +7,17 @@ Go monorepo for a homelab SSO infrastructure stack. Two binaries:
 - `cmd/mcp` — MCP server exposing homelab tools to AI assistants
   - `agent_invoke` supports provider fallback: Ollama, Claude Code, Copilot CLI, Emberfall
 
-All packages under `internal/`. No public API.
+Service implementation packages live under `services/<slug>/`; shared internal
+packages remain under `internal/`. No public API.
 
 ## Build & Test
 
 ```bash
 go build ./...                    # build everything
-go test ./internal/... -v         # run all tests
+go test ./...                     # run all tests
 go test ./internal/install/ -v    # test a specific package
 go run ./cmd/homelab oauth-setup --domain caboose-ai.io  # print external OAuth/Turnstile setup
+go run ./cmd/homelab service --domain caboose-ai.io forgejo status  # inspect one service
 CLOUDFLARE_ACCOUNT_ID=... CLOUDFLARE_API_TOKEN=... go run ./cmd/homelab oauth-setup --domain caboose-ai.io --create-turnstile  # create Turnstile via API
 mise run sso:check                # full SSO smoke tests (requires live stack)
 mise run sso:check-quick          # API config checks only
@@ -28,8 +30,10 @@ Go binary is at `/home/caboose/.local/go/bin/go`. If `go` isn't on PATH, use `PA
 - `internal/config/` — Config structs, YAML parsing, URL derivation
 - `internal/secrets/` — SecretStore interface with 1Password + .env backends
 - `internal/install/` — Installer orchestration, one file per concern
-- `internal/services/<name>/` — Per-service configurators implementing `ServiceConfigurator`
-- `internal/services/authentik/` — Authentik API client, one file per resource type
+- `internal/service/` — Shared service manifest, registry, and `ServiceConfigurator` types
+- `internal/servicebuilder/` — Central service configurator construction for installer and MCP
+- `services/<slug>/` — Per-service workspaces with `service.yaml`, `README.md`, and optional Go configurator package
+- `services/authentik/` — Authentik API client, one file per resource type
 - `internal/tui/` — Bubbletea TUI with message-driven phase transitions
 - `internal/mcp/` — MCP server, tools, resources
 - `internal/runner/` — CommandRunner + HTTPClient interfaces for testability
@@ -50,6 +54,7 @@ container recreation.
 ### Code Style
 - Interfaces for testability: `SecretStore`, `CommandRunner`, `HTTPClient`
 - `ServiceConfigurator` interface for all services: `Name()`, `Slug()`, `CheckConfigured()`, `Configure()`
+- Service manifests live at `services/<slug>/service.yaml` and back CLI/MCP service discovery.
 - Return errors up the stack. TUI/CLI handles display.
 - No global state — everything flows through `Installer` struct or Bubbletea model.
 - One responsibility per file. Split by domain, not layer.
@@ -90,7 +95,9 @@ container recreation.
 - Secrets via `${VAR}` from `.env`
 - DB networks: `*-internal` with `internal: true`
 - App networks: `apps`
-- Ports: `127.0.0.1` only — Caddy handles external
+- Port exposure is configurable with `serve_mode` / `--serve-mode`:
+  `public` binds host ports to `127.0.0.1` for Caddy, `local` binds to
+  `0.0.0.0` for LAN access.
 
 ### Authentik
 - OAuth2 and proxy providers must have matching Authentik applications.
@@ -104,10 +111,11 @@ container recreation.
 1. Compose entry in `dev/homelab/docker-compose.yml`
 2. Caddy site in `/etc/caddy/Caddyfile`
 3. Authentik provider (proxy for SSO gate, OAuth2 for native OIDC)
-4. Service configurator in `internal/services/<name>/`
-5. Register in `install/install.go` `BuildServices()`
-6. Secrets in `secrets/store.go` if needed
-7. Add or update `internal/smoketest/flows.go` when the service has native
+4. Service workspace in `services/<slug>/` with `service.yaml` and `README.md`
+5. Optional service configurator in `services/<slug>/`
+6. Register configurator construction in `internal/servicebuilder`
+7. Secrets in `secrets/store.go` if needed
+8. Add or update `internal/smoketest/flows.go` when the service has native
    login, first-run setup, or proxy-gated landing behavior that must be proven
    by the live SSO browser test.
 

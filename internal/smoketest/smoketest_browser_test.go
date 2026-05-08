@@ -37,6 +37,7 @@ func testOAuthFlow(t *testing.T, s *Suite, svc ServiceFlow) {
 	t.Helper()
 
 	basePage := s.Browser.MustPage(svc.LoginURL)
+	s.handleDialogs(basePage)
 	defer func() {
 		s.ScreenshotOnFailure(t, basePage)
 		basePage.Close()
@@ -151,7 +152,10 @@ func linkForgejoAccount(t *testing.T, s *Suite, page *rod.Page) {
 	}
 	s.Input(t, page, pw, "forgejo local password", password, true)
 
-	submit, err := page.Element(`button[type="submit"]`)
+	submit, err := page.ElementByJS(deepQueryText(`button, input[type="submit"]`, "Link Account"))
+	if err != nil {
+		submit, err = page.Element(`button[name="submit"], button[type="submit"], input[type="submit"]`)
+	}
 	if err != nil {
 		t.Fatalf("forgejo link account submit not found: %v", err)
 	}
@@ -163,6 +167,7 @@ func testProxyFlow(t *testing.T, s *Suite, name, targetHost, url string) {
 	t.Helper()
 
 	basePage := s.Browser.MustPage(url)
+	s.handleDialogs(basePage)
 	defer func() {
 		s.ScreenshotOnFailure(t, basePage)
 		basePage.Close()

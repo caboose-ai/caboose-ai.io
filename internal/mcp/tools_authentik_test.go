@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/caboose-ai/caboose-ai.io/internal/services"
+	"github.com/caboose-ai/caboose-ai.io/internal/service"
 )
 
 func TestHandleAuthentikListProviders_NoAK(t *testing.T) {
@@ -70,7 +70,7 @@ func TestHandleSSOConfigureService_NoAK(t *testing.T) {
 type mockServiceConfigurator struct {
 	slug   string
 	name   string
-	result *services.ConfigureResult
+	result *service.ConfigureResult
 	err    error
 }
 
@@ -79,19 +79,19 @@ func (m *mockServiceConfigurator) Slug() string { return m.slug }
 func (m *mockServiceConfigurator) CheckConfigured(_ context.Context) (bool, error) {
 	return m.result != nil, nil
 }
-func (m *mockServiceConfigurator) Configure(_ context.Context, _ services.ConfigureOpts) (*services.ConfigureResult, error) {
+func (m *mockServiceConfigurator) Configure(_ context.Context, _ service.ConfigureOpts) (*service.ConfigureResult, error) {
 	return m.result, m.err
 }
 
 func TestHandleSSOConfigureService_ValidService(t *testing.T) {
 	s := &Server{
 		ak: dummyAK(),
-		services: []services.ServiceConfigurator{
+		services: []service.ServiceConfigurator{
 			&mockServiceConfigurator{
 				slug: "forgejo",
 				name: "Forgejo",
-				result: &services.ConfigureResult{
-					Status:  services.StatusCreated,
+				result: &service.ConfigureResult{
+					Status:  service.StatusCreated,
 					Message: "OAuth provider created",
 				},
 			},
@@ -111,10 +111,13 @@ func TestHandleSSOConfigureService_ValidService(t *testing.T) {
 func TestHandleSSOConfigureService_UnknownService(t *testing.T) {
 	s := &Server{
 		ak: dummyAK(),
-		services: []services.ServiceConfigurator{
+		registry: service.NewRegistry(map[string]service.Manifest{
+			"forgejo": {Slug: "forgejo", DisplayName: "Forgejo", Configurator: "forgejo"},
+			"grafana": {Slug: "grafana", DisplayName: "Grafana", Configurator: "grafana"},
+		}, []service.ServiceConfigurator{
 			&mockServiceConfigurator{slug: "forgejo", name: "Forgejo"},
 			&mockServiceConfigurator{slug: "grafana", name: "Grafana"},
-		},
+		}),
 	}
 
 	_, _, err := s.handleSSOConfigureService(context.Background(), nil, ssoConfigureServiceInput{Service: "unknown"})

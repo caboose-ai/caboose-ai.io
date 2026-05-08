@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/caboose-ai/caboose-ai.io/internal/services"
-	"github.com/caboose-ai/caboose-ai.io/internal/services/authentik"
+	"github.com/caboose-ai/caboose-ai.io/internal/service"
+	"github.com/caboose-ai/caboose-ai.io/services/authentik"
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -176,26 +176,40 @@ func (s *Server) handleSSOConfigureService(ctx context.Context, _ *sdkmcp.CallTo
 		return nil, nil, fmt.Errorf("sso_configure_service: service is required")
 	}
 
-	var svc services.ServiceConfigurator
-	for _, sc := range s.services {
-		if strings.EqualFold(sc.Slug(), input.Service) {
-			svc = sc
-			break
-		}
-	}
-	if svc == nil {
-		slugs := make([]string, len(s.services))
-		for i, sc := range s.services {
-			slugs[i] = sc.Slug()
-		}
+	svc, ok := s.configurator(input.Service)
+	if !ok {
+		slugs := s.configurableSlugs()
 		return nil, nil, fmt.Errorf("sso_configure_service: unknown service %q — valid services: %s", input.Service, strings.Join(slugs, ", "))
 	}
 
-	opts := services.ConfigureOpts{DryRun: input.DryRun, Force: input.Force}
+	opts := service.ConfigureOpts{DryRun: input.DryRun, Force: input.Force}
 	result, err := svc.Configure(ctx, opts)
 	if err != nil {
 		return nil, nil, fmt.Errorf("sso_configure_service(%s): %w", input.Service, err)
 	}
 	data, _ := json.MarshalIndent(result, "", "  ")
 	return textResult(string(data)), nil, nil
+}
+
+func (s *Server) configurator(slug string) (service.ServiceConfigurator, bool) {
+	if s.registry != nil {
+		return s.registry.Configurator(slug)
+	}
+	for _, sc := range s.services {
+		if strings.EqualFold(sc.Slug(), slug) {
+			return sc, true
+		}
+	}
+	return nil, false
+}
+
+func (s *Server) configurableSlugs() []string {
+	if s.registry != nil {
+		return s.registry.ConfigurableSlugs()
+	}
+	slugs := make([]string, len(s.services))
+	for i, sc := range s.services {
+		slugs[i] = sc.Slug()
+	}
+	return slugs
 }

@@ -1,0 +1,14 @@
+slug: openclaw
+display_name: OpenClaw
+url_key: openclaw
+compose_services:
+  - openclaw
+secrets: []
+configurator: ""
+smoke_flow: openclaw
+health:
+  url_key: openclaw
+  path: /
+  kind: http
+docs:
+  - README.md

@@ -1,0 +1,17 @@
+slug: sonarqube
+display_name: SonarQube
+url_key: sonarqube
+compose_services:
+  - sonarqube
+  - sonarqube-db
+secrets:
+  - SONAR_ADMIN_PASSWORD
+  - SONAR_DB_PASS
+configurator: sonarqube
+smoke_flow: sonarqube
+health:
+  url_key: sonarqube
+  path: /
+  kind: http
+docs:
+  - README.md

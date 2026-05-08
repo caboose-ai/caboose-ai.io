@@ -1,0 +1,13 @@
+slug: loki
+display_name: Loki
+url_key: ""
+compose_services:
+  - loki
+secrets: []
+configurator: ""
+smoke_flow: loki
+health:
+  path: http://127.0.0.1:3100/ready
+  kind: http
+docs:
+  - README.md

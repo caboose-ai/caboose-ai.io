@@ -1,0 +1,18 @@
+slug: social
+display_name: Social Login
+url_key: authentik
+compose_services:
+  - authentik-server
+secrets:
+  - GITHUB_CLIENT_ID
+  - GITHUB_CLIENT_SECRET
+  - GOOGLE_CLIENT_ID
+  - GOOGLE_CLIENT_SECRET
+configurator: social
+smoke_flow: social
+health:
+  url_key: authentik
+  path: /api/v3/root/config/
+  kind: http
+docs:
+  - README.md

@@ -29,6 +29,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "  reset      Tear down everything and delete all secrets")
 		fmt.Fprintln(os.Stderr, "  migrate    Migrate host services to Docker containers")
 		fmt.Fprintln(os.Stderr, "  oauth-setup Print external OAuth setup and optionally create Turnstile")
+		fmt.Fprintln(os.Stderr, "  service    Inspect or configure one registered service")
 		os.Exit(1)
 	}
 
@@ -42,6 +43,7 @@ func main() {
 	fs.StringVar(&opts.domain, "domain", "", "Homelab domain (e.g. caboose-ai.io)")
 	fs.StringVar(&opts.composeDir, "compose-dir", "", "Path to docker-compose.yml directory")
 	fs.StringVar(&opts.orchestrator, "orchestrator", "", "Backend orchestrator: compose (default) or kubernetes")
+	fs.StringVar(&opts.serveMode, "serve-mode", "", "Exposure mode: public (loopback behind Caddy) or local (LAN-bound ports)")
 	fs.StringVar(&opts.kubeNamespace, "kube-namespace", "", "Kubernetes namespace for homelab resources (default: homelab)")
 	fs.StringVar(&opts.kubeconfig, "kubeconfig", "", "Path to kubeconfig file for kubectl")
 	fs.StringVar(&opts.kubeContext, "kube-context", "", "Kubernetes context name for kubectl")
@@ -50,6 +52,7 @@ func main() {
 	fs.StringVar(&opts.n8nUser, "n8n-user", "", "N8N admin username")
 	fs.StringVar(&opts.email, "email", "", "Admin email for Authentik bootstrap")
 	fs.BoolVar(&opts.keepEnv, "keep-env", false, "Preserve .env file during reset")
+	fs.BoolVar(&opts.secretsEnvOnly, "secrets-env-only", false, "Use only compose .env for secrets and skip 1Password login checks")
 	fs.BoolVar(&opts.createTurnstile, "create-turnstile", false, "Create a Cloudflare Turnstile widget via API")
 	fs.StringVar(&opts.cloudflareAccountID, "cloudflare-account-id", "", "Cloudflare account ID (or CLOUDFLARE_ACCOUNT_ID)")
 	fs.StringVar(&opts.cloudflareAPIToken, "cloudflare-api-token", "", "Cloudflare API token (or CLOUDFLARE_API_TOKEN)")
@@ -65,6 +68,8 @@ func main() {
 		os.Exit(runMigrate(opts))
 	case "oauth-setup":
 		os.Exit(runOAuthSetup(opts))
+	case "service":
+		os.Exit(runService(opts, fs.Args()))
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", subcmd)
 		os.Exit(1)
@@ -72,7 +77,7 @@ func main() {
 }
 
 func extractSubcommand(args []string) (string, []string) {
-	known := map[string]bool{"install": true, "reset": true, "migrate": true, "oauth-setup": true}
+	known := map[string]bool{"install": true, "reset": true, "migrate": true, "oauth-setup": true, "service": true}
 	if len(args) == 0 {
 		return "", nil
 	}
@@ -80,6 +85,44 @@ func extractSubcommand(args []string) (string, []string) {
 		return args[0], args[1:]
 	}
 	return "", args
+}
+
+func runService(opts cliOpts, args []string) int {
+	cfg := config.DefaultConfig()
+	if opts.configPath != "" {
+		loaded, err := config.LoadFromFile(opts.configPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
+			return 1
+		}
+		cfg = loaded
+	}
+	if opts.domain != "" {
+		cfg.Domain = opts.domain
+	}
+	if opts.composeDir != "" {
+		cfg.ComposeDir = opts.composeDir
+	}
+	if opts.orchestrator != "" {
+		cfg.Orchestrator = opts.orchestrator
+	}
+	if opts.serveMode != "" {
+		cfg.ServeMode = opts.serveMode
+	}
+	if opts.opVault != "" {
+		cfg.OPVault = opts.opVault
+	}
+	if opts.opStaticVault != "" {
+		cfg.OPStaticVault = opts.opStaticVault
+	}
+	cfg.DryRun = opts.dryRun
+	cfg.Force = opts.force
+	cfg.Verbose = opts.verbose
+	cfg.SecretsEnvOnly = opts.secretsEnvOnly
+
+	cmdRunner := runner.NewLocalRunner()
+	secretStore := secretStoreForConfig(cfg, cmdRunner)
+	return cli.RunServiceCommand(context.Background(), cfg, cmdRunner, secretStore, args, cli.ServiceCommandOptions{DryRun: opts.dryRun, Force: opts.force})
 }
 
 type cliOpts struct {
@@ -95,10 +138,12 @@ type cliOpts struct {
 	n8nUser        string
 	email          string
 	orchestrator   string
+	serveMode      string
 	kubeNamespace  string
 	kubeconfig     string
 	kubeContext    string
 	keepEnv        bool
+	secretsEnvOnly bool
 
 	createTurnstile     bool
 	cloudflareAccountID string
@@ -129,6 +174,9 @@ func runInstall(opts cliOpts) int {
 	if opts.orchestrator != "" {
 		cfg.Orchestrator = opts.orchestrator
 	}
+	if opts.serveMode != "" {
+		cfg.ServeMode = opts.serveMode
+	}
 	if opts.kubeNamespace != "" {
 		cfg.Kubernetes.Namespace = opts.kubeNamespace
 	}
@@ -155,6 +203,7 @@ func runInstall(opts cliOpts) int {
 	cfg.Force = opts.force
 	cfg.Verbose = opts.verbose
 	cfg.NonInteractive = opts.nonInteractive
+	cfg.SecretsEnvOnly = opts.secretsEnvOnly
 
 	if opts.nonInteractive {
 		if err := cfg.Validate(); err != nil {
@@ -165,7 +214,7 @@ func runInstall(opts cliOpts) int {
 
 	cmdRunner := runner.NewLocalRunner()
 	httpClient := runner.NewHTTPClient()
-	secretStore := secrets.NewSplitOnePasswordStore(cfg.OPStaticVault, cfg.OPVault, cmdRunner, cfg.EnvPath())
+	secretStore := secretStoreForConfig(cfg, cmdRunner)
 
 	inst := install.New(cfg, secretStore, cmdRunner, httpClient)
 
@@ -205,6 +254,9 @@ func runReset(opts cliOpts) int {
 	if opts.orchestrator != "" {
 		cfg.Orchestrator = opts.orchestrator
 	}
+	if opts.serveMode != "" {
+		cfg.ServeMode = opts.serveMode
+	}
 	if opts.kubeNamespace != "" {
 		cfg.Kubernetes.Namespace = opts.kubeNamespace
 	}
@@ -221,14 +273,22 @@ func runReset(opts cliOpts) int {
 		cfg.OPStaticVault = opts.opStaticVault
 	}
 	cfg.DryRun = opts.dryRun
+	cfg.SecretsEnvOnly = opts.secretsEnvOnly
 
 	cmdRunner := runner.NewLocalRunner()
 	httpClient := runner.NewHTTPClient()
-	secretStore := secrets.NewSplitOnePasswordStore(cfg.OPStaticVault, cfg.OPVault, cmdRunner, cfg.EnvPath())
+	secretStore := secretStoreForConfig(cfg, cmdRunner)
 
 	inst := install.New(cfg, secretStore, cmdRunner, httpClient)
 	inst.State.KeepEnv = opts.keepEnv
 	return cli.RunReset(context.Background(), inst)
+}
+
+func secretStoreForConfig(cfg *config.Config, r runner.CommandRunner) secrets.SecretStore {
+	if cfg.SecretsEnvOnly {
+		return secrets.NewEnvFileStore(cfg.EnvPath())
+	}
+	return secrets.NewSplitOnePasswordStore(cfg.OPStaticVault, cfg.OPVault, r, cfg.EnvPath())
 }
 
 func runMigrate(opts cliOpts) int {

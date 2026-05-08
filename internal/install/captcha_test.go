@@ -9,7 +9,7 @@ import (
 
 	"github.com/caboose-ai/caboose-ai.io/internal/config"
 	"github.com/caboose-ai/caboose-ai.io/internal/secrets"
-	"github.com/caboose-ai/caboose-ai.io/internal/services/authentik"
+	"github.com/caboose-ai/caboose-ai.io/services/authentik"
 )
 
 // mockSecrets implements secrets.SecretStore for testing.

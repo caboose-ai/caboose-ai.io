@@ -1,0 +1,15 @@
+slug: forgejo
+display_name: Forgejo
+url_key: forgejo
+compose_services:
+  - forgejo
+secrets:
+  - GITEA_ADMIN_PASSWORD
+configurator: forgejo
+smoke_flow: forgejo
+health:
+  url_key: forgejo
+  path: /
+  kind: http
+docs:
+  - README.md

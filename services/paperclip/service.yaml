@@ -1,0 +1,15 @@
+slug: paperclip
+display_name: Paperclip
+url_key: ""
+compose_services:
+  - paperclip
+secrets:
+  - OPENAI_API_KEY
+  - ANTHROPIC_API_KEY
+configurator: ""
+smoke_flow: paperclip
+health:
+  path: http://127.0.0.1:3100/
+  kind: http
+docs:
+  - README.md

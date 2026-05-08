@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/caboose-ai/caboose-ai.io/internal/services/authentik"
+	"github.com/caboose-ai/caboose-ai.io/services/authentik"
 )
 
 var (
