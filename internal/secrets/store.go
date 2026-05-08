@@ -41,6 +41,8 @@ func BootstrapSecrets() []SecretDef {
 		{Key: "MATTERMOST_DB_PASS", Length: 32, Opts: GenerateOpts{Recipe: "letters,digits,32"}},
 		{Key: "MATTERMOST_ADMIN_PASSWORD", Length: 32, Opts: GenerateOpts{Recipe: "letters,digits,symbols,32"}},
 		{Key: "HOMARR_SECRET_ENCRYPTION_KEY", Length: 64, Opts: GenerateOpts{Recipe: "hex"}},
+		{Key: "PAPERCLIP_DB_PASS", Length: 32, Opts: GenerateOpts{Recipe: "letters,digits,32"}},
+		{Key: "PAPERCLIP_AUTH_SECRET", Length: 64, Opts: GenerateOpts{Recipe: "hex"}},
 	}
 }
 

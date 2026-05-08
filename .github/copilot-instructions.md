@@ -26,6 +26,7 @@ internal/
   tui/                  Bubbletea TUI (app model, views, components, styles)
   services/             Per-service configurators (forgejo, grafana, etc.)
     authentik/          Authentik API client (providers, sources, outpost)
+  paperclip/            Paperclip bootstrap client and software-shop seed profile
   mcp/                  MCP server, tools, resources
   cli/                  Non-interactive CLI runner
   migrate/              Host-to-Docker migration orchestrators
@@ -66,7 +67,7 @@ bootstrap verification. Woodpecker persists server data at
 - Browser smoke tests cover native Authentik/OIDC login, service-specific
   handoffs such as Portainer's OAuth button and Mattermost's browser handoff
   plus local admin login, and proxy-gated landing checks for Woodpecker, n8n,
-  Homarr, and OpenClaw.
+  Homarr, OpenClaw, and Paperclip.
 - Run tests: `go test ./internal/... -v`
 - Run smoke tests: `mise run sso:check` (full) or `mise run sso:check-quick` (API only)
 
@@ -121,6 +122,7 @@ bootstrap verification. Woodpecker persists server data at
 7. Add any secrets to `secrets/store.go` `BootstrapSecrets()`
 8. Update `internal/smoketest/flows.go` when the service needs a browser proof
    for native login, first-run setup, or proxy-gated landing behavior.
+9. Add or update `services/<slug>/service.yaml` when the service participates in the service-workspace surface.
 
 ### Adding a new Authentik API method
 
@@ -134,6 +136,8 @@ bootstrap verification. Woodpecker persists server data at
 go run ./cmd/homelab oauth-setup --domain caboose-ai.io
 CLOUDFLARE_ACCOUNT_ID=... CLOUDFLARE_API_TOKEN=... go run ./cmd/homelab oauth-setup --domain caboose-ai.io --create-turnstile
 go run ./cmd/homelab install --domain caboose-ai.io --compose-dir dev/homelab
+go run ./cmd/homelab service --domain caboose-ai.io --compose-dir dev/homelab paperclip status
+go run ./cmd/homelab paperclip seed-company --profile software-shop --repo /home/caboose/dev/caboose-ai.io
 ```
 
 ### Building

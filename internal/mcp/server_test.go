@@ -71,8 +71,8 @@ func TestServerIntegration(t *testing.T) {
 			}
 			count++
 		}
-		if count != 20 {
-			t.Errorf("expected 20 tools, got %d", count)
+		if count != 22 {
+			t.Errorf("expected 22 tools, got %d", count)
 		}
 	})
 

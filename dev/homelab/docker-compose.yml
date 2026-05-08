@@ -387,9 +387,11 @@ services:
       - sonarqube-internal
     restart: unless-stopped
 
-  # Paperclip — multi-agent workspace (image not yet published)
+  # Paperclip — homelab AI-labor control plane
   paperclip:
-    image: ghcr.io/paperclipai/paperclip:latest
+    image: paperclipai/paperclip:v2026.428.0
+    build:
+      context: https://github.com/paperclipai/paperclip.git#v2026.428.0
     container_name: paperclip
     profiles:
       - paperclip
@@ -397,15 +399,42 @@ services:
       - "127.0.0.1:3100:3100"
     environment:
       HOST: 0.0.0.0
-      PORT: 3100
+      PORT: "3100"
+      SERVE_UI: "true"
       PAPERCLIP_HOME: /paperclip
+      PAPERCLIP_CONFIG: /paperclip/instances/default/config.json
       PAPERCLIP_PUBLIC_URL: "${PAPERCLIP_PUBLIC_URL:-https://paperclip.caboose-ai.io}"
+      PAPERCLIP_DEPLOYMENT_MODE: authenticated
+      PAPERCLIP_DEPLOYMENT_EXPOSURE: private
+      PAPERCLIP_TELEMETRY_DISABLED: "1"
+      DO_NOT_TRACK: "1"
+      BETTER_AUTH_SECRET: "${PAPERCLIP_AUTH_SECRET}"
+      PAPERCLIP_AGENT_JWT_SECRET: "${PAPERCLIP_AUTH_SECRET}"
+      DATABASE_URL: "postgres://paperclip:${PAPERCLIP_DB_PASS}@paperclip-db:5432/paperclip?sslmode=disable"
       OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
       ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+    depends_on:
+      - paperclip-db
     volumes:
       - paperclip_data:/paperclip
     networks:
+      - paperclip-internal
       - apps
+    restart: unless-stopped
+
+  paperclip-db:
+    image: postgres:16.13
+    container_name: paperclip-db
+    profiles:
+      - paperclip
+    environment:
+      POSTGRES_USER: paperclip
+      POSTGRES_PASSWORD: ${PAPERCLIP_DB_PASS}
+      POSTGRES_DB: paperclip
+    volumes:
+      - paperclip_db:/var/lib/postgresql/data
+    networks:
+      - paperclip-internal
     restart: unless-stopped
 
   # Loki — log aggregation, queried by Grafana
@@ -458,6 +487,7 @@ volumes:
   sonarqube_extensions:
   sonarqube_db:
   paperclip_data:
+  paperclip_db:
 
 networks:
   # Authentik DB tier — internal:true prevents outbound internet access and
@@ -479,5 +509,9 @@ networks:
     internal: true
   # SonarQube DB tier — isolated from all other services.
   sonarqube-internal:
+    driver: bridge
+    internal: true
+  # Paperclip DB tier — isolated from the app network.
+  paperclip-internal:
     driver: bridge
     internal: true

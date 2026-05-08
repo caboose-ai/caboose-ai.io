@@ -30,6 +30,7 @@ Go binary is at `/home/caboose/.local/go/bin/go`. If `go` isn't on PATH, use `PA
 - `internal/install/` — Installer orchestration, one file per concern
 - `internal/services/<name>/` — Per-service configurators implementing `ServiceConfigurator`
 - `internal/services/authentik/` — Authentik API client, one file per resource type
+- `internal/paperclip/` — Paperclip bootstrap client and software-shop seed profile
 - `internal/tui/` — Bubbletea TUI with message-driven phase transitions
 - `internal/mcp/` — MCP server, tools, resources
 - `internal/runner/` — CommandRunner + HTTPClient interfaces for testability
@@ -68,7 +69,7 @@ container recreation.
 - Browser smoke tests exercise both Authentik/OIDC login and service-specific
   handoffs, including Portainer's OAuth button, Mattermost's browser handoff and
   local admin login, and proxy-gated landing checks for Woodpecker, n8n,
-  Homarr, and OpenClaw.
+  Homarr, OpenClaw, and Paperclip.
 
 ### Git
 - Never commit to main. Always branch first.
@@ -110,13 +111,15 @@ container recreation.
 7. Add or update `internal/smoketest/flows.go` when the service has native
    login, first-run setup, or proxy-gated landing behavior that must be proven
    by the live SSO browser test.
+8. For Paperclip-style control-plane services, add or update `services/<slug>/service.yaml` and any seed/context document.
 
 ## Live Environment
 
 - Domain: `caboose-ai.io`
 - Auth: `auth.caboose-ai.io` (Authentik)
-- Services: git, ci, docker, grafana, ai, n8n, sonar, chat, openclaw, blog, dash
+- Services: git, ci, docker, grafana, ai, n8n, sonar, chat, openclaw, blog, paperclip, dash
 - Observability: Prometheus (metrics), Loki + Promtail (logs), Grafana (dashboards)
 - Caddy reverse proxy on the host
 - Cloudflare tunnel for `chat` and `sonar` subdomains
 - Ollama on host for local LLM inference
+- Paperclip runs behind the compose `paperclip` profile with Authentik forward-auth provider `paperclip-proxy`; seed it with `homelab paperclip seed-company --profile software-shop --repo /home/caboose/dev/caboose-ai.io`.

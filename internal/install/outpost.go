@@ -21,6 +21,7 @@ func DefaultProxySpecs(urls config.URLs) []ProxySpec {
 		{Name: "ci-proxy", Slug: "ci-proxy", ExternalHost: urls.CI},
 		{Name: "n8n-proxy", Slug: "n8n-proxy", ExternalHost: urls.N8N},
 		{Name: "openclaw-proxy", Slug: "openclaw-proxy", ExternalHost: urls.OpenClaw},
+		{Name: "paperclip-proxy", Slug: "paperclip-proxy", ExternalHost: urls.Paperclip},
 	}
 }
 

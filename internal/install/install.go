@@ -23,6 +23,7 @@ import (
 	"github.com/caboose-ai/caboose-ai.io/internal/services/mattermost"
 	"github.com/caboose-ai/caboose-ai.io/internal/services/n8n"
 	"github.com/caboose-ai/caboose-ai.io/internal/services/openwebui"
+	paperclipsvc "github.com/caboose-ai/caboose-ai.io/internal/services/paperclip"
 	"github.com/caboose-ai/caboose-ai.io/internal/services/portainer"
 	"github.com/caboose-ai/caboose-ai.io/internal/services/social"
 	"github.com/caboose-ai/caboose-ai.io/internal/services/sonarqube"
@@ -119,6 +120,7 @@ func (inst *Installer) BuildServices(ctx context.Context) error {
 		grafana.New(inst.AK, inst.Secrets),
 		openwebui.New(inst.AK, inst.Secrets),
 		homarr.New(inst.AK, inst.Secrets),
+		paperclipsvc.New(inst.AK),
 		n8n.New(n8nAPIURL, inst.HTTP, inst.Config.Email, n8nPass),
 		sonarqube.New(sonarAPIURL, inst.HTTP, sonarAdminPass),
 		mattermost.New(inst.DockerExec, inst.Secrets, "mattermost", inst.Config.Email),

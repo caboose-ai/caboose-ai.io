@@ -1,0 +1,29 @@
+name: Paperclip
+slug: paperclip
+url: https://paperclip.caboose-ai.io
+compose:
+  profile: paperclip
+  services:
+    - paperclip
+    - paperclip-db
+auth:
+  mode: authentik-forward-auth
+  provider: paperclip-proxy
+  exposure: private
+secrets:
+  dynamic:
+    - PAPERCLIP_DB_PASS
+  static:
+    - PAPERCLIP_API_KEY
+    - OPENAI_API_KEY
+    - ANTHROPIC_API_KEY
+operations:
+  status: mise run service:status -- paperclip
+  seed: go run ./cmd/homelab paperclip seed-company --profile software-shop --repo /home/caboose/dev/caboose-ai.io
+authority:
+  requires_human_approval:
+    - docker destructive operations
+    - installer reset or production deploy
+    - secret changes
+    - firewall changes
+    - destructive filesystem or data mutations

@@ -22,6 +22,7 @@ import (
 	"github.com/caboose-ai/caboose-ai.io/internal/services/mattermost"
 	"github.com/caboose-ai/caboose-ai.io/internal/services/n8n"
 	"github.com/caboose-ai/caboose-ai.io/internal/services/openwebui"
+	paperclipsvc "github.com/caboose-ai/caboose-ai.io/internal/services/paperclip"
 	"github.com/caboose-ai/caboose-ai.io/internal/services/portainer"
 	"github.com/caboose-ai/caboose-ai.io/internal/services/social"
 	"github.com/caboose-ai/caboose-ai.io/internal/services/sonarqube"
@@ -192,6 +193,7 @@ func (s *Server) buildServices(ctx context.Context) {
 		portainer.New(s.ak, s.http, s.runner, portainerAPIURL, portainerAdminPass, urls.Authentik, urls.Portainer+"/"),
 		grafana.New(s.ak, s.secrets),
 		openwebui.New(s.ak, s.secrets),
+		paperclipsvc.New(s.ak),
 		n8n.New(n8nAPIURL, s.http, s.cfg.Email, n8nPass),
 		sonarqube.New(sonarAPIURL, s.http, sonarAdminPass),
 		mattermost.New(s.dockerExec, s.secrets, "mattermost", s.cfg.Email),
@@ -217,6 +219,7 @@ func (s *Server) buildHealthCheckers() {
 		&health.HTTPChecker{ServiceName: "Grafana", URL: urls.Grafana, Client: s.http},
 		&health.HTTPChecker{ServiceName: "OpenWebUI", URL: urls.OpenWebUI, Client: s.http},
 		&health.HTTPChecker{ServiceName: "Mattermost", URL: urls.Mattermost, Client: s.http},
+		&health.HTTPChecker{ServiceName: "Paperclip", URL: urls.Paperclip, Client: s.http},
 	}
 }
 
