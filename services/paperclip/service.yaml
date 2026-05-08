@@ -1,15 +1,21 @@
 slug: paperclip
 display_name: Paperclip
-url_key: ""
+url_key: paperclip
 compose_services:
   - paperclip
+  - paperclip-db
 secrets:
+  - PAPERCLIP_DB_PASS
+  - PAPERCLIP_AUTH_SECRET
+  - PAPERCLIP_API_KEY
   - OPENAI_API_KEY
   - ANTHROPIC_API_KEY
-configurator: ""
+configurator: paperclip
 smoke_flow: paperclip
 health:
-  path: http://127.0.0.1:3100/
+  url_key: paperclip
+  path: /
   kind: http
 docs:
   - README.md
+  - context.md

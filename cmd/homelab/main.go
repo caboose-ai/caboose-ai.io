@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/mattn/go-isatty"
@@ -14,6 +15,7 @@ import (
 	"github.com/caboose-ai/caboose-ai.io/internal/docker"
 	"github.com/caboose-ai/caboose-ai.io/internal/install"
 	"github.com/caboose-ai/caboose-ai.io/internal/migrate"
+	"github.com/caboose-ai/caboose-ai.io/internal/paperclip"
 	"github.com/caboose-ai/caboose-ai.io/internal/runner"
 	"github.com/caboose-ai/caboose-ai.io/internal/secrets"
 	appTUI "github.com/caboose-ai/caboose-ai.io/internal/tui"
@@ -30,6 +32,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "  migrate    Migrate host services to Docker containers")
 		fmt.Fprintln(os.Stderr, "  oauth-setup Print external OAuth setup and optionally create Turnstile")
 		fmt.Fprintln(os.Stderr, "  service    Inspect or configure one registered service")
+		fmt.Fprintln(os.Stderr, "  paperclip  Manage Paperclip homelab seed data")
 		os.Exit(1)
 	}
 
@@ -57,6 +60,10 @@ func main() {
 	fs.StringVar(&opts.cloudflareAccountID, "cloudflare-account-id", "", "Cloudflare account ID (or CLOUDFLARE_ACCOUNT_ID)")
 	fs.StringVar(&opts.cloudflareAPIToken, "cloudflare-api-token", "", "Cloudflare API token (or CLOUDFLARE_API_TOKEN)")
 	fs.StringVar(&opts.turnstileWidgetName, "turnstile-widget-name", "", "Cloudflare Turnstile widget name")
+	fs.StringVar(&opts.paperclipProfile, "profile", "software-shop", "Paperclip seed profile")
+	fs.StringVar(&opts.paperclipRepo, "repo", "/home/caboose/dev/caboose-ai.io", "Repository path for Paperclip project workspaces")
+	fs.StringVar(&opts.paperclipAPIBase, "api-base", "", "Paperclip API base URL")
+	fs.StringVar(&opts.paperclipAPIKey, "api-key", "", "Paperclip API key")
 	fs.Parse(args)
 
 	switch subcmd {
@@ -70,6 +77,8 @@ func main() {
 		os.Exit(runOAuthSetup(opts))
 	case "service":
 		os.Exit(runService(opts, fs.Args()))
+	case "paperclip":
+		os.Exit(runPaperclip(opts, fs.Args()))
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", subcmd)
 		os.Exit(1)
@@ -77,7 +86,7 @@ func main() {
 }
 
 func extractSubcommand(args []string) (string, []string) {
-	known := map[string]bool{"install": true, "reset": true, "migrate": true, "oauth-setup": true, "service": true}
+	known := map[string]bool{"install": true, "reset": true, "migrate": true, "oauth-setup": true, "service": true, "paperclip": true}
 	if len(args) == 0 {
 		return "", nil
 	}
@@ -149,6 +158,10 @@ type cliOpts struct {
 	cloudflareAccountID string
 	cloudflareAPIToken  string
 	turnstileWidgetName string
+	paperclipProfile    string
+	paperclipRepo       string
+	paperclipAPIBase    string
+	paperclipAPIKey     string
 }
 
 func runInstall(opts cliOpts) int {
@@ -376,4 +389,67 @@ func runOAuthSetup(opts cliOpts) int {
 		return 1
 	}
 	return 0
+}
+
+func runPaperclip(opts cliOpts, args []string) int {
+	if len(args) == 0 || args[0] != "seed-company" {
+		fmt.Fprintln(os.Stderr, "Usage: homelab paperclip seed-company --profile software-shop --repo /home/caboose/dev/caboose-ai.io [--api-base http://127.0.0.1:3100] [--api-key token]")
+		return 1
+	}
+	fs := flag.NewFlagSet("paperclip seed-company", flag.ExitOnError)
+	fs.StringVar(&opts.domain, "domain", opts.domain, "Homelab domain")
+	fs.StringVar(&opts.composeDir, "compose-dir", opts.composeDir, "Path to docker-compose.yml directory")
+	fs.StringVar(&opts.paperclipProfile, "profile", opts.paperclipProfile, "Paperclip seed profile")
+	fs.StringVar(&opts.paperclipRepo, "repo", opts.paperclipRepo, "Repository path for Paperclip project workspaces")
+	fs.StringVar(&opts.paperclipAPIBase, "api-base", opts.paperclipAPIBase, "Paperclip API base URL")
+	fs.StringVar(&opts.paperclipAPIKey, "api-key", opts.paperclipAPIKey, "Paperclip API key")
+	_ = fs.Parse(args[1:])
+	if len(fs.Args()) != 0 {
+		fmt.Fprintln(os.Stderr, "Usage: homelab paperclip seed-company --profile software-shop --repo /home/caboose/dev/caboose-ai.io [--api-base http://127.0.0.1:3100] [--api-key token]")
+		return 1
+	}
+	if opts.paperclipProfile != "software-shop" {
+		fmt.Fprintf(os.Stderr, "unsupported Paperclip profile %q; supported: software-shop\n", opts.paperclipProfile)
+		return 1
+	}
+
+	cfg := config.DefaultConfig()
+	if opts.domain != "" {
+		cfg.Domain = opts.domain
+	}
+	if opts.composeDir != "" {
+		cfg.ComposeDir = opts.composeDir
+	}
+	apiBase := opts.paperclipAPIBase
+	if apiBase == "" {
+		apiBase = "http://127.0.0.1:3100"
+	}
+	apiKey := opts.paperclipAPIKey
+	if apiKey == "" {
+		apiKey = os.Getenv("PAPERCLIP_API_KEY")
+	}
+	if apiKey == "" {
+		store := secrets.NewSplitOnePasswordStore(cfg.OPStaticVault, cfg.OPVault, runner.NewLocalRunner(), cfg.EnvPath())
+		apiKey, _ = store.Get(context.Background(), "PAPERCLIP_API_KEY")
+	}
+
+	client := paperclip.NewClient(apiBase, apiKey, nil)
+	report, err := paperclip.SeedSoftwareShop(context.Background(), client, opts.paperclipRepo)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "paperclip seed failed: %v\n", err)
+		return 1
+	}
+	fmt.Printf("company=%s created=%s existing=%s\n", report.CompanyID, formatCounts(report.Created), formatCounts(report.Existing))
+	return 0
+}
+
+func formatCounts(counts map[string]int) string {
+	if len(counts) == 0 {
+		return "none"
+	}
+	var parts []string
+	for key, value := range counts {
+		parts = append(parts, fmt.Sprintf("%s:%d", key, value))
+	}
+	return strings.Join(parts, ",")
 }

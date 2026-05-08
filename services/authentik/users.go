@@ -8,12 +8,36 @@ import (
 )
 
 type User struct {
-	PK       int    `json:"pk"`
-	Username string `json:"username"`
+	PK         int    `json:"pk"`
+	Username   string `json:"username"`
+	Name       string `json:"name"`
+	Email      string `json:"email"`
+	IsActive   bool   `json:"is_active"`
+	DateJoined string `json:"date_joined"`
+	LastLogin  string `json:"last_login"`
 }
 
 type userList struct {
 	Results []User `json:"results"`
+}
+
+func (c *Client) ListPendingUsers(ctx context.Context) ([]User, error) {
+	data, err := c.Get(ctx, "/api/v3/core/users/?is_active=false&page_size=50")
+	if err != nil {
+		return nil, err
+	}
+
+	var list userList
+	if err := json.Unmarshal(data, &list); err != nil {
+		return nil, fmt.Errorf("parsing pending users: %w", err)
+	}
+	return list.Results, nil
+}
+
+func (c *Client) ActivateUser(ctx context.Context, pk int) error {
+	body := map[string]bool{"is_active": true}
+	_, err := c.Patch(ctx, fmt.Sprintf("/api/v3/core/users/%d/", pk), body)
+	return err
 }
 
 func (c *Client) FindUser(ctx context.Context, username string) (*User, error) {

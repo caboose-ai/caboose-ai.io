@@ -16,6 +16,7 @@ type URLs struct {
 	OpenClaw   string
 	SonarQube  string
 	Ghost      string
+	Paperclip  string
 	CI         string
 }
 
@@ -39,6 +40,7 @@ func DeriveURLs(domain string) URLs {
 		OpenClaw:   fmt.Sprintf("https://openclaw.%s", domain),
 		SonarQube:  fmt.Sprintf("https://sonar.%s", domain),
 		Ghost:      fmt.Sprintf("https://blog.%s", domain),
+		Paperclip:  fmt.Sprintf("https://paperclip.%s", domain),
 		CI:         fmt.Sprintf("https://ci.%s", domain),
 	}
 }
@@ -56,6 +58,7 @@ func (u URLs) ServiceLinks() []ServiceLink {
 		{Name: "Mattermost", URL: u.Mattermost},
 		{Name: "OpenClaw", URL: u.OpenClaw},
 		{Name: "Ghost", URL: u.Ghost},
+		{Name: "Paperclip", URL: u.Paperclip},
 		{Name: "Homarr", URL: u.Dashboard},
 		{Name: "Homarr Alias", URL: u.DashAlias},
 	}

@@ -52,6 +52,10 @@ run = "go run ./cmd/homelab reset --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$
 description = "Print external OAuth and Turnstile setup values"
 run = "go run ./cmd/homelab oauth-setup --domain \"$HOMELAB_DOMAIN\""
 
+[tasks."paperclip:seed"]
+description = "Seed the Paperclip software-shop company profile"
+run = "go run ./cmd/homelab paperclip seed-company --profile software-shop --repo /home/caboose/dev/caboose-ai.io"
+
 [tasks."homelab:create-turnstile"]
 description = "Create or verify the Cloudflare Turnstile widget via API"
 run = "go run ./cmd/homelab oauth-setup --domain \"$HOMELAB_DOMAIN\" --create-turnstile"

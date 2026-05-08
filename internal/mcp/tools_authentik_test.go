@@ -59,6 +59,22 @@ func TestHandleAuthentikRenameUser_NoAK(t *testing.T) {
 	}
 }
 
+func TestHandleAuthentikListPendingUsers_NoAK(t *testing.T) {
+	s := &Server{ak: nil}
+	_, _, err := s.handleAuthentikListPendingUsers(context.Background(), nil, nil)
+	if err == nil {
+		t.Fatal("expected error when Authentik not initialized")
+	}
+}
+
+func TestHandleAuthentikActivateUser_NoAK(t *testing.T) {
+	s := &Server{ak: nil}
+	_, _, err := s.handleAuthentikActivateUser(context.Background(), nil, authentikActivateUserInput{PK: 1})
+	if err == nil {
+		t.Fatal("expected error when Authentik not initialized")
+	}
+}
+
 func TestHandleSSOConfigureService_NoAK(t *testing.T) {
 	s := &Server{ak: nil}
 	_, _, err := s.handleSSOConfigureService(context.Background(), nil, ssoConfigureServiceInput{Service: "forgejo"})

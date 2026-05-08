@@ -17,6 +17,7 @@ Go monorepo for a self-hosted homelab infrastructure stack with SSO via Authenti
 | Mattermost | `chat.caboose-ai.io` | Team chat |
 | OpenClaw | `openclaw.caboose-ai.io` | OpenClaw app behind Authentik forward auth |
 | Ghost | `blog.caboose-ai.io` | Blog |
+| Paperclip | `paperclip.caboose-ai.io` | AI-labor control plane for the homelab software shop |
 | Homarr | `caboose-ai.io` | Dashboard / homepage |
 | Prometheus | — | Metrics collection |
 | Loki + Promtail | — | Log aggregation |
@@ -78,6 +79,9 @@ mise run service:status -- forgejo
 mise run service:configure -- mattermost --dry-run
 mise run service:smoke -- forgejo
 
+# Seed the Paperclip software-shop company
+mise run paperclip:seed
+
 # Migrate host Mattermost to Docker
 go run ./cmd/homelab migrate
 ```
@@ -122,6 +126,7 @@ validated by reaching their protected landing URLs.
 
 - **Caddy** reverse proxy on the host — handles TLS and routes to containers in `public` serve mode
 - **Docker Compose** at `dev/homelab/docker-compose.yml` — all services
+- **Paperclip** profile (`docker compose --profile paperclip ...`) — built from upstream tag `v2026.428.0`, backed by `paperclip-db`, and Authentik-gated through `paperclip-proxy`
 - **Cloudflare tunnel** for `chat` and `sonar` subdomains
 - **1Password** for secret storage (with `.env` fallback)
 - **Prometheus + Loki** for metrics and logs, visualized in Grafana

@@ -33,6 +33,10 @@ type authentikRenameUserInput struct {
 	NewUsername     string `json:"new_username" jsonschema:"desired new username"`
 }
 
+type authentikActivateUserInput struct {
+	PK int `json:"pk" jsonschema:"primary key (pk) of the user to activate"`
+}
+
 type ssoConfigureServiceInput struct {
 	Service string `json:"service" jsonschema:"service slug: forgejo, woodpecker, portainer, grafana, open-webui, mattermost, social"`
 	DryRun  bool   `json:"dry_run,omitempty" jsonschema:"if true, show what would happen without making changes"`
@@ -69,6 +73,16 @@ func (s *Server) registerAuthentikTools() {
 		Name:        "authentik_rename_user",
 		Description: "Rename a user in Authentik",
 	}, s.handleAuthentikRenameUser)
+
+	sdkmcp.AddTool(s.mcpServer, &sdkmcp.Tool{
+		Name:        "authentik_list_pending_users",
+		Description: "List users awaiting activation (is_active=false) in Authentik",
+	}, s.handleAuthentikListPendingUsers)
+
+	sdkmcp.AddTool(s.mcpServer, &sdkmcp.Tool{
+		Name:        "authentik_activate_user",
+		Description: "Activate an inactive user in Authentik (set is_active=true)",
+	}, s.handleAuthentikActivateUser)
 
 	sdkmcp.AddTool(s.mcpServer, &sdkmcp.Tool{
 		Name:        "sso_configure_service",
@@ -166,6 +180,34 @@ func (s *Server) handleAuthentikRenameUser(ctx context.Context, _ *sdkmcp.CallTo
 		return nil, nil, fmt.Errorf("authentik_rename_user: %w", err)
 	}
 	return textResult(fmt.Sprintf("User %q renamed to %q", input.CurrentUsername, input.NewUsername)), nil, nil
+}
+
+func (s *Server) handleAuthentikListPendingUsers(ctx context.Context, _ *sdkmcp.CallToolRequest, _ any) (*sdkmcp.CallToolResult, any, error) {
+	if err := s.requireAuthentik(); err != nil {
+		return nil, nil, err
+	}
+	users, err := s.ak.ListPendingUsers(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("authentik_list_pending_users: %w", err)
+	}
+	if len(users) == 0 {
+		return textResult("No pending users awaiting activation"), nil, nil
+	}
+	data, _ := json.MarshalIndent(users, "", "  ")
+	return textResult(string(data)), nil, nil
+}
+
+func (s *Server) handleAuthentikActivateUser(ctx context.Context, _ *sdkmcp.CallToolRequest, input authentikActivateUserInput) (*sdkmcp.CallToolResult, any, error) {
+	if err := s.requireAuthentik(); err != nil {
+		return nil, nil, err
+	}
+	if input.PK == 0 {
+		return nil, nil, fmt.Errorf("authentik_activate_user: pk is required")
+	}
+	if err := s.ak.ActivateUser(ctx, input.PK); err != nil {
+		return nil, nil, fmt.Errorf("authentik_activate_user: %w", err)
+	}
+	return textResult(fmt.Sprintf("User pk=%d activated successfully", input.PK)), nil, nil
 }
 
 func (s *Server) handleSSOConfigureService(ctx context.Context, _ *sdkmcp.CallToolRequest, input ssoConfigureServiceInput) (*sdkmcp.CallToolResult, any, error) {

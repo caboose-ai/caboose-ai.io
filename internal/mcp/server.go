@@ -211,6 +211,7 @@ func (s *Server) buildHealthCheckers() {
 		&health.HTTPChecker{ServiceName: "Grafana", URL: urls.Grafana, Client: s.http},
 		&health.HTTPChecker{ServiceName: "OpenWebUI", URL: urls.OpenWebUI, Client: s.http},
 		&health.HTTPChecker{ServiceName: "Mattermost", URL: urls.Mattermost, Client: s.http},
+		&health.HTTPChecker{ServiceName: "Paperclip", URL: urls.Paperclip, Client: s.http},
 	}
 }
 

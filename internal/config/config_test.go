@@ -27,6 +27,7 @@ func TestDeriveURLs(t *testing.T) {
 		{"OpenClaw", urls.OpenClaw, "https://openclaw.example.com"},
 		{"SonarQube", urls.SonarQube, "https://sonar.example.com"},
 		{"Ghost", urls.Ghost, "https://blog.example.com"},
+		{"Paperclip", urls.Paperclip, "https://paperclip.example.com"},
 		{"CI", urls.CI, "https://ci.example.com"},
 	}
 
@@ -53,6 +54,23 @@ func TestServiceLinksIncludeOpenClaw(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("OpenClaw missing from service links")
+	}
+}
+
+func TestServiceLinksIncludePaperclip(t *testing.T) {
+	urls := DeriveURLs("example.com")
+
+	var found bool
+	for _, link := range urls.ServiceLinks() {
+		if link.Name == "Paperclip" {
+			found = true
+			if link.URL != "https://paperclip.example.com" {
+				t.Fatalf("Paperclip URL = %q", link.URL)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("Paperclip missing from service links")
 	}
 }
 

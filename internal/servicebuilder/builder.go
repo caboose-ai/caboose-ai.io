@@ -16,6 +16,7 @@ import (
 	"github.com/caboose-ai/caboose-ai.io/services/mattermost"
 	"github.com/caboose-ai/caboose-ai.io/services/n8n"
 	openwebui "github.com/caboose-ai/caboose-ai.io/services/open-webui"
+	"github.com/caboose-ai/caboose-ai.io/services/paperclip"
 	"github.com/caboose-ai/caboose-ai.io/services/portainer"
 	"github.com/caboose-ai/caboose-ai.io/services/social"
 	"github.com/caboose-ai/caboose-ai.io/services/sonarqube"
@@ -82,6 +83,7 @@ func Build(ctx context.Context, deps Dependencies) ([]service.ServiceConfigurato
 		grafana.New(deps.Authentik, deps.Secrets),
 		openwebui.New(deps.Authentik, deps.Secrets),
 		homarr.New(deps.Authentik, deps.Secrets),
+		paperclip.New(deps.Authentik),
 		n8n.New(n8nAPIURL, deps.HTTP, deps.Config.Email, n8nPass),
 		sonarqube.New(sonarAPIURL, deps.HTTP, sonarAdminPass),
 		mattermost.New(deps.DockerExec, deps.Secrets, "mattermost", deps.Config.Email),
