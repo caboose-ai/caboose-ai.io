@@ -1,0 +1,16 @@
+slug: mattermost
+display_name: Mattermost
+url_key: mattermost
+compose_services:
+  - mattermost
+  - mattermost-db
+secrets:
+  - MATTERMOST_DB_PASS
+configurator: mattermost
+smoke_flow: mattermost
+health:
+  url_key: mattermost
+  path: /
+  kind: http
+docs:
+  - README.md

@@ -4,6 +4,7 @@ go = "latest"
 [env]
 HOMELAB_DOMAIN = "caboose-ai.io"
 HOMELAB_COMPOSE_DIR = "/opt/homelab"
+HOMELAB_SERVE_MODE = "public"
 
 [tasks.build]
 description = "Build all binaries"
@@ -16,20 +17,20 @@ run = "go build -o ./homelab ./cmd/homelab"
 [tasks.homelab]
 description = "Build and run the homelab TUI installer against the configured stack"
 raw = true
-run = "go build -o ./homelab ./cmd/homelab && ./homelab install --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
+run = "go build -o ./homelab ./cmd/homelab && ./homelab install --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" --serve-mode \"$HOMELAB_SERVE_MODE\""
 
 [tasks.install]
 description = "Run the verified non-interactive homelab install"
-run = "go run ./cmd/homelab install --non-interactive --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
+run = "go run ./cmd/homelab install --non-interactive --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" --serve-mode \"$HOMELAB_SERVE_MODE\""
 
 [tasks."homelab:install"]
 description = "Run the verified non-interactive homelab install"
-run = "go run ./cmd/homelab install --non-interactive --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
+run = "go run ./cmd/homelab install --non-interactive --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" --serve-mode \"$HOMELAB_SERVE_MODE\""
 
 [tasks."homelab:install-tui"]
 description = "Build and run the interactive homelab TUI installer"
 raw = true
-run = "go build -o ./homelab ./cmd/homelab && ./homelab install --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
+run = "go build -o ./homelab ./cmd/homelab && ./homelab install --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" --serve-mode \"$HOMELAB_SERVE_MODE\""
 
 [tasks.reset]
 description = "Run the verified homelab reset while preserving static external credentials"
@@ -41,20 +42,15 @@ run = "go run ./cmd/homelab reset --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$
 
 [tasks.reinstall]
 description = "Run reset followed by the verified non-interactive install"
-run = "go run ./cmd/homelab reset --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" && go run ./cmd/homelab install --non-interactive --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
+run = "go run ./cmd/homelab reset --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" && go run ./cmd/homelab install --non-interactive --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" --serve-mode \"$HOMELAB_SERVE_MODE\""
 
 [tasks."homelab:reinstall"]
 description = "Run reset followed by the verified non-interactive install"
-run = "go run ./cmd/homelab reset --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" && go run ./cmd/homelab install --non-interactive --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
+run = "go run ./cmd/homelab reset --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" && go run ./cmd/homelab install --non-interactive --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" --serve-mode \"$HOMELAB_SERVE_MODE\""
 
 [tasks."homelab:oauth-setup"]
 description = "Print external OAuth and Turnstile setup values"
 run = "go run ./cmd/homelab oauth-setup --domain \"$HOMELAB_DOMAIN\""
-
-[tasks."service:status"]
-description = "Check a homelab service status, for example: mise run service:status -- paperclip"
-usage = 'arg "service"'
-run = "go run ./cmd/homelab service --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" \"$usage_service\" status"
 
 [tasks."paperclip:seed"]
 description = "Seed the Paperclip software-shop company profile"
@@ -64,13 +60,25 @@ run = "go run ./cmd/homelab paperclip seed-company --profile software-shop --rep
 description = "Create or verify the Cloudflare Turnstile widget via API"
 run = "go run ./cmd/homelab oauth-setup --domain \"$HOMELAB_DOMAIN\" --create-turnstile"
 
+[tasks."service:status"]
+description = "Show status for one registered service"
+run = "go run ./cmd/homelab service --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" status"
+
+[tasks."service:configure"]
+description = "Configure one registered service"
+run = "go run ./cmd/homelab service --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" configure"
+
+[tasks."service:smoke"]
+description = "Run the smoke flow for one registered service"
+run = "go run ./cmd/homelab service --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" smoke"
+
 [tasks.mcp]
 description = "Build and run the MCP server"
 run = "go build -o ./mcp-server ./cmd/mcp && ./mcp-server"
 
 [tasks.test]
 description = "Run all tests"
-run = "go test ./internal/... -v"
+run = "go test ./... -v"
 
 [tasks.down]
 description = "Stop containers (keep data)"
@@ -90,4 +98,4 @@ run = "SMOKETEST_EVIDENCE=1 go test -tags integration ./internal/smoketest/ -run
 
 [tasks."homelab:e2e-reset"]
 description = "Destructive reset, install, then browser SSO evidence test"
-run = "go run ./cmd/homelab reset --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" && go run ./cmd/homelab install --non-interactive --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" && SMOKETEST_EVIDENCE=1 go test -tags integration ./internal/smoketest/ -run 'TestSSO_Config|TestSSO_Endpoints|TestSSO_BrowserFlows' -v -timeout 15m"
+run = "go run ./cmd/homelab reset --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" && go run ./cmd/homelab install --non-interactive --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" --serve-mode \"$HOMELAB_SERVE_MODE\" && SMOKETEST_EVIDENCE=1 go test -tags integration ./internal/smoketest/ -run 'TestSSO_Config|TestSSO_Endpoints|TestSSO_BrowserFlows' -v -timeout 15m"

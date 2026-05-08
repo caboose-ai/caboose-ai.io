@@ -12,7 +12,7 @@ import (
 	"github.com/caboose-ai/caboose-ai.io/internal/config"
 	"github.com/caboose-ai/caboose-ai.io/internal/docker"
 	"github.com/caboose-ai/caboose-ai.io/internal/runner"
-	"github.com/caboose-ai/caboose-ai.io/internal/services/authentik"
+	"github.com/caboose-ai/caboose-ai.io/services/authentik"
 )
 
 type mockHTTP struct {

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/caboose-ai/caboose-ai.io/internal/services/authentik"
+	"github.com/caboose-ai/caboose-ai.io/services/authentik"
 )
 
 func (inst *Installer) SetupCaptcha(ctx context.Context, progressFn func(string)) error {

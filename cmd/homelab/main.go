@@ -13,7 +13,6 @@ import (
 	"github.com/caboose-ai/caboose-ai.io/internal/cli"
 	"github.com/caboose-ai/caboose-ai.io/internal/config"
 	"github.com/caboose-ai/caboose-ai.io/internal/docker"
-	"github.com/caboose-ai/caboose-ai.io/internal/health"
 	"github.com/caboose-ai/caboose-ai.io/internal/install"
 	"github.com/caboose-ai/caboose-ai.io/internal/migrate"
 	"github.com/caboose-ai/caboose-ai.io/internal/paperclip"
@@ -32,7 +31,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "  reset      Tear down everything and delete all secrets")
 		fmt.Fprintln(os.Stderr, "  migrate    Migrate host services to Docker containers")
 		fmt.Fprintln(os.Stderr, "  oauth-setup Print external OAuth setup and optionally create Turnstile")
-		fmt.Fprintln(os.Stderr, "  service    Check homelab service status")
+		fmt.Fprintln(os.Stderr, "  service    Inspect or configure one registered service")
 		fmt.Fprintln(os.Stderr, "  paperclip  Manage Paperclip homelab seed data")
 		os.Exit(1)
 	}
@@ -47,6 +46,7 @@ func main() {
 	fs.StringVar(&opts.domain, "domain", "", "Homelab domain (e.g. caboose-ai.io)")
 	fs.StringVar(&opts.composeDir, "compose-dir", "", "Path to docker-compose.yml directory")
 	fs.StringVar(&opts.orchestrator, "orchestrator", "", "Backend orchestrator: compose (default) or kubernetes")
+	fs.StringVar(&opts.serveMode, "serve-mode", "", "Exposure mode: public (loopback behind Caddy) or local (LAN-bound ports)")
 	fs.StringVar(&opts.kubeNamespace, "kube-namespace", "", "Kubernetes namespace for homelab resources (default: homelab)")
 	fs.StringVar(&opts.kubeconfig, "kubeconfig", "", "Path to kubeconfig file for kubectl")
 	fs.StringVar(&opts.kubeContext, "kube-context", "", "Kubernetes context name for kubectl")
@@ -55,6 +55,7 @@ func main() {
 	fs.StringVar(&opts.n8nUser, "n8n-user", "", "N8N admin username")
 	fs.StringVar(&opts.email, "email", "", "Admin email for Authentik bootstrap")
 	fs.BoolVar(&opts.keepEnv, "keep-env", false, "Preserve .env file during reset")
+	fs.BoolVar(&opts.secretsEnvOnly, "secrets-env-only", false, "Use only compose .env for secrets and skip 1Password login checks")
 	fs.BoolVar(&opts.createTurnstile, "create-turnstile", false, "Create a Cloudflare Turnstile widget via API")
 	fs.StringVar(&opts.cloudflareAccountID, "cloudflare-account-id", "", "Cloudflare account ID (or CLOUDFLARE_ACCOUNT_ID)")
 	fs.StringVar(&opts.cloudflareAPIToken, "cloudflare-api-token", "", "Cloudflare API token (or CLOUDFLARE_API_TOKEN)")
@@ -95,6 +96,44 @@ func extractSubcommand(args []string) (string, []string) {
 	return "", args
 }
 
+func runService(opts cliOpts, args []string) int {
+	cfg := config.DefaultConfig()
+	if opts.configPath != "" {
+		loaded, err := config.LoadFromFile(opts.configPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
+			return 1
+		}
+		cfg = loaded
+	}
+	if opts.domain != "" {
+		cfg.Domain = opts.domain
+	}
+	if opts.composeDir != "" {
+		cfg.ComposeDir = opts.composeDir
+	}
+	if opts.orchestrator != "" {
+		cfg.Orchestrator = opts.orchestrator
+	}
+	if opts.serveMode != "" {
+		cfg.ServeMode = opts.serveMode
+	}
+	if opts.opVault != "" {
+		cfg.OPVault = opts.opVault
+	}
+	if opts.opStaticVault != "" {
+		cfg.OPStaticVault = opts.opStaticVault
+	}
+	cfg.DryRun = opts.dryRun
+	cfg.Force = opts.force
+	cfg.Verbose = opts.verbose
+	cfg.SecretsEnvOnly = opts.secretsEnvOnly
+
+	cmdRunner := runner.NewLocalRunner()
+	secretStore := secretStoreForConfig(cfg, cmdRunner)
+	return cli.RunServiceCommand(context.Background(), cfg, cmdRunner, secretStore, args, cli.ServiceCommandOptions{DryRun: opts.dryRun, Force: opts.force})
+}
+
 type cliOpts struct {
 	configPath     string
 	dryRun         bool
@@ -108,10 +147,12 @@ type cliOpts struct {
 	n8nUser        string
 	email          string
 	orchestrator   string
+	serveMode      string
 	kubeNamespace  string
 	kubeconfig     string
 	kubeContext    string
 	keepEnv        bool
+	secretsEnvOnly bool
 
 	createTurnstile     bool
 	cloudflareAccountID string
@@ -146,6 +187,9 @@ func runInstall(opts cliOpts) int {
 	if opts.orchestrator != "" {
 		cfg.Orchestrator = opts.orchestrator
 	}
+	if opts.serveMode != "" {
+		cfg.ServeMode = opts.serveMode
+	}
 	if opts.kubeNamespace != "" {
 		cfg.Kubernetes.Namespace = opts.kubeNamespace
 	}
@@ -172,6 +216,7 @@ func runInstall(opts cliOpts) int {
 	cfg.Force = opts.force
 	cfg.Verbose = opts.verbose
 	cfg.NonInteractive = opts.nonInteractive
+	cfg.SecretsEnvOnly = opts.secretsEnvOnly
 
 	if opts.nonInteractive {
 		if err := cfg.Validate(); err != nil {
@@ -182,7 +227,7 @@ func runInstall(opts cliOpts) int {
 
 	cmdRunner := runner.NewLocalRunner()
 	httpClient := runner.NewHTTPClient()
-	secretStore := secrets.NewSplitOnePasswordStore(cfg.OPStaticVault, cfg.OPVault, cmdRunner, cfg.EnvPath())
+	secretStore := secretStoreForConfig(cfg, cmdRunner)
 
 	inst := install.New(cfg, secretStore, cmdRunner, httpClient)
 
@@ -222,6 +267,9 @@ func runReset(opts cliOpts) int {
 	if opts.orchestrator != "" {
 		cfg.Orchestrator = opts.orchestrator
 	}
+	if opts.serveMode != "" {
+		cfg.ServeMode = opts.serveMode
+	}
 	if opts.kubeNamespace != "" {
 		cfg.Kubernetes.Namespace = opts.kubeNamespace
 	}
@@ -238,14 +286,22 @@ func runReset(opts cliOpts) int {
 		cfg.OPStaticVault = opts.opStaticVault
 	}
 	cfg.DryRun = opts.dryRun
+	cfg.SecretsEnvOnly = opts.secretsEnvOnly
 
 	cmdRunner := runner.NewLocalRunner()
 	httpClient := runner.NewHTTPClient()
-	secretStore := secrets.NewSplitOnePasswordStore(cfg.OPStaticVault, cfg.OPVault, cmdRunner, cfg.EnvPath())
+	secretStore := secretStoreForConfig(cfg, cmdRunner)
 
 	inst := install.New(cfg, secretStore, cmdRunner, httpClient)
 	inst.State.KeepEnv = opts.keepEnv
 	return cli.RunReset(context.Background(), inst)
+}
+
+func secretStoreForConfig(cfg *config.Config, r runner.CommandRunner) secrets.SecretStore {
+	if cfg.SecretsEnvOnly {
+		return secrets.NewEnvFileStore(cfg.EnvPath())
+	}
+	return secrets.NewSplitOnePasswordStore(cfg.OPStaticVault, cfg.OPVault, r, cfg.EnvPath())
 }
 
 func runMigrate(opts cliOpts) int {
@@ -335,52 +391,6 @@ func runOAuthSetup(opts cliOpts) int {
 	return 0
 }
 
-func runService(opts cliOpts, args []string) int {
-	fs := flag.NewFlagSet("service", flag.ExitOnError)
-	fs.StringVar(&opts.domain, "domain", opts.domain, "Homelab domain")
-	fs.StringVar(&opts.composeDir, "compose-dir", opts.composeDir, "Path to docker-compose.yml directory")
-	_ = fs.Parse(args)
-	args = fs.Args()
-	if len(args) != 2 || args[1] != "status" {
-		fmt.Fprintln(os.Stderr, "Usage: homelab service [--domain caboose-ai.io] [--compose-dir /opt/homelab] <service> status")
-		return 1
-	}
-	service := args[0]
-	cfg := config.DefaultConfig()
-	if opts.domain != "" {
-		cfg.Domain = opts.domain
-	}
-	if opts.composeDir != "" {
-		cfg.ComposeDir = opts.composeDir
-	}
-	if cfg.Domain == "" {
-		fmt.Fprintln(os.Stderr, "Config validation error: domain is required")
-		return 1
-	}
-
-	r := runner.NewLocalRunner()
-	compose := docker.NewComposeClient(r, cfg.ComposeDir)
-	running, err := compose.IsRunning(context.Background(), service)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "status failed: %v\n", err)
-		return 1
-	}
-
-	url := serviceURL(cfg.URLs(), service)
-	fmt.Printf("service=%s running=%t", service, running)
-	if url != "" {
-		checker := health.HTTPChecker{ServiceName: service, URL: url, Client: runner.NewHTTPClient()}
-		if err := checker.Check(context.Background()); err != nil {
-			fmt.Printf(" healthy=false url=%s error=%q\n", url, err)
-			return 2
-		}
-		fmt.Printf(" healthy=true url=%s\n", url)
-		return 0
-	}
-	fmt.Println()
-	return 0
-}
-
 func runPaperclip(opts cliOpts, args []string) int {
 	if len(args) == 0 || args[0] != "seed-company" {
 		fmt.Fprintln(os.Stderr, "Usage: homelab paperclip seed-company --profile software-shop --repo /home/caboose/dev/caboose-ai.io [--api-base http://127.0.0.1:3100] [--api-key token]")
@@ -431,29 +441,6 @@ func runPaperclip(opts cliOpts, args []string) int {
 	}
 	fmt.Printf("company=%s created=%s existing=%s\n", report.CompanyID, formatCounts(report.Created), formatCounts(report.Existing))
 	return 0
-}
-
-func serviceURL(urls config.URLs, service string) string {
-	switch strings.ToLower(service) {
-	case "authentik":
-		return urls.Authentik + "/api/v3/root/config/"
-	case "forgejo":
-		return urls.Forgejo
-	case "woodpecker", "ci":
-		return urls.Woodpecker
-	case "portainer":
-		return urls.Portainer
-	case "grafana":
-		return urls.Grafana
-	case "open-webui", "openwebui":
-		return urls.OpenWebUI
-	case "mattermost":
-		return urls.Mattermost
-	case "paperclip":
-		return urls.Paperclip
-	default:
-		return ""
-	}
 }
 
 func formatCounts(counts map[string]int) string {

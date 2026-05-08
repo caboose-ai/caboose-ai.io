@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/caboose-ai/caboose-ai.io/internal/config"
-	"github.com/caboose-ai/caboose-ai.io/internal/services/authentik"
+	"github.com/caboose-ai/caboose-ai.io/services/authentik"
 )
 
 func TestEnsureProviderFlowsCreatesMissingDefaults(t *testing.T) {

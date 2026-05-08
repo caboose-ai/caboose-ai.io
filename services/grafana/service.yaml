@@ -1,0 +1,17 @@
+slug: grafana
+display_name: Grafana
+url_key: grafana
+compose_services:
+  - grafana
+secrets:
+  - GF_AUTH_GENERIC_OAUTH_CLIENT_ID
+  - GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET
+  - GRAFANA_ADMIN_PASSWORD
+configurator: grafana
+smoke_flow: grafana
+health:
+  url_key: grafana
+  path: /api/health
+  kind: http
+docs:
+  - README.md

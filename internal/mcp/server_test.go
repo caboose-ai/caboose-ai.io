@@ -7,7 +7,7 @@ import (
 	"github.com/caboose-ai/caboose-ai.io/internal/config"
 	"github.com/caboose-ai/caboose-ai.io/internal/docker"
 	"github.com/caboose-ai/caboose-ai.io/internal/health"
-	"github.com/caboose-ai/caboose-ai.io/internal/services"
+	"github.com/caboose-ai/caboose-ai.io/internal/service"
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -27,8 +27,8 @@ func TestServerIntegration(t *testing.T) {
 		checkers: []health.Checker{
 			&mockChecker{name: "Forgejo", err: nil},
 		},
-		services: []services.ServiceConfigurator{
-			&mockServiceConfigurator{slug: "forgejo", name: "Forgejo", result: &services.ConfigureResult{Status: services.StatusAlreadyConfigured}},
+		services: []service.ServiceConfigurator{
+			&mockServiceConfigurator{slug: "forgejo", name: "Forgejo", result: &service.ConfigureResult{Status: service.StatusAlreadyConfigured}},
 		},
 		mcpServer: sdkmcp.NewServer(
 			&sdkmcp.Implementation{Name: "homelab-test", Version: "v0.0.1"},

@@ -47,6 +47,7 @@ func RunInstall(ctx context.Context, inst *install.Installer) int {
 			}
 		}
 		console.Run("would apply homelab backend", "orchestrator", inst.Backend.Name(), "dir", inst.Config.ComposeDir)
+		console.Run("would write runtime exposure config", "serve_mode", inst.Config.ServeMode, "bind", inst.Config.BindAddress())
 		console.Run("would resolve optional social OAuth credentials from config/1Password")
 		console.Run("would wait for services to be healthy")
 		console.Run("would rename akadmin to auth-admin")
@@ -108,6 +109,13 @@ func RunInstall(ctx context.Context, inst *install.Installer) int {
 	console.Success("social credentials ready")
 
 	console.Phase("Compose")
+	console.Run("writing runtime exposure config", "serve_mode", inst.Config.ServeMode, "bind", inst.Config.BindAddress())
+	if err := inst.WriteRuntimeEnv(ctx); err != nil {
+		console.Error("runtime exposure config failed", "error", err)
+		return 3
+	}
+	console.Success("runtime exposure config ready")
+
 	console.Run("starting homelab backend", "orchestrator", inst.Backend.Name(), "dir", inst.Config.ComposeDir)
 	if err := inst.ComposeUp(ctx); err != nil {
 		console.Error("backend apply failed", "orchestrator", inst.Backend.Name(), "error", err)

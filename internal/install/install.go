@@ -15,19 +15,9 @@ import (
 	"github.com/caboose-ai/caboose-ai.io/internal/prereq"
 	"github.com/caboose-ai/caboose-ai.io/internal/runner"
 	"github.com/caboose-ai/caboose-ai.io/internal/secrets"
-	"github.com/caboose-ai/caboose-ai.io/internal/services"
-	"github.com/caboose-ai/caboose-ai.io/internal/services/authentik"
-	"github.com/caboose-ai/caboose-ai.io/internal/services/forgejo"
-	"github.com/caboose-ai/caboose-ai.io/internal/services/grafana"
-	"github.com/caboose-ai/caboose-ai.io/internal/services/homarr"
-	"github.com/caboose-ai/caboose-ai.io/internal/services/mattermost"
-	"github.com/caboose-ai/caboose-ai.io/internal/services/n8n"
-	"github.com/caboose-ai/caboose-ai.io/internal/services/openwebui"
-	paperclipsvc "github.com/caboose-ai/caboose-ai.io/internal/services/paperclip"
-	"github.com/caboose-ai/caboose-ai.io/internal/services/portainer"
-	"github.com/caboose-ai/caboose-ai.io/internal/services/social"
-	"github.com/caboose-ai/caboose-ai.io/internal/services/sonarqube"
-	"github.com/caboose-ai/caboose-ai.io/internal/services/woodpecker"
+	"github.com/caboose-ai/caboose-ai.io/internal/service"
+	"github.com/caboose-ai/caboose-ai.io/internal/servicebuilder"
+	"github.com/caboose-ai/caboose-ai.io/services/authentik"
 )
 
 type Installer struct {
@@ -40,7 +30,7 @@ type Installer struct {
 	Backend    orchestrator.Backend
 	DockerExec *docker.ExecClient
 	AK         *authentik.Client
-	Services   []services.ServiceConfigurator
+	Services   []service.ServiceConfigurator
 }
 
 func New(cfg *config.Config, secretStore secrets.SecretStore, r runner.CommandRunner, httpClient runner.HTTPClient) *Installer {
@@ -84,54 +74,24 @@ func (inst *Installer) BuildServices(ctx context.Context) error {
 	if inst.AK == nil {
 		return fmt.Errorf("BuildServices called before InitAK")
 	}
-	urls := inst.Config.URLs()
-
-	giteaAdminPass, err := inst.Secrets.Get(ctx, "GITEA_ADMIN_PASSWORD")
+	services, err := servicebuilder.Build(ctx, servicebuilder.Dependencies{
+		Config:     inst.Config,
+		Secrets:    inst.Secrets,
+		Runner:     inst.Runner,
+		HTTP:       inst.HTTP,
+		DockerExec: inst.DockerExec,
+		Authentik:  inst.AK,
+	})
 	if err != nil {
-		return fmt.Errorf("retrieving GITEA_ADMIN_PASSWORD: %w", err)
+		return err
 	}
-
-	portainerAdminPass, err := inst.Secrets.Get(ctx, "PORTAINER_ADMIN_PASSWORD")
-	if err != nil {
-		return fmt.Errorf("retrieving PORTAINER_ADMIN_PASSWORD: %w", err)
-	}
-	n8nPass, err := inst.Secrets.Get(ctx, "N8N_PASSWORD")
-	if err != nil {
-		return fmt.Errorf("retrieving N8N_PASSWORD: %w", err)
-	}
-	sonarAdminPass, err := inst.Secrets.Get(ctx, "SONAR_ADMIN_PASSWORD")
-	if err != nil {
-		return fmt.Errorf("retrieving SONAR_ADMIN_PASSWORD: %w", err)
-	}
-
-	portainerAPIURL := urls.Portainer
-	n8nAPIURL := urls.N8N
-	sonarAPIURL := urls.SonarQube
-	if inst.Config.Orchestrator == "compose" {
-		portainerAPIURL = "http://127.0.0.1:9000"
-		n8nAPIURL = "http://127.0.0.1:5678"
-		sonarAPIURL = "http://127.0.0.1:9005"
-	}
-
-	inst.Services = []services.ServiceConfigurator{
-		forgejo.New(inst.AK, inst.DockerExec, inst.Secrets, "forgejo", "auth-admin", urls.Authentik),
-		woodpecker.New(inst.DockerExec, inst.HTTP, inst.Secrets, "woodpecker-server", "auth-admin", giteaAdminPass, urls.Woodpecker+"/authorize"),
-		portainer.New(inst.AK, inst.HTTP, inst.Runner, portainerAPIURL, portainerAdminPass, urls.Authentik, urls.Portainer+"/"),
-		grafana.New(inst.AK, inst.Secrets),
-		openwebui.New(inst.AK, inst.Secrets),
-		homarr.New(inst.AK, inst.Secrets),
-		paperclipsvc.New(inst.AK),
-		n8n.New(n8nAPIURL, inst.HTTP, inst.Config.Email, n8nPass),
-		sonarqube.New(sonarAPIURL, inst.HTTP, sonarAdminPass),
-		mattermost.New(inst.DockerExec, inst.Secrets, "mattermost", inst.Config.Email),
-		social.New(inst.AK, inst.Config.Social),
-	}
+	inst.Services = services
 	return nil
 }
 
 func (inst *Installer) CheckPrereqs(ctx context.Context) ([]prereq.Result, error) {
 	checker := prereq.NewChecker(inst.Runner)
-	results := checker.CheckAll(ctx)
+	results := checker.CheckAllWithOptions(ctx, prereq.Options{SkipOnePasswordLogin: inst.Config.SecretsEnvOnly})
 	if !prereq.AllPassed(results) {
 		var missing []string
 		for _, r := range results {
@@ -208,6 +168,14 @@ func (inst *Installer) ComposeUp(ctx context.Context) error {
 	return inst.Backend.Apply(ctx)
 }
 
+func (inst *Installer) WriteRuntimeEnv(ctx context.Context) error {
+	if inst.State.DryRun {
+		return nil
+	}
+	env := secrets.NewEnvFileStore(inst.Config.EnvPath())
+	return env.Put(ctx, "HOMELAB_BIND_ADDRESS", inst.Config.BindAddress())
+}
+
 func (inst *Installer) WaitHealthy(ctx context.Context) <-chan health.Status {
 	urls := inst.Config.URLs()
 
@@ -242,7 +210,7 @@ func (inst *Installer) ConfigureServices(ctx context.Context, progressFn func(na
 	if progressFn == nil {
 		progressFn = func(string, bool) {}
 	}
-	opts := services.ConfigureOpts{
+	opts := service.ConfigureOpts{
 		DryRun: inst.State.DryRun,
 		Force:  inst.State.Force,
 	}
@@ -340,6 +308,6 @@ func (inst *Installer) RestartServices(ctx context.Context) error {
 		}
 	}
 
-	_, err := inst.Compose.Restart(ctx, svcs...)
+	_, err := inst.Compose.UpService(ctx, svcs...)
 	return err
 }

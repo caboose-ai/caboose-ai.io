@@ -35,8 +35,17 @@ container recreation.
 ## Binaries
 
 - **`cmd/homelab`** — Bubbletea TUI installer that bootstraps the entire stack: generates secrets, starts containers, provisions OAuth providers, configures each service.
+  - Includes `homelab service <slug> <status|configure|logs|smoke|open>` for per-service operations backed by `services/<slug>/service.yaml`.
 - **`cmd/mcp`** — MCP server exposing homelab tools to AI assistants.
   - Includes `agent_invoke` provider fallback across Ollama, Claude Code, Copilot CLI, and Emberfall.
+
+## Service workspaces
+
+Each service has a root-level workspace under `services/<slug>/`. Configured
+services keep their Go configurator package there, and operational-only
+services keep a manifest and README so CLI, MCP, docs, and smoke flows share
+one registry. The shared `ServiceConfigurator` contract lives in
+`internal/service`.
 
 ## Quick start
 
@@ -65,25 +74,35 @@ mise run homelab:oauth-setup
 # Create a Cloudflare Turnstile widget via API, then print all setup values
 mise run homelab:create-turnstile
 
-# Check Paperclip status and seed the software-shop company
-mise run service:status -- paperclip
+# Per-service operations
+mise run service:status -- forgejo
+mise run service:configure -- mattermost --dry-run
+mise run service:smoke -- forgejo
+
+# Seed the Paperclip software-shop company
 mise run paperclip:seed
 
 # Migrate host Mattermost to Docker
 go run ./cmd/homelab migrate
 ```
 
-The homelab tasks default to `HOMELAB_DOMAIN=caboose-ai.io` and `HOMELAB_COMPOSE_DIR=/opt/homelab`.
-Override either variable inline when needed, for example:
+The homelab tasks default to `HOMELAB_DOMAIN=caboose-ai.io`, `HOMELAB_COMPOSE_DIR=/opt/homelab`, and `HOMELAB_SERVE_MODE=public`.
+Override variables inline when needed, for example:
 
 ```bash
 HOMELAB_COMPOSE_DIR=dev/homelab mise run install
+HOMELAB_SERVE_MODE=local mise run install
 ```
+
+`serve_mode` controls host port exposure. `public` binds compose ports to
+`127.0.0.1` for Caddy/TLS reverse proxying. `local` binds them to `0.0.0.0`
+for LAN access while keeping the same service URLs and Authentik callback
+configuration.
 
 ## Testing
 
 ```bash
-go test ./internal/... -v           # unit tests
+go test ./...                       # unit tests
 
 # SSO smoke tests (requires live stack running)
 mise run sso:check                  # full suite: config + endpoints + browser login
@@ -105,7 +124,7 @@ validated by reaching their protected landing URLs.
 
 ## Infrastructure
 
-- **Caddy** reverse proxy on the host — handles TLS and routes to containers
+- **Caddy** reverse proxy on the host — handles TLS and routes to containers in `public` serve mode
 - **Docker Compose** at `dev/homelab/docker-compose.yml` — all services
 - **Paperclip** profile (`docker compose --profile paperclip ...`) — built from upstream tag `v2026.428.0`, backed by `paperclip-db`, and Authentik-gated through `paperclip-proxy`
 - **Cloudflare tunnel** for `chat` and `sonar` subdomains

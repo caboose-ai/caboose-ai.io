@@ -1,0 +1,13 @@
+slug: cadvisor
+display_name: cAdvisor
+url_key: ""
+compose_services:
+  - cadvisor
+secrets: []
+configurator: ""
+smoke_flow: cadvisor
+health:
+  path: http://127.0.0.1:8181/healthz
+  kind: http
+docs:
+  - README.md

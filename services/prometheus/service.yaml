@@ -1,0 +1,13 @@
+slug: prometheus
+display_name: Prometheus
+url_key: ""
+compose_services:
+  - prometheus
+secrets: []
+configurator: ""
+smoke_flow: prometheus
+health:
+  path: http://127.0.0.1:9090/-/healthy
+  kind: http
+docs:
+  - README.md

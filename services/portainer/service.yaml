@@ -1,0 +1,15 @@
+slug: portainer
+display_name: Portainer
+url_key: portainer
+compose_services:
+  - portainer
+secrets:
+  - PORTAINER_ADMIN_PASSWORD
+configurator: portainer
+smoke_flow: portainer
+health:
+  url_key: portainer
+  path: /
+  kind: http
+docs:
+  - README.md

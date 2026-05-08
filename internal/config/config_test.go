@@ -85,6 +85,7 @@ n8n_user: testuser
 op_vault: TestVault
 op_static_vault: StaticVault
 orchestrator: kubernetes
+serve_mode: local
 kubernetes:
   namespace: lab
   kubeconfig: /tmp/kubeconfig
@@ -124,6 +125,9 @@ social:
 	if cfg.Orchestrator != "kubernetes" || cfg.Kubernetes.Namespace != "lab" {
 		t.Errorf("kubernetes config not loaded: %+v", cfg.Kubernetes)
 	}
+	if cfg.ServeMode != "local" {
+		t.Errorf("ServeMode = %q", cfg.ServeMode)
+	}
 }
 
 func TestValidate(t *testing.T) {
@@ -142,6 +146,11 @@ func TestValidate(t *testing.T) {
 	if err := cfg.Validate(); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
+
+	cfg.ServeMode = "bad"
+	if err := cfg.Validate(); err == nil {
+		t.Errorf("expected serve_mode validation error")
+	}
 }
 
 func TestDefaultConfig(t *testing.T) {
@@ -157,6 +166,16 @@ func TestDefaultConfig(t *testing.T) {
 	}
 	if cfg.Orchestrator != "compose" {
 		t.Errorf("default Orchestrator = %q", cfg.Orchestrator)
+	}
+	if cfg.ServeMode != "public" {
+		t.Errorf("default ServeMode = %q", cfg.ServeMode)
+	}
+	if cfg.BindAddress() != "127.0.0.1" {
+		t.Errorf("default BindAddress = %q", cfg.BindAddress())
+	}
+	cfg.ServeMode = "local"
+	if cfg.BindAddress() != "0.0.0.0" {
+		t.Errorf("local BindAddress = %q", cfg.BindAddress())
 	}
 	if cfg.Kubernetes.Namespace != "homelab" {
 		t.Errorf("default Kubernetes Namespace = %q", cfg.Kubernetes.Namespace)
