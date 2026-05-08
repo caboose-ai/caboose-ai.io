@@ -23,6 +23,14 @@ Go monorepo for a self-hosted homelab infrastructure stack with SSO via Authenti
 
 All services authenticate through Authentik via OAuth2/OIDC or forward-auth proxy. The installer keeps Authentik applications open (`policy_engine_mode=all`) so provider-level SSO decisions control access consistently. The social login configurator promotes managed GitHub and Google sources, while generic source upserts preserve the existing promotion state unless explicitly changed.
 
+The installer also completes first-run setup for services that expose a product
+setup or local-login boundary before they can participate in the SSO smoke
+suite. SonarQube, n8n, and Mattermost are configured with managed admin
+credentials from 1Password or the compose `.env` fallback, and Mattermost local
+mode is enabled in compose for repeatable bootstrap checks. Woodpecker keeps its
+server data under `/var/lib/woodpecker` so OAuth/session setup survives
+container recreation.
+
 ## Binaries
 
 - **`cmd/homelab`** — Bubbletea TUI installer that bootstraps the entire stack: generates secrets, starts containers, provisions OAuth providers, configures each service.
@@ -83,6 +91,12 @@ Browser E2E runs write an action log and screenshots under
 `internal/smoketest/testdata/evidence/`. Each action records the page URL and
 whether the test opened a page, clicked a control, entered text, or reached a
 service. Password values are redacted from the evidence log.
+
+The browser flow covers both native Authentik/OIDC redirects and service
+specific first-run paths. Portainer clicks its visible OAuth login control,
+Mattermost follows the browser handoff and uses the managed local admin account,
+and proxy-gated services such as Woodpecker, n8n, Homarr, and OpenClaw are
+validated by reaching their protected landing URLs.
 
 ## Infrastructure
 

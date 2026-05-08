@@ -37,6 +37,14 @@ Go binary is at `/home/caboose/.local/go/bin/go`. If `go` isn't on PATH, use `PA
 - `internal/smoketest/` — Integration smoke tests (API config checks + headless browser login flows)
 - `dev/homelab/` — Docker Compose, Prometheus/Loki/Promtail config, Grafana dashboards, Authentik patches
 
+The installer includes first-run configurators for services that otherwise stop
+at setup or product-local login screens. SonarQube, n8n, and Mattermost use
+managed admin credentials from the split 1Password store or `.env` fallback;
+Mattermost compose enables local mode so the configurator can verify the
+bootstrap state without interactive browser setup. Woodpecker stores server
+state at `/var/lib/woodpecker` to preserve OAuth/session configuration across
+container recreation.
+
 ## Conventions
 
 ### Code Style
@@ -57,6 +65,10 @@ Go binary is at `/home/caboose/.local/go/bin/go`. If `go` isn't on PATH, use `PA
 - Table-driven tests for multiple cases
 - Mock via interfaces (see `runner/mock.go`)
 - Integration smoke tests in `internal/smoketest/` use build tag `integration` and require a live stack
+- Browser smoke tests exercise both Authentik/OIDC login and service-specific
+  handoffs, including Portainer's OAuth button, Mattermost's browser handoff and
+  local admin login, and proxy-gated landing checks for Woodpecker, n8n,
+  Homarr, and OpenClaw.
 
 ### Git
 - Never commit to main. Always branch first.
@@ -95,6 +107,9 @@ Go binary is at `/home/caboose/.local/go/bin/go`. If `go` isn't on PATH, use `PA
 4. Service configurator in `internal/services/<name>/`
 5. Register in `install/install.go` `BuildServices()`
 6. Secrets in `secrets/store.go` if needed
+7. Add or update `internal/smoketest/flows.go` when the service has native
+   login, first-run setup, or proxy-gated landing behavior that must be proven
+   by the live SSO browser test.
 
 ## Live Environment
 

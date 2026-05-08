@@ -33,6 +33,13 @@ internal/
   orchestrator/         Backend abstraction (compose, kubernetes)
 ```
 
+The installer performs first-run setup for services that would otherwise block
+SSO validation behind setup or local product login screens. SonarQube, n8n, and
+Mattermost use managed admin credentials from the split 1Password store or
+`.env` fallback; Mattermost local mode is enabled in compose for repeatable
+bootstrap verification. Woodpecker persists server data at
+`/var/lib/woodpecker` so OAuth/session state survives container recreation.
+
 ## Conventions
 
 ### Go Patterns
@@ -56,6 +63,10 @@ internal/
 - Use table-driven tests where there are multiple cases.
 - Mock external dependencies via interfaces (see `runner/mock.go`, test mocks in `install/social_test.go`).
 - Integration smoke tests in `internal/smoketest/` use build tag `integration` and require a live stack.
+- Browser smoke tests cover native Authentik/OIDC login, service-specific
+  handoffs such as Portainer's OAuth button and Mattermost's browser handoff
+  plus local admin login, and proxy-gated landing checks for Woodpecker, n8n,
+  Homarr, and OpenClaw.
 - Run tests: `go test ./internal/... -v`
 - Run smoke tests: `mise run sso:check` (full) or `mise run sso:check-quick` (API only)
 
@@ -108,6 +119,8 @@ internal/
 5. Create service configurator in `internal/services/<name>/`
 6. Register in `install/install.go` `BuildServices()`
 7. Add any secrets to `secrets/store.go` `BootstrapSecrets()`
+8. Update `internal/smoketest/flows.go` when the service needs a browser proof
+   for native login, first-run setup, or proxy-gated landing behavior.
 
 ### Adding a new Authentik API method
 
