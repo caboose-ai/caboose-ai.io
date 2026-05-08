@@ -3,13 +3,18 @@ package smoketest
 import "github.com/caboose-ai/caboose-ai.io/internal/config"
 
 type ServiceFlow struct {
-	Name        string
-	LoginURL    string
-	SSOSelector string
-	SSOText     string
-	LandingHost string
-	PreClick    string
-	AutoLogin   bool
+	Name                string
+	LoginURL            string
+	SSOSelector         string
+	SSOText             string
+	LandingHost         string
+	PreClick            string
+	AutoLogin           bool
+	LocalUsername       string
+	LocalPasswordSecret string
+	UsernameSelector    string
+	PasswordSelector    string
+	SubmitSelector      string
 }
 
 type ProxyFlow struct {
@@ -40,12 +45,14 @@ func OAuthServiceFlows(urls config.URLs) []ServiceFlow {
 			LandingHost: hostFromURL(urls.Portainer),
 		},
 		{
-			Name:        "mattermost",
-			LoginURL:    urls.Mattermost + "/login",
-			SSOSelector: `a[href*="/oauth/openid"], button[class*="openid"]`,
-			SSOText:     "Authentik",
-			LandingHost: hostFromURL(urls.Mattermost),
-			PreClick:    `a.btn-tertiary`,
+			Name:                "mattermost",
+			LoginURL:            urls.Mattermost + "/login",
+			LandingHost:         hostFromURL(urls.Mattermost),
+			LocalUsername:       "auth-admin",
+			LocalPasswordSecret: "MATTERMOST_ADMIN_PASSWORD",
+			UsernameSelector:    `#input_loginId`,
+			PasswordSelector:    `#input_password-input`,
+			SubmitSelector:      `#saveSetting`,
 		},
 		{
 			Name:        "open-webui",
