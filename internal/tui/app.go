@@ -10,7 +10,7 @@ import (
 
 	"github.com/caboose-ai/caboose-ai.io/internal/install"
 	"github.com/caboose-ai/caboose-ai.io/internal/secrets"
-	"github.com/caboose-ai/caboose-ai.io/internal/services"
+	"github.com/caboose-ai/caboose-ai.io/internal/service"
 	"github.com/caboose-ai/caboose-ai.io/internal/tui/components"
 	"github.com/caboose-ai/caboose-ai.io/internal/tui/styles"
 	"github.com/caboose-ai/caboose-ai.io/internal/tui/views"
@@ -496,7 +496,7 @@ func (m AppModel) runInitForgejo() tea.Cmd {
 func (m AppModel) configureServiceAtIndex(index int) tea.Cmd {
 	return func() tea.Msg {
 		svc := m.installer.Services[index]
-		opts := services.ConfigureOpts{
+		opts := service.ConfigureOpts{
 			DryRun: m.installer.State.DryRun,
 			Force:  m.installer.State.Force,
 		}

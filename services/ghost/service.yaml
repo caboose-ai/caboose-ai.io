@@ -1,0 +1,16 @@
+slug: ghost
+display_name: Ghost
+url_key: ghost
+compose_services:
+  - ghost
+  - ghost-db
+secrets:
+  - GHOST_DB_PASS
+configurator: ""
+smoke_flow: ghost
+health:
+  url_key: ghost
+  path: /
+  kind: http
+docs:
+  - README.md

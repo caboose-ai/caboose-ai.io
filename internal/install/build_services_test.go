@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/caboose-ai/caboose-ai.io/internal/config"
-	"github.com/caboose-ai/caboose-ai.io/internal/services/authentik"
-	"github.com/caboose-ai/caboose-ai.io/internal/services/portainer"
+	"github.com/caboose-ai/caboose-ai.io/services/authentik"
+	"github.com/caboose-ai/caboose-ai.io/services/portainer"
 )
 
 func TestBuildServicesUsesLocalPortainerAPIForCompose(t *testing.T) {

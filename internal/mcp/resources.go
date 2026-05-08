@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/caboose-ai/caboose-ai.io/internal/config"
+	"github.com/caboose-ai/caboose-ai.io/internal/service"
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -35,6 +36,12 @@ func (s *Server) registerResources() {
 		Name:        "Service Status",
 		Description: "Combined status for a service: container running, health, SSO configured",
 	}, s.handleServiceStatusResource)
+
+	s.mcpServer.AddResourceTemplate(&sdkmcp.ResourceTemplate{
+		URITemplate: "homelab://services/{service}/manifest",
+		Name:        "Service Manifest",
+		Description: "Service workspace manifest from services/<slug>/service.yaml",
+	}, s.handleServiceManifestResource)
 }
 
 func (s *Server) registerStaticResource(uri, name, description, filename string) {
@@ -71,7 +78,14 @@ func (s *Server) handleServiceStatusResource(ctx context.Context, req *sdkmcp.Re
 
 	status := serviceStatus{Service: service}
 
-	running, err := s.compose.IsRunning(ctx, service)
+	composeService := service
+	if s.registry != nil {
+		if manifest, ok := s.registry.Manifest(service); ok && len(manifest.ComposeServices) > 0 {
+			composeService = manifest.ComposeServices[0]
+		}
+	}
+
+	running, err := s.compose.IsRunning(ctx, composeService)
 	if err != nil {
 		status.Error = err.Error()
 	} else {
@@ -86,7 +100,7 @@ func (s *Server) handleServiceStatusResource(ctx context.Context, req *sdkmcp.Re
 		}
 	}
 
-	for _, svc := range s.services {
+	for _, svc := range s.configurators() {
 		if strings.EqualFold(svc.Slug(), service) || strings.EqualFold(svc.Name(), service) {
 			configured, _ := svc.CheckConfigured(ctx)
 			status.Configured = &configured
@@ -100,9 +114,36 @@ func (s *Server) handleServiceStatusResource(ctx context.Context, req *sdkmcp.Re
 	}, nil
 }
 
+func (s *Server) handleServiceManifestResource(_ context.Context, req *sdkmcp.ReadResourceRequest) (*sdkmcp.ReadResourceResult, error) {
+	service := extractServiceManifestFromURI(req.Params.URI)
+	if service == "" {
+		return nil, fmt.Errorf("could not extract service name from URI %q", req.Params.URI)
+	}
+	if s.registry == nil {
+		return nil, fmt.Errorf("service registry is not initialized")
+	}
+	manifest, ok := s.registry.Manifest(service)
+	if !ok {
+		return nil, fmt.Errorf("unknown service %q", service)
+	}
+	data, _ := json.MarshalIndent(manifest, "", "  ")
+	return &sdkmcp.ReadResourceResult{
+		Contents: []*sdkmcp.ResourceContents{{URI: req.Params.URI, Text: string(data)}},
+	}, nil
+}
+
 func extractServiceFromURI(uri string) string {
 	const prefix = "homelab://services/"
 	const suffix = "/status"
+	if !strings.HasPrefix(uri, prefix) || !strings.HasSuffix(uri, suffix) {
+		return ""
+	}
+	return strings.TrimSuffix(strings.TrimPrefix(uri, prefix), suffix)
+}
+
+func extractServiceManifestFromURI(uri string) string {
+	const prefix = "homelab://services/"
+	const suffix = "/manifest"
 	if !strings.HasPrefix(uri, prefix) || !strings.HasSuffix(uri, suffix) {
 		return ""
 	}
@@ -158,7 +199,7 @@ func (s *Server) handleDiagnoseServicePrompt(ctx context.Context, req *sdkmcp.Ge
 		parts = append(parts, fmt.Sprintf("## Recent Logs (last 50 lines)\n```\n%s\n```\n", string(logs)))
 	}
 
-	for _, svc := range s.services {
+	for _, svc := range s.configurators() {
 		if strings.EqualFold(svc.Slug(), service) || strings.EqualFold(svc.Name(), service) {
 			configured, err := svc.CheckConfigured(ctx)
 			if err != nil {
@@ -204,9 +245,9 @@ func (s *Server) handleFullStackReportPrompt(ctx context.Context, _ *sdkmcp.GetP
 		parts = append(parts, "")
 	}
 
-	if len(s.services) > 0 {
+	if len(s.configurators()) > 0 {
 		parts = append(parts, "## SSO Configuration")
-		for _, svc := range s.services {
+		for _, svc := range s.configurators() {
 			configured, err := svc.CheckConfigured(ctx)
 			if err != nil {
 				parts = append(parts, fmt.Sprintf("- %s: error (%v)", svc.Name(), err))
@@ -228,4 +269,17 @@ func (s *Server) handleFullStackReportPrompt(ctx context.Context, _ *sdkmcp.GetP
 			},
 		},
 	}, nil
+}
+
+func (s *Server) configurators() []service.ServiceConfigurator {
+	if s.registry == nil {
+		return s.services
+	}
+	configurators := make([]service.ServiceConfigurator, 0, len(s.registry.ConfigurableSlugs()))
+	for _, slug := range s.registry.ConfigurableSlugs() {
+		if configurator, ok := s.registry.Configurator(slug); ok {
+			configurators = append(configurators, configurator)
+		}
+	}
+	return configurators
 }

@@ -7,7 +7,8 @@ Go monorepo for a homelab SSO infrastructure stack. Two binaries:
 - `cmd/mcp` — MCP server exposing homelab tools to AI assistants
   - `agent_invoke` provider fallback supports Ollama, Claude Code, Copilot CLI, and Emberfall
 
-All packages live under `internal/`. No public API surface.
+Service implementation packages live under `services/<slug>/`; shared internal
+packages live under `internal/`. No public API surface.
 
 ## Architecture
 
@@ -24,13 +25,17 @@ internal/
   runner/               CommandRunner + HTTPClient interfaces (for testability)
   health/               Health polling for services
   tui/                  Bubbletea TUI (app model, views, components, styles)
-  services/             Per-service configurators (forgejo, grafana, etc.)
-    authentik/          Authentik API client (providers, sources, outpost)
+  service/              Shared service manifest, registry, and configurator types
+  servicebuilder/       Central service configurator construction
   mcp/                  MCP server, tools, resources
   cli/                  Non-interactive CLI runner
   migrate/              Host-to-Docker migration orchestrators
   smoketest/            Integration smoke tests (API + browser, build tag: integration)
   orchestrator/         Backend abstraction (compose, kubernetes)
+
+services/
+  <slug>/               Service workspace with service.yaml, README.md, and optional Go configurator package
+  authentik/            Authentik API client (providers, sources, outpost)
 ```
 
 The installer performs first-run setup for services that would otherwise block
@@ -46,6 +51,7 @@ bootstrap verification. Woodpecker persists server data at
 
 - **Interfaces for testability**: `SecretStore`, `CommandRunner`, `HTTPClient` — inject via struct fields, mock in tests.
 - **`ServiceConfigurator` interface**: Every service implements `Name()`, `Slug()`, `CheckConfigured()`, `Configure()`. New services follow this pattern.
+- **Service manifest registry**: `services/<slug>/service.yaml` backs per-service CLI and MCP resources.
 - **Installer state machine**: Phases defined in `install/state.go`. TUI drives phase transitions via Bubbletea messages in `tui/app.go`.
 - **Error handling**: Return errors up the stack, don't log-and-continue. The TUI/CLI handles display.
 - **No global state**: All state flows through the `Installer` struct or Bubbletea model.
@@ -53,8 +59,8 @@ bootstrap verification. Woodpecker persists server data at
 ### File Organization
 
 - One responsibility per file. Split by domain, not by technical layer.
-- Service configurators go in `internal/services/<name>/<name>.go`.
-- Authentik API methods go in `internal/services/authentik/` — one file per resource type (providers.go, sources.go, outpost.go).
+- Service configurators go in `services/<slug>/<name>.go`.
+- Authentik API methods go in `services/authentik/` — one file per resource type (providers.go, sources.go, outpost.go).
 - Install orchestration steps go in `internal/install/` — one file per concern (providers.go, outpost.go, social.go, forgejo.go).
 
 ### Testing
@@ -67,7 +73,7 @@ bootstrap verification. Woodpecker persists server data at
   handoffs such as Portainer's OAuth button and Mattermost's browser handoff
   plus local admin login, and proxy-gated landing checks for Woodpecker, n8n,
   Homarr, and OpenClaw.
-- Run tests: `go test ./internal/... -v`
+- Run tests: `go test ./...`
 - Run smoke tests: `mise run sso:check` (full) or `mise run sso:check-quick` (API only)
 
 ### Naming
@@ -83,7 +89,9 @@ bootstrap verification. Woodpecker persists server data at
 - Secrets via `${VAR}` env var substitution from `.env` file
 - Internal-only DB networks (`*-internal` with `internal: true`)
 - App-facing services join the `apps` network
-- Ports bind to `127.0.0.1` only — Caddy reverse proxies externally
+- Port exposure is configurable with `serve_mode` / `--serve-mode`:
+  `public` binds host ports to `127.0.0.1` for Caddy reverse proxying,
+  `local` binds to `0.0.0.0` for LAN access.
 
 ### Authentik
 
@@ -116,15 +124,16 @@ bootstrap verification. Woodpecker persists server data at
 2. Add Caddy reverse proxy entry to `/etc/caddy/Caddyfile`
 3. If SSO-gated (no native OIDC): create proxy provider + bind to outpost
 4. If app-level OIDC: create OAuth2 provider + application in Authentik
-5. Create service configurator in `internal/services/<name>/`
-6. Register in `install/install.go` `BuildServices()`
-7. Add any secrets to `secrets/store.go` `BootstrapSecrets()`
-8. Update `internal/smoketest/flows.go` when the service needs a browser proof
+5. Create `services/<slug>/service.yaml` and `services/<slug>/README.md`
+6. Create optional service configurator in `services/<slug>/`
+7. Register configurator construction in `internal/servicebuilder`
+8. Add any secrets to `secrets/store.go` `BootstrapSecrets()`
+9. Update `internal/smoketest/flows.go` when the service needs a browser proof
    for native login, first-run setup, or proxy-gated landing behavior.
 
 ### Adding a new Authentik API method
 
-1. Add to appropriate file in `internal/services/authentik/` (or create new file for new resource type)
+1. Add to appropriate file in `services/authentik/` (or create new file for new resource type)
 2. Follow existing patterns: define request/response structs, use `c.Get()`/`c.Post()`/`c.Patch()`
 3. The `Client` struct handles auth headers and error checking
 
@@ -134,11 +143,12 @@ bootstrap verification. Woodpecker persists server data at
 go run ./cmd/homelab oauth-setup --domain caboose-ai.io
 CLOUDFLARE_ACCOUNT_ID=... CLOUDFLARE_API_TOKEN=... go run ./cmd/homelab oauth-setup --domain caboose-ai.io --create-turnstile
 go run ./cmd/homelab install --domain caboose-ai.io --compose-dir dev/homelab
+go run ./cmd/homelab service --domain caboose-ai.io --compose-dir dev/homelab forgejo status
 ```
 
 ### Building
 
 ```bash
 go build ./...          # build all
-go test ./internal/...  # test all
+go test ./...           # test all
 ```

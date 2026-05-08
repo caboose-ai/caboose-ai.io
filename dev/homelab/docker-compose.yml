@@ -3,7 +3,7 @@ services:
     image: gitea/gitea:1.26.1
     container_name: forgejo
     ports:
-      - "127.0.0.1:3000:3000"
+      - "${HOMELAB_BIND_ADDRESS:-127.0.0.1}:3000:3000"
     environment:
       GITEA__security__INSTALL_LOCK: "true"
       GITEA__server__ROOT_URL: "${FORGEJO_ROOT_URL:-https://git.caboose-ai.io}"
@@ -20,7 +20,7 @@ services:
     image: woodpeckerci/woodpecker-server:v3
     container_name: woodpecker-server
     ports:
-      - "127.0.0.1:8000:8000"
+      - "${HOMELAB_BIND_ADDRESS:-127.0.0.1}:8000:8000"
     environment:
       WOODPECKER_OPEN: "true"
       WOODPECKER_HOST: https://ci.caboose-ai.io
@@ -53,7 +53,7 @@ services:
     image: portainer/portainer-ce:2.39.1
     container_name: portainer
     ports:
-      - "127.0.0.1:9000:9000"
+      - "${HOMELAB_BIND_ADDRESS:-127.0.0.1}:9000:9000"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - portainer_data:/data
@@ -65,7 +65,7 @@ services:
     image: ghcr.io/open-webui/open-webui:v0.9.0
     container_name: open-webui
     ports:
-      - "127.0.0.1:8080:8080"
+      - "${HOMELAB_BIND_ADDRESS:-127.0.0.1}:8080:8080"
     environment:
       OLLAMA_BASE_URL: http://host.docker.internal:11434
       ENABLE_OAUTH_SIGNUP: "true"
@@ -87,7 +87,7 @@ services:
     image: n8nio/n8n:2.17.8
     container_name: n8n
     ports:
-      - "127.0.0.1:5678:5678"
+      - "${HOMELAB_BIND_ADDRESS:-127.0.0.1}:5678:5678"
     environment:
       N8N_HOST: n8n.caboose-ai.io
       N8N_PROTOCOL: https
@@ -106,8 +106,8 @@ services:
     image: mattermost/mattermost-team-edition:10.6
     container_name: mattermost
     ports:
-      - "127.0.0.1:8065:8065"
-      - "127.0.0.1:8067:8067"
+      - "${HOMELAB_BIND_ADDRESS:-127.0.0.1}:8065:8065"
+      - "${HOMELAB_BIND_ADDRESS:-127.0.0.1}:8067:8067"
     environment:
       MM_SQLSETTINGS_DRIVERNAME: postgres
       MM_SQLSETTINGS_DATASOURCE: postgres://mattermost:${MATTERMOST_DB_PASS}@mattermost-db:5432/mattermost?sslmode=disable
@@ -159,7 +159,7 @@ services:
     image: grafana/grafana:13.0.1
     container_name: grafana
     ports:
-      - "127.0.0.1:3001:3000"
+      - "${HOMELAB_BIND_ADDRESS:-127.0.0.1}:3001:3000"
     extra_hosts:
       - host.docker.internal:host-gateway
     environment:
@@ -192,7 +192,7 @@ services:
     image: gcr.io/cadvisor/cadvisor:v0.55.1
     container_name: cadvisor
     ports:
-      - "127.0.0.1:8181:8080"
+      - "${HOMELAB_BIND_ADDRESS:-127.0.0.1}:8181:8080"
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
@@ -247,8 +247,8 @@ services:
       AUTHENTIK_BOOTSTRAP_TOKEN: "${AUTHENTIK_BOOTSTRAP_TOKEN}"
       AUTHENTIK_LISTEN__METRICS: "0.0.0.0:9300"
     ports:
-      - "127.0.0.1:9002:9000"
-      - "127.0.0.1:9300:9300"
+      - "${HOMELAB_BIND_ADDRESS:-127.0.0.1}:9002:9000"
+      - "${HOMELAB_BIND_ADDRESS:-127.0.0.1}:9300:9300"
     depends_on:
       - authentik-postgres
       - authentik-redis
@@ -293,7 +293,7 @@ services:
     image: ghcr.io/homarr-labs/homarr:latest
     container_name: homarr
     ports:
-      - "127.0.0.1:7575:7575"
+      - "${HOMELAB_BIND_ADDRESS:-127.0.0.1}:7575:7575"
     healthcheck:
       disable: true
     environment:
@@ -321,7 +321,7 @@ services:
     image: ghost:5-alpine
     container_name: ghost
     ports:
-      - "127.0.0.1:2368:2368"
+      - "${HOMELAB_BIND_ADDRESS:-127.0.0.1}:2368:2368"
     environment:
       url: "${GHOST_URL:-https://blog.caboose-ai.io}"
       database__client: mysql
@@ -358,7 +358,7 @@ services:
     image: sonarqube:community
     container_name: sonarqube
     ports:
-      - "127.0.0.1:9005:9000"
+      - "${HOMELAB_BIND_ADDRESS:-127.0.0.1}:9005:9000"
     environment:
       SONAR_JDBC_URL: jdbc:postgresql://sonarqube-db:5432/sonar
       SONAR_JDBC_USERNAME: sonar
@@ -394,7 +394,7 @@ services:
     profiles:
       - paperclip
     ports:
-      - "127.0.0.1:3100:3100"
+      - "${HOMELAB_BIND_ADDRESS:-127.0.0.1}:3100:3100"
     environment:
       HOST: 0.0.0.0
       PORT: 3100

@@ -1,0 +1,12 @@
+slug: promtail
+display_name: Promtail
+url_key: ""
+compose_services:
+  - promtail
+secrets: []
+configurator: ""
+smoke_flow: promtail
+health:
+  kind: container
+docs:
+  - README.md

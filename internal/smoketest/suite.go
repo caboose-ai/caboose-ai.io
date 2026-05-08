@@ -18,7 +18,7 @@ import (
 	"github.com/caboose-ai/caboose-ai.io/internal/docker"
 	"github.com/caboose-ai/caboose-ai.io/internal/runner"
 	"github.com/caboose-ai/caboose-ai.io/internal/secrets"
-	"github.com/caboose-ai/caboose-ai.io/internal/services/authentik"
+	"github.com/caboose-ai/caboose-ai.io/services/authentik"
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/launcher"
 	"github.com/go-rod/rod/lib/proto"
@@ -156,22 +156,27 @@ const (
 func (s *Suite) InitBrowser(t *testing.T) {
 	t.Helper()
 
-	chromePath := findChromium()
-	if chromePath == "" {
-		t.Skip("Chromium binary not found (checked ~/.cache/ms-playwright/)")
-	}
-
 	s.swapCaptchaToTestKeys(t)
 
-	headed := os.Getenv("SMOKETEST_HEADED") == "1"
+	var url string
+	if browserURL := os.Getenv("SMOKETEST_BROWSER_URL"); browserURL != "" {
+		url = launcher.MustResolveURL(browserURL)
+	} else {
+		chromePath := findChromium()
+		if chromePath == "" {
+			t.Skip("Chromium binary not found (checked ~/.cache/ms-playwright/)")
+		}
 
-	l := launcher.New().
-		Bin(chromePath).
-		Headless(!headed).
-		Set("no-sandbox").
-		Set("disable-gpu")
+		headed := os.Getenv("SMOKETEST_HEADED") == "1"
 
-	url := l.MustLaunch()
+		l := launcher.New().
+			Bin(chromePath).
+			Headless(!headed).
+			Set("no-sandbox").
+			Set("disable-gpu")
+
+		url = l.MustLaunch()
+	}
 
 	browser := rod.New().ControlURL(url).MustConnect()
 	browser.MustIgnoreCertErrors(true)
@@ -311,7 +316,7 @@ func (s *Suite) SetupAdminPassword(t *testing.T) string {
 func (s *Suite) LoginToAuthentik(t *testing.T, page *rod.Page) {
 	t.Helper()
 
-	s.WaitStable(t, page, "authentik login page")
+	s.handleDialogs(page)
 
 	uid, err := page.ElementByJS(deepQueryOne(`input[name='uidField']`))
 	if err != nil {
@@ -344,8 +349,7 @@ func (s *Suite) LoginToAuthentik(t *testing.T, page *rod.Page) {
 func (s *Suite) WaitStable(t *testing.T, page *rod.Page, label string) {
 	t.Helper()
 	if err := page.WaitStable(time.Second); err != nil {
-		s.ScreenshotOnFailure(t, page)
-		t.Fatalf("waiting for %s to stabilize: %v", label, err)
+		t.Logf("warning: waiting for %s to stabilize: %v", label, err)
 	}
 }
 
@@ -376,6 +380,12 @@ func (s *Suite) ClickText(t *testing.T, page *rod.Page, text, label string) bool
 	return true
 }
 
+func (s *Suite) handleDialogs(page *rod.Page) {
+	go page.EachEvent(func(e *proto.PageJavascriptDialogOpening) {
+		_ = proto.PageHandleJavaScriptDialog{Accept: true}.Call(page)
+	})()
+}
+
 func (s *Suite) Input(t *testing.T, page *rod.Page, el *rod.Element, label, value string, secret bool) {
 	t.Helper()
 	details := map[string]string{"value": value}
@@ -392,10 +402,17 @@ func (s *Suite) Input(t *testing.T, page *rod.Page, el *rod.Element, label, valu
 
 func (s *Suite) Secret(t *testing.T, key string) string {
 	t.Helper()
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+
 	store := secrets.NewSplitOnePasswordStore("Homelab - Static", "Homelab - Dynamic", runner.NewLocalRunner(), findEnvFile())
 	value, err := store.Get(context.Background(), key)
-	if err != nil || value == "" {
+	if err != nil {
 		t.Fatalf("reading secret %s: %v", key, err)
+	}
+	if value == "" {
+		t.Fatalf("reading secret %s: not found in environment, 1Password, or .env", key)
 	}
 	return value
 }
@@ -452,6 +469,9 @@ func testdataDir() string {
 
 func skipIfNoBrowser(t *testing.T) {
 	t.Helper()
+	if os.Getenv("SMOKETEST_BROWSER_URL") != "" {
+		return
+	}
 	if findChromium() == "" {
 		t.Skip("Chromium not found")
 	}

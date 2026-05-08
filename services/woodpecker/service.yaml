@@ -1,0 +1,18 @@
+slug: woodpecker
+display_name: Woodpecker
+url_key: woodpecker
+compose_services:
+  - woodpecker-server
+  - woodpecker-agent
+secrets:
+  - WOODPECKER_GITEA_CLIENT
+  - WOODPECKER_GITEA_SECRET
+  - WOODPECKER_AGENT_SECRET
+configurator: woodpecker
+smoke_flow: woodpecker
+health:
+  url_key: woodpecker
+  path: /
+  kind: http
+docs:
+  - README.md

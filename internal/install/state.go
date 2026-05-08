@@ -2,7 +2,7 @@ package install
 
 import (
 	"github.com/caboose-ai/caboose-ai.io/internal/secrets"
-	"github.com/caboose-ai/caboose-ai.io/internal/services"
+	"github.com/caboose-ai/caboose-ai.io/internal/service"
 )
 
 type Phase int
@@ -62,7 +62,7 @@ func (p Phase) Group() int {
 
 type ServiceResult struct {
 	Name   string
-	Result *services.ConfigureResult
+	Result *service.ConfigureResult
 	Err    error
 }
 
@@ -97,7 +97,7 @@ func (s *State) Advance() {
 	}
 }
 
-func (s *State) AddServiceResult(name string, result *services.ConfigureResult, err error) {
+func (s *State) AddServiceResult(name string, result *service.ConfigureResult, err error) {
 	s.ServiceResults = append(s.ServiceResults, ServiceResult{Name: name, Result: result, Err: err})
 	if result != nil && result.RestartRequired {
 		s.RestartNeeded = append(s.RestartNeeded, result.Services...)

@@ -12,6 +12,7 @@ type Config struct {
 	Email         string           `yaml:"email"`
 	ComposeDir    string           `yaml:"compose_dir"`
 	Orchestrator  string           `yaml:"orchestrator"`
+	ServeMode     string           `yaml:"serve_mode"`
 	Kubernetes    KubernetesConfig `yaml:"kubernetes"`
 	N8NUser       string           `yaml:"n8n_user"`
 	Social        SocialConfig     `yaml:"social"`
@@ -23,6 +24,7 @@ type Config struct {
 	Force          bool `yaml:"-"`
 	Verbose        bool `yaml:"-"`
 	NonInteractive bool `yaml:"-"`
+	SecretsEnvOnly bool `yaml:"-"`
 }
 
 type KubernetesConfig struct {
@@ -50,6 +52,7 @@ func DefaultConfig() *Config {
 	return &Config{
 		ComposeDir:    "dev/homelab",
 		Orchestrator:  "compose",
+		ServeMode:     "public",
 		Kubernetes:    KubernetesConfig{Namespace: "homelab"},
 		OPVault:       "Homelab - Dynamic",
 		OPStaticVault: "Homelab - Static",
@@ -77,13 +80,26 @@ func (c *Config) Validate() error {
 	if c.Orchestrator == "" {
 		c.Orchestrator = "compose"
 	}
+	if c.ServeMode == "" {
+		c.ServeMode = "public"
+	}
 	if c.Kubernetes.Namespace == "" {
 		c.Kubernetes.Namespace = "homelab"
 	}
 	if c.Orchestrator != "compose" && c.Orchestrator != "kubernetes" {
 		return fmt.Errorf("orchestrator must be one of: compose, kubernetes")
 	}
+	if c.ServeMode != "public" && c.ServeMode != "local" {
+		return fmt.Errorf("serve_mode must be one of: public, local")
+	}
 	return nil
+}
+
+func (c *Config) BindAddress() string {
+	if c.ServeMode == "local" {
+		return "0.0.0.0"
+	}
+	return "127.0.0.1"
 }
 
 func (c *Config) URLs() URLs {

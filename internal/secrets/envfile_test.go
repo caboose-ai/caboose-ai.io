@@ -27,6 +27,34 @@ func TestEnvFileStore_GetPut(t *testing.T) {
 	}
 }
 
+func TestEnvFileStore_QuotesComposeSensitiveValues(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".env")
+	store := NewEnvFileStore(path)
+	ctx := context.Background()
+
+	value := "pa$$ word#with'quote"
+	if err := store.Put(ctx, "SECRET", value); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if got := string(data); !strings.Contains(got, "SECRET='pa$$ word#with\\'quote'") {
+		t.Fatalf("stored value was not quoted for Compose interpolation: %q", got)
+	}
+
+	got, err := store.Get(ctx, "SECRET")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got != value {
+		t.Errorf("Get = %q, want %q", got, value)
+	}
+}
+
 func TestEnvFileStore_Upsert(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, ".env")

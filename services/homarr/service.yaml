@@ -1,0 +1,17 @@
+slug: homarr
+display_name: Homarr
+url_key: dashboard
+compose_services:
+  - homarr
+secrets:
+  - HOMARR_OIDC_CLIENT_ID
+  - HOMARR_OIDC_CLIENT_SECRET
+  - HOMARR_SECRET_ENCRYPTION_KEY
+configurator: homarr
+smoke_flow: homarr
+health:
+  url_key: dashboard
+  path: /
+  kind: http
+docs:
+  - README.md

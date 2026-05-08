@@ -33,11 +33,21 @@ var required = []struct {
 }
 
 func (c *Checker) CheckAll(ctx context.Context) []Result {
+	return c.CheckAllWithOptions(ctx, Options{})
+}
+
+type Options struct {
+	SkipOnePasswordLogin bool
+}
+
+func (c *Checker) CheckAllWithOptions(ctx context.Context, opts Options) []Result {
 	results := make([]Result, len(required))
 	for i, req := range required {
 		results[i] = c.check(ctx, req.name, req.cmd, req.versionArg)
 	}
-	results = append(results, c.checkOPLogin(ctx))
+	if !opts.SkipOnePasswordLogin {
+		results = append(results, c.checkOPLogin(ctx))
+	}
 	return results
 }
 
