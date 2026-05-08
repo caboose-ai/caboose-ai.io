@@ -61,17 +61,30 @@ func testOAuthFlow(t *testing.T, s *Suite, svc ServiceFlow) {
 		return
 	}
 
+	if svc.LocalPasswordSecret != "" {
+		loginLocalService(t, s, page, svc)
+		finalURL := page.MustInfo().URL
+		if !strings.Contains(finalURL, svc.LandingHost) {
+			t.Errorf("expected to land on %s, got %s", svc.LandingHost, finalURL)
+		}
+		if !isLoggedInURL(finalURL, svc.LandingHost) {
+			t.Errorf("expected %s to finish logged in, got %s", svc.Name, finalURL)
+		}
+		s.Record(t, page, "landed", svc.Name, map[string]string{"url": finalURL})
+		t.Logf("%s: landed on %s", svc.Name, finalURL)
+		return
+	}
+
 	if svc.SSOSelector != "" && !strings.Contains(currentURL, "auth."+s.Domain) {
-		el, err := page.Element(svc.SSOSelector)
-		if err != nil && svc.SSOText != "" {
-			if s.ClickText(t, page, svc.SSOText, svc.Name+" SSO button") {
-				err = nil
+		clicked := false
+		if svc.SSOText != "" {
+			clicked = s.ClickText(t, page, svc.SSOText, svc.Name+" SSO button")
+		}
+		if !clicked {
+			el, err := page.Element(svc.SSOSelector)
+			if err != nil {
+				t.Fatalf("SSO button not found for %s (selector: %s): %v", svc.Name, svc.SSOSelector, err)
 			}
-		}
-		if err != nil {
-			t.Fatalf("SSO button not found for %s (selector: %s): %v", svc.Name, svc.SSOSelector, err)
-		}
-		if el != nil {
 			s.Click(t, page, el, svc.Name+" SSO button")
 		}
 		s.WaitStable(t, page, svc.Name+" SSO redirect")
@@ -97,6 +110,35 @@ func testOAuthFlow(t *testing.T, s *Suite, svc ServiceFlow) {
 	}
 	s.Record(t, page, "landed", svc.Name, map[string]string{"url": finalURL})
 	t.Logf("%s: landed on %s", svc.Name, finalURL)
+}
+
+func loginLocalService(t *testing.T, s *Suite, page *rod.Page, svc ServiceFlow) {
+	t.Helper()
+
+	if s.ClickText(t, page, "View in Browser", svc.Name+" browser handoff") {
+		s.WaitStable(t, page, svc.Name+" browser handoff landing")
+		if isLoggedInURL(page.MustInfo().URL, svc.LandingHost) {
+			return
+		}
+	}
+
+	username, err := page.Element(svc.UsernameSelector)
+	if err != nil {
+		t.Fatalf("%s local username input not found: %v", svc.Name, err)
+	}
+	password, err := page.Element(svc.PasswordSelector)
+	if err != nil {
+		t.Fatalf("%s local password input not found: %v", svc.Name, err)
+	}
+	submit, err := page.Element(svc.SubmitSelector)
+	if err != nil {
+		t.Fatalf("%s local submit button not found: %v", svc.Name, err)
+	}
+
+	s.Input(t, page, username, svc.Name+" local username", svc.LocalUsername, false)
+	s.Input(t, page, password, svc.Name+" local password", s.Secret(t, svc.LocalPasswordSecret), true)
+	s.Click(t, page, submit, svc.Name+" local login")
+	s.WaitStable(t, page, svc.Name+" local landing")
 }
 
 func linkForgejoAccount(t *testing.T, s *Suite, page *rod.Page) {

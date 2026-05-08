@@ -21,9 +21,11 @@ import (
 	"github.com/caboose-ai/caboose-ai.io/internal/services/grafana"
 	"github.com/caboose-ai/caboose-ai.io/internal/services/homarr"
 	"github.com/caboose-ai/caboose-ai.io/internal/services/mattermost"
+	"github.com/caboose-ai/caboose-ai.io/internal/services/n8n"
 	"github.com/caboose-ai/caboose-ai.io/internal/services/openwebui"
 	"github.com/caboose-ai/caboose-ai.io/internal/services/portainer"
 	"github.com/caboose-ai/caboose-ai.io/internal/services/social"
+	"github.com/caboose-ai/caboose-ai.io/internal/services/sonarqube"
 	"github.com/caboose-ai/caboose-ai.io/internal/services/woodpecker"
 )
 
@@ -92,10 +94,22 @@ func (inst *Installer) BuildServices(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("retrieving PORTAINER_ADMIN_PASSWORD: %w", err)
 	}
+	n8nPass, err := inst.Secrets.Get(ctx, "N8N_PASSWORD")
+	if err != nil {
+		return fmt.Errorf("retrieving N8N_PASSWORD: %w", err)
+	}
+	sonarAdminPass, err := inst.Secrets.Get(ctx, "SONAR_ADMIN_PASSWORD")
+	if err != nil {
+		return fmt.Errorf("retrieving SONAR_ADMIN_PASSWORD: %w", err)
+	}
 
 	portainerAPIURL := urls.Portainer
+	n8nAPIURL := urls.N8N
+	sonarAPIURL := urls.SonarQube
 	if inst.Config.Orchestrator == "compose" {
 		portainerAPIURL = "http://127.0.0.1:9000"
+		n8nAPIURL = "http://127.0.0.1:5678"
+		sonarAPIURL = "http://127.0.0.1:9005"
 	}
 
 	inst.Services = []services.ServiceConfigurator{
@@ -105,7 +119,9 @@ func (inst *Installer) BuildServices(ctx context.Context) error {
 		grafana.New(inst.AK, inst.Secrets),
 		openwebui.New(inst.AK, inst.Secrets),
 		homarr.New(inst.AK, inst.Secrets),
-		mattermost.New(inst.AK, inst.DockerExec, "mattermost", urls.Authentik),
+		n8n.New(n8nAPIURL, inst.HTTP, inst.Config.Email, n8nPass),
+		sonarqube.New(sonarAPIURL, inst.HTTP, sonarAdminPass),
+		mattermost.New(inst.DockerExec, inst.Secrets, "mattermost", inst.Config.Email),
 		social.New(inst.AK, inst.Config.Social),
 	}
 	return nil
