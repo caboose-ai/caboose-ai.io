@@ -1,164 +1,202 @@
 # Agent Guidance Report
 
 Repository: `/home/caboose/dev/caboose-ai.io`
-Generated: `2026-05-08`
+Generated: `2026-05-09`
 
 ## Executive Summary
 
-This repository is a Go homelab infrastructure monorepo centered on an Authentik-backed SSO stack. The current guidance surface is useful but split across `CLAUDE.md`, `.github/copilot-instructions.md`, and `README.md`; there is no root `AGENTS.md`.
+This refresh was run after PR #33 landed on `main`. The repository is still a Go homelab infrastructure monorepo centered on Authentik SSO, but the active service surface has changed: n8n is no longer present in compose, service manifests, service links, prompts, smoke flows, or docs.
 
-I generated proposed agent guidance under `docs/` only:
+The previous `2026-05-08` report was stale because it still described n8n as active. This report replaces it as the canonical guidance report. The current proposed guidance set is:
 
-- `docs/proposed-AGENTS.md`
-- `docs/proposed-dev-homelab-AGENTS.md`
-- `docs/proposed-internal-smoketest-AGENTS.md`
-- `docs/proposed-services-authentik-AGENTS.md`
+- Existing: `docs/proposed-AGENTS.md`
+- Existing: `docs/proposed-dev-homelab-AGENTS.md`
+- Existing: `docs/proposed-internal-smoketest-AGENTS.md`
+- Existing: `docs/proposed-services-authentik-AGENTS.md`
+- New: `docs/proposed-services-homarr-AGENTS.md`
 
-No source code or existing guidance file was modified.
+Primary current recommendation: keep the existing root, homelab, smoke-test, and Authentik guidance proposals, and add a nested `services/homarr/AGENTS.md` because Homarr has enough live-state, OIDC, dashboard-seeding, and Docker/SQLite-specific workflow to justify local instructions.
 
-## Existing Guidance
+## Current Guidance Inventory
 
-Observed:
+- `CLAUDE.md`: Canonical repository guidance for Claude Code. It covers Go commands, homelab workflows, Authentik state contracts, service manifests, docs checks, and PR hygiene.
+- `.github/copilot-instructions.md`: Compatibility pointer that tells Copilot to follow `CLAUDE.md`.
+- `AGENTS.md`: Not present at repo root.
+- Nested guidance files: none currently checked in.
+- Generated proposal docs:
+  - `docs/proposed-AGENTS.md`
+  - `docs/proposed-dev-homelab-AGENTS.md`
+  - `docs/proposed-internal-smoketest-AGENTS.md`
+  - `docs/proposed-services-authentik-AGENTS.md`
+  - `docs/proposed-services-homarr-AGENTS.md`
 
-- `CLAUDE.md` documents the project map, commands, conventions, Git workflow, docs policy, Authentik notes, and adding-service checklist.
-- `.github/copilot-instructions.md` mirrors the same architecture and coding expectations for GitHub Copilot.
-- `README.md` gives the human-facing stack overview, service table, quick start, testing commands, and docs policy.
-- `.github/workflows/docs-check.yml` enforces docs updates for PRs that change `cmd/*`, `internal/*`, or `dev/homelab/docker-compose.yml`, unless the PR has `docs-exempt`.
-- There is no root `AGENTS.md`, `GEMINI.md`, or nested `AGENTS.md`.
+## Repository Shape
 
-Recommendation:
+The repo is a single Go module:
 
-- Add a root `AGENTS.md` based on `docs/proposed-AGENTS.md`.
-- Keep `CLAUDE.md`, `.github/copilot-instructions.md`, and `README.md` as the required docs-sync set.
-- Add nested `AGENTS.md` only for high-risk directories where local instructions materially differ from root guidance.
+- `cmd/homelab`: User-facing homelab CLI entrypoint.
+- `internal/*`: Shared installer, Authentik, service registry, compose, smoke-test, and support packages.
+- `services/<slug>`: First-class service workspaces with a `service.yaml`, implementation, tests, and usually README/docs.
+- `dev/homelab`: Docker Compose, Authentik bootstrap scripts, smoke-test scripts, and local homelab runtime artifacts.
+- `internal/smoketest`: Playwright-backed live SSO validation and service smoke coverage.
+- `docs`: Operational documentation and generated guidance proposals.
 
-## Architecture and Repo Map
+The repo already has a strong `CLAUDE.md`, so root `AGENTS.md` should mostly translate and condense that guidance for Codex-style agents rather than invent new policy.
 
-Observed:
+## Important Current Service Surface
 
-- `go.mod` declares module `github.com/caboose-ai/caboose-ai.io` with Go `1.26.2`.
-- `cmd/homelab/main.go` contains the homelab CLI entrypoint and subcommands: `install`, `reset`, `migrate`, `oauth-setup`, `service`, `recovery`, and `paperclip`.
-- `cmd/mcp/main.go` starts the MCP server, requiring a config file and supporting stdio or HTTP mode.
-- `internal/config/config.go` defines defaults, YAML config, `serve_mode`, compose directory, orchestrator selection, and split 1Password vault names.
-- `internal/install/install.go` owns installer state, prereq checks, secret generation, compose apply, Authentik initialization, and service configuration.
-- `internal/service/service.go` defines the shared `ServiceConfigurator` interface.
-- `internal/service/registry.go` loads `services/<slug>/service.yaml` and validates that manifest slugs match directory names.
-- `internal/servicebuilder/builder.go` is the central configurator construction point.
-- `services/<slug>/` contains service manifests and optional configurator packages.
-- `services/authentik/` is a resource-oriented Authentik API client.
-- `dev/homelab/docker-compose.yml` defines the compose stack, internal DB networks, app network, Authentik containers, observability, and the profile-gated Paperclip services.
+Active compose/services observed in this refresh:
 
-Confidence: High. These are directly observed from the current tree.
+- Authentik
+- Forgejo
+- Grafana
+- Homarr
+- Mattermost
+- Open WebUI
+- Paperclip
+- Portainer
+- SonarQube
 
-## Commands
+n8n is intentionally absent from current compose, manifests, installer prompts, service links, smoke targets, and docs. Avoid reintroducing n8n instructions unless the service is restored intentionally.
 
-Observed:
+## Recommended Root AGENTS.md
 
-- `mise.toml` defines repo tasks for build, install, reset, reinstall, service operations, OAuth setup, Turnstile creation, Paperclip seed, MCP, tests, SSO checks, browser E2E, and destructive E2E reset.
-- `go build ./...` and `go test ./...` are the baseline local validation commands.
-- `mise run sso:check-quick` runs `go test -tags integration ./internal/smoketest/ -run TestSSO_Config -v`.
-- `mise run sso:check` runs the full live SSO smoke suite with a five-minute timeout.
-- `mise run sso:e2e` enables screenshot/action evidence for browser flows.
-- `mise run homelab:e2e-reset` is destructive: reset, install, and browser SSO evidence tests.
+Use `docs/proposed-AGENTS.md` as the starting point for a root `AGENTS.md`.
 
-Recommendation:
+Why:
 
-- Root guidance should separate cheap unit validation from live-stack validation.
-- Destructive reset commands should be explicitly labeled so agents do not run them casually.
+- It aligns with the existing `CLAUDE.md` without being as long.
+- It keeps branch/PR hygiene explicit.
+- It names the most important validation commands.
+- It preserves the repo-specific Authentik, 1Password, and homelab smoke-test expectations.
 
-Confidence: High.
+Suggested next action:
 
-## Code Style and Dependencies
+```bash
+cp docs/proposed-AGENTS.md AGENTS.md
+```
 
-Observed:
+Then run:
 
-- Go code uses small packages under `internal/` and per-service packages under `services/`.
-- External effects are abstracted behind interfaces such as `SecretStore`, `CommandRunner`, and `HTTPClient`.
-- Service setup follows the `ServiceConfigurator` interface and central servicebuilder registration.
-- Manifests use YAML and are loaded through structured parsing, not string scanning.
-- Authentik helpers are split by resource type.
-- Dependencies include Bubble Tea/Lip Gloss for TUI, Rod for browser tests, the Go MCP SDK, and `yaml.v3`.
+```bash
+go test ./...
+```
 
-Recommendation:
+No code changes are required for the guidance file itself.
 
-- Agent guidance should require `gofmt`, interface-backed tests, manifest updates for service discovery, and servicebuilder registration for configurable services.
+## Recommended Nested AGENTS.md Files
 
-Confidence: High.
+### `dev/homelab/AGENTS.md`
 
-## Testing and Quality Gates
+Use `docs/proposed-dev-homelab-AGENTS.md`.
 
-Observed:
+Reason:
 
-- Unit tests live next to production code across `internal/` and `services/`.
-- `internal/smoketest/` contains build-tagged integration tests, endpoint tests, browser flows, evidence recording, and live Authentik token discovery/recovery.
-- Browser flow definitions include native OAuth/OIDC, service-specific login controls, local-admin handoffs, and proxy-gated landing checks.
-- Evidence is written under `internal/smoketest/testdata/evidence/` when enabled.
-- The docs check workflow blocks relevant PRs without documentation updates unless labeled `docs-exempt`.
+- `dev/homelab` mixes live compose state, bootstrap scripts, generated env files, Authentik runtime files, and smoke-test helper scripts.
+- Agents need stronger guardrails here because accidental edits can affect live local services or secrets.
 
-Recommendation:
+Suggested next action:
 
-- Root guidance should require focused unit tests before live smoke tests.
-- Nested smoke-test guidance should warn that tests touch live Authentik state and can change Turnstile test keys.
+```bash
+cp docs/proposed-dev-homelab-AGENTS.md dev/homelab/AGENTS.md
+```
 
-Confidence: High.
+### `internal/smoketest/AGENTS.md`
 
-## Security, Data, and Risk
+Use `docs/proposed-internal-smoketest-AGENTS.md`.
 
-Observed:
+Reason:
 
-- The inventory flagged `.env` and `dev/homelab/.env` as secret-like paths.
-- `internal/secrets/store.go` defines generated bootstrap secrets, derived OAuth secret keys, static external credentials, social OAuth credentials, and Turnstile keys.
-- `dev/homelab/docker-compose.yml` mounts Docker socket access for some services, uses privileged cAdvisor access, has internal database networks, and profile-gates Paperclip.
-- `internal/smoketest/suite.go` can recover Authentik bootstrap API token state from the running container but does not need to print token values.
+- Smoke tests depend on Playwright behavior, Authentik flows, service-specific success states, Shadow DOM handling, and live environment assumptions.
+- A nested file can keep browser automation guidance close to the tests.
 
-Recommendation:
+Suggested next action:
 
-- Agent guidance should explicitly forbid reading, printing, or committing real `.env`, 1Password, OAuth, Turnstile, Cloudflare, or bootstrap-token values.
-- Compose guidance should call out Docker socket mounts, privileged containers, host networking, and port exposure.
-- Authentik guidance should treat recovery URLs, bearer tokens, OAuth client secrets, and bootstrap tokens as sensitive.
+```bash
+cp docs/proposed-internal-smoketest-AGENTS.md internal/smoketest/AGENTS.md
+```
 
-Confidence: High.
+### `services/authentik/AGENTS.md`
 
-## Documentation Gaps and Proposed Guidance Files
+Use `docs/proposed-services-authentik-AGENTS.md`.
 
-Observed gaps:
+Reason:
 
-- No root `AGENTS.md` exists, so Codex-style repo guidance is currently inherited from `CLAUDE.md` and user-provided session instructions.
-- No nested guidance exists for high-risk directories.
-- Existing docs are strong but optimized for humans, Claude, and Copilot rather than repo-local Codex operating rules.
+- Authentik provider/source/outpost provisioning is a central contract for all service SSO.
+- The package is high-impact and has specific failure modes around missing providers, source flow fields, and state reconciliation.
 
-Recommended nested guidance:
+Suggested next action:
 
-- `dev/homelab/AGENTS.md`: Compose, secret, host-access, profile, and validation rules are materially different from Go source defaults.
-- `internal/smoketest/AGENTS.md`: Live integration tests have stateful Authentik, browser, evidence, and secret-redaction concerns.
-- `services/authentik/AGENTS.md`: Auth-critical API helpers need exact-match slug semantics, token hygiene, and focused tests.
+```bash
+cp docs/proposed-services-authentik-AGENTS.md services/authentik/AGENTS.md
+```
 
-Not recommended right now:
+### `services/homarr/AGENTS.md`
 
-- Per-service nested guidance for every `services/<slug>/` directory. The root guidance plus service README/manifests should be enough unless a service gets distinct ownership or test commands.
-- Separate guidance for `cmd/` or most `internal/` packages. Current patterns are consistent enough for root guidance.
+Use `docs/proposed-services-homarr-AGENTS.md`.
 
-Confidence: Medium-high. The nested candidates are recommendations, but the underlying risks are directly observed.
+Reason:
 
-## Proposed Files
+- Homarr now owns dashboard setup, OIDC login wiring, default board seeding, app filtering, and Docker-backed SQLite mutation.
+- The live repair path is unusual enough to justify local rules: installer-owned rows use `homelab_app_%` and `homelab_item_%`, seed code should stay idempotent, and dashboard curation belongs in `internal/servicebuilder`.
 
-- `docs/proposed-AGENTS.md`: Root Codex/agent guidance candidate.
-- `docs/proposed-dev-homelab-AGENTS.md`: Candidate content for `dev/homelab/AGENTS.md`.
-- `docs/proposed-internal-smoketest-AGENTS.md`: Candidate content for `internal/smoketest/AGENTS.md`.
-- `docs/proposed-services-authentik-AGENTS.md`: Candidate content for `services/authentik/AGENTS.md`.
+Suggested next action:
 
-## Confidence and Open Questions
+```bash
+cp docs/proposed-services-homarr-AGENTS.md services/homarr/AGENTS.md
+```
 
-Confidence:
+## Candidate Areas That Do Not Need Nested Guidance Yet
 
-- Architecture map: High.
-- Commands: High.
-- Testing and docs policy: High.
-- Security/risk guidance: High.
-- Nested guidance placement: Medium-high.
+### Other `services/<slug>` Packages
 
-Open questions:
+Most current service packages are small and follow the common manifest/configurator pattern. A nested AGENTS file for every service would add maintenance overhead before it adds clarity.
 
-- Whether the team wants to actually add root and nested `AGENTS.md` files now, or keep the generated candidates under `docs/` for review first.
-- Whether `GEMINI.md` should be added as a compatibility pointer after root `AGENTS.md` lands.
-- Whether the docs-check workflow should include `services/*` changes in addition to `cmd/*`, `internal/*`, and `dev/homelab/docker-compose.yml`.
+Add more service-local guidance later if one of these services gains:
+
+- Live database mutation.
+- Multi-step bootstrap or repair scripts.
+- Complex SSO-specific behavior.
+- Service-owned smoke-test conventions that differ from the rest of the repo.
+
+### `internal/servicebuilder`
+
+This package is now important because it curates service metadata and dashboard app inclusion. It does not yet need a standalone AGENTS file, but future Homarr/dashboard changes should mention it from `services/homarr/AGENTS.md`.
+
+If service planning grows more complex, consider either:
+
+- A nested `internal/servicebuilder/AGENTS.md`.
+- A short root guidance note that dashboard inclusion and service metadata should be changed in `internal/servicebuilder`, not duplicated in service packages.
+
+## Documentation Gaps
+
+The previous `2026-05-08` report was stale after n8n removal. This report replaces it and reflects the post-PR #33 service surface.
+
+The main remaining gaps are:
+
+- No checked-in root `AGENTS.md` yet.
+- No nested guidance files checked in yet.
+- Existing docs still duplicate some guidance across `CLAUDE.md`, `.github/copilot-instructions.md`, and proposed AGENTS docs. If the proposed files are adopted, keep `CLAUDE.md` as the canonical long-form source and make compatibility files concise pointers where possible.
+
+## Validation Performed
+
+This guidance refresh was read-only with respect to source code. The inventory pass inspected file names, directory structure, and non-secret docs/source context. Secret-like file paths such as `.env` were identified as sensitive and were not opened.
+
+Recommended before committing guidance adoption:
+
+```bash
+git diff --check
+go test ./...
+```
+
+For Homarr-specific adoption, also run:
+
+```bash
+go test ./internal/servicebuilder ./services/homarr -v
+```
+
+## Open Questions
+
+- Whether to adopt all proposed nested guidance files now, or land only root plus Homarr first.
+- Whether `docs/proposed-*.md` should remain after guidance files are copied into place, or be removed once the checked-in guidance exists.
+- Whether `internal/servicebuilder` should get local guidance if dashboard/service metadata keeps expanding.
