@@ -107,6 +107,13 @@ bootstrap verification. Woodpecker persists server data at
 - Never commit directly to main. Always create a feature branch.
 - Commit messages: `type(scope): description` (e.g., `feat(install):`, `fix(homelab):`, `test(install):`)
 - Types: feat, fix, test, docs, chore, refactor
+- PR titles targeting `main` must follow Conventional Commits. CI validates the
+  title before merge.
+- Release Please uses conventional commits from `main` to open release PRs and
+  publish GitHub releases. Starting version is `v0.1.0`; `fix:` is patch,
+  `feat:` is minor, and `!` or `BREAKING CHANGE:` is major.
+- CI builds `cmd/homelab` and `cmd/mcp` with `-buildvcs=false` so release
+  checks do not depend on Go VCS stamping.
 
 ## Documentation
 
