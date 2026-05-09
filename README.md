@@ -17,7 +17,7 @@ Go monorepo for a self-hosted homelab infrastructure stack with SSO via Authenti
 | OpenClaw | `openclaw.caboose-ai.io` | OpenClaw app behind Authentik forward auth |
 | Ghost | `blog.caboose-ai.io` | Blog |
 | Paperclip | `paperclip.caboose-ai.io` | AI-labor control plane for the homelab software shop |
-| Homarr | `caboose-ai.io` | Dashboard / homepage |
+| Homarr | `caboose-ai.io` | Native Authentik/OIDC dashboard homepage |
 | Prometheus | — | Metrics collection |
 | Loki + Promtail | — | Log aggregation |
 
@@ -60,10 +60,11 @@ automation.
 
 ## Release automation
 
-Pull requests to `main` must use Conventional Commit titles such as
+Pull requests to `main` should use Conventional Commit titles such as
 `feat(homelab): add installer check` or `fix(mcp): repair config loading`. CI
-runs unit tests and builds both release binaries on every PR and push to
-`main`.
+accepts legacy bracketed titles such as `[chore] tighten setup` during the
+transition, then runs unit tests and builds both release binaries on every PR
+and push to `main`.
 
 Releases are managed by Release Please from conventional commits after merges
 to `main`. The current release manifest starts at `v0.1.0`; future `fix:`
@@ -151,13 +152,16 @@ service. Password values are redacted from the evidence log.
 The browser flow covers both native Authentik/OIDC redirects and service
 specific first-run paths. Portainer clicks its visible OAuth login control,
 Mattermost follows the browser handoff and uses the managed local admin account,
-and proxy-gated services such as Woodpecker, Homarr, and OpenClaw are
-validated by reaching their protected landing URLs.
+Homarr validates the native Authentik/OIDC dashboard login, while
+proxy-gated services such as Woodpecker and OpenClaw are validated by reaching
+their protected landing URLs.
 
 ## Infrastructure
 
 - **Caddy** reverse proxy on the host — handles TLS and routes to containers in `public` serve mode
 - **Docker Compose** at `dev/homelab/docker-compose.yml` — all services
+- **Homarr** homepage — pinned to `ghcr.io/homarr-labs/homarr:v1.61.0`, stores dashboard state in `homarr_data:/appdata`, and uses native Authentik OIDC for `caboose-ai.io`
+- **Authentik** state — `/data` is persisted in the `authentik_data` volume for uploaded media and runtime-managed files
 - **Paperclip** profile (`docker compose --profile paperclip ...`) — built from upstream tag `v2026.428.0`, backed by `paperclip-db`, and Authentik-gated through `paperclip-proxy`
 - **Cloudflare tunnel** for `chat` and `sonar` subdomains
 - **1Password** for secret storage (with `.env` fallback)
