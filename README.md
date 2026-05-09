@@ -58,6 +58,19 @@ compose `.env` fallback for secrets. Caddy and Cloudflare are only needed for
 deployment modes that use the host reverse proxy, TLS, tunnels, or Turnstile
 automation.
 
+## Release automation
+
+Pull requests to `main` must use Conventional Commit titles such as
+`feat(homelab): add installer check` or `fix(mcp): repair config loading`. CI
+runs unit tests and builds both release binaries on every PR and push to
+`main`.
+
+Releases are managed by Release Please from conventional commits after merges
+to `main`. The current release manifest starts at `v0.1.0`; future `fix:`
+commits produce patch releases, `feat:` commits produce minor releases, and
+breaking changes produce major releases. Release Please opens the version bump
+PR and publishes the GitHub release when that PR is merged.
+
 ## Service workspaces
 
 Each service has a root-level workspace under `services/<slug>/`. Configured

@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  conventional-title:
+    name: Conventional PR title
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate pull request title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          pattern='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9._/-]+\))?!?: .+'
+
+          if [[ ! "$PR_TITLE" =~ $pattern ]]; then
+            echo "::error::Pull request title must follow Conventional Commits."
+            echo "Expected: type(scope): description"
+            echo "Allowed types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert"
+            echo "Breaking changes may use !, for example: feat!: change install contract"
+            echo "Actual: $PR_TITLE"
+            exit 1
+          fi
+
+  build:
+    name: Test and build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.26.x"
+          check-latest: true
+          cache: true
+
+      - name: Download modules
+        run: go mod download
+
+      - name: Run unit tests
+        run: go test ./...
+
+      - name: Build homelab
+        run: |
+          go build -trimpath -buildvcs=false -ldflags "-s -w" -o /tmp/homelab ./cmd/homelab
+          set +e
+          /tmp/homelab > /tmp/homelab.out 2>&1
+          status=$?
+          set -e
+          test "$status" -eq 1
+          grep -q "Usage: homelab <command> \\[flags\\]" /tmp/homelab.out
+
+      - name: Build homelab-mcp
+        run: |
+          go build -trimpath -buildvcs=false -ldflags "-s -w" -o /tmp/homelab-mcp ./cmd/mcp
+          /tmp/homelab-mcp -help > /tmp/homelab-mcp.out 2>&1
+          grep -q "Path to homelab.yml config file" /tmp/homelab-mcp.out

@@ -80,6 +80,12 @@ container recreation.
 - Never commit to main. Always branch first.
 - Commit format: `type(scope): description`
 - Types: feat, fix, test, docs, chore, refactor
+- PR titles to `main` must follow Conventional Commits because CI validates the
+  title and Release Please uses conventional commits for semver releases.
+- Release Please starts from `v0.1.0`: `fix:` creates patch releases, `feat:`
+  creates minor releases, and `!` or `BREAKING CHANGE:` creates major releases.
+- CI builds both release binaries with `go build -buildvcs=false` to avoid
+  Go VCS stamping failures in linked worktrees or source archive contexts.
 
 ### Documentation
 - Every PR to main that changes code or infrastructure MUST update docs.
