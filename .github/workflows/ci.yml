@@ -20,16 +20,25 @@ jobs:
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
-          pattern='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9._/-]+\))?!?: .+'
+          conventional_pattern='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9._/-]+\))?!?: .+'
+          legacy_bracket_pattern='^\[(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)\] .+'
 
-          if [[ ! "$PR_TITLE" =~ $pattern ]]; then
-            echo "::error::Pull request title must follow Conventional Commits."
-            echo "Expected: type(scope): description"
-            echo "Allowed types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert"
-            echo "Breaking changes may use !, for example: feat!: change install contract"
-            echo "Actual: $PR_TITLE"
-            exit 1
+          if [[ "$PR_TITLE" =~ $conventional_pattern ]]; then
+            exit 0
           fi
+
+          if [[ "$PR_TITLE" =~ $legacy_bracket_pattern ]]; then
+            echo "::notice::Accepted legacy bracketed PR title. Prefer Conventional Commits for new PRs."
+            exit 0
+          fi
+
+          echo "::error::Pull request title must follow Conventional Commits."
+          echo "Expected: type(scope): description"
+          echo "Allowed types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert"
+          echo "Breaking changes may use !, for example: feat!: change install contract"
+          echo "Legacy bracketed titles are accepted as [type] description during transition."
+          echo "Actual: $PR_TITLE"
+          exit 1
 
   build:
     name: Test and build

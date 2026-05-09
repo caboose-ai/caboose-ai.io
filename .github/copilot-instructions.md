@@ -72,8 +72,8 @@ bootstrap verification. Woodpecker persists server data at
 - Integration smoke tests in `internal/smoketest/` use build tag `integration` and require a live stack.
 - Browser smoke tests cover native Authentik/OIDC login, service-specific
   handoffs such as Portainer's OAuth button and Mattermost's browser handoff
-  plus local admin login, and proxy-gated landing checks for Woodpecker,
-  Homarr, OpenClaw, and Paperclip.
+  plus local admin login, Homarr native Authentik/OIDC login, and proxy-gated
+  landing checks for Woodpecker, OpenClaw, and Paperclip.
 - Run tests: `go test ./...`
 - Run smoke tests: `mise run sso:check` (full) or `mise run sso:check-quick` (API only)
 
@@ -90,6 +90,10 @@ bootstrap verification. Woodpecker persists server data at
 - Secrets via `${VAR}` env var substitution from `.env` file
 - Internal-only DB networks (`*-internal` with `internal: true`)
 - App-facing services join the `apps` network
+- Homarr is pinned to `ghcr.io/homarr-labs/homarr:v1.61.0`, persists `/appdata`
+  in `homarr_data`, and uses native Authentik OIDC for the root homepage.
+- Authentik mounts `authentik_data:/data` in both server and worker containers
+  so uploaded media and runtime-managed files survive container recreation.
 - Port exposure is configurable with `serve_mode` / `--serve-mode`:
   `public` binds host ports to `127.0.0.1` for Caddy reverse proxying,
   `local` binds to `0.0.0.0` for LAN access.
@@ -107,8 +111,9 @@ bootstrap verification. Woodpecker persists server data at
 - Never commit directly to main. Always create a feature branch.
 - Commit messages: `type(scope): description` (e.g., `feat(install):`, `fix(homelab):`, `test(install):`)
 - Types: feat, fix, test, docs, chore, refactor
-- PR titles targeting `main` must follow Conventional Commits. CI validates the
-  title before merge.
+- PR titles targeting `main` should follow Conventional Commits. CI validates
+  the title before merge and accepts legacy `[type] description` titles during
+  transition.
 - Release Please uses conventional commits from `main` to open release PRs and
   publish GitHub releases. Starting version is `v0.1.0`; `fix:` is patch,
   `feat:` is minor, and `!` or `BREAKING CHANGE:` is major.

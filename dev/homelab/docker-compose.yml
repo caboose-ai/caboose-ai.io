@@ -231,6 +231,7 @@ services:
       - authentik-postgres
       - authentik-redis
     volumes:
+      - authentik_data:/data
       - ./patches/authentik/0010_remove_role_group_alter_role_name.py:/authentik/rbac/migrations/0010_remove_role_group_alter_role_name.py:ro
       - ./patches/authentik/0056_user_roles.py:/authentik/core/migrations/0056_user_roles.py:ro
     networks:
@@ -259,6 +260,7 @@ services:
       - authentik-postgres
       - authentik-redis
     volumes:
+      - authentik_data:/data
       - /var/run/docker.sock:/var/run/docker.sock
       - ./patches/authentik/0010_remove_role_group_alter_role_name.py:/authentik/rbac/migrations/0010_remove_role_group_alter_role_name.py:ro
       - ./patches/authentik/0056_user_roles.py:/authentik/core/migrations/0056_user_roles.py:ro
@@ -268,7 +270,7 @@ services:
     restart: unless-stopped
 
   homarr:
-    image: ghcr.io/homarr-labs/homarr:latest
+    image: ghcr.io/homarr-labs/homarr:v1.61.0
     container_name: homarr
     ports:
       - "${HOMELAB_BIND_ADDRESS:-127.0.0.1}:7575:7575"
@@ -451,6 +453,7 @@ volumes:
   grafana_data:
   authentik_postgres_data:
   authentik_redis_data:
+  authentik_data:
   homarr_data:
   ghost_data:
   ghost_db:

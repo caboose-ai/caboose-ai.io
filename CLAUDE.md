@@ -73,15 +73,16 @@ container recreation.
 - Integration smoke tests in `internal/smoketest/` use build tag `integration` and require a live stack
 - Browser smoke tests exercise both Authentik/OIDC login and service-specific
   handoffs, including Portainer's OAuth button, Mattermost's browser handoff and
-  local admin login, and proxy-gated landing checks for Woodpecker,
-  Homarr, OpenClaw, and Paperclip.
+  local admin login, Homarr native Authentik/OIDC, and proxy-gated landing
+  checks for Woodpecker, OpenClaw, and Paperclip.
 
 ### Git
 - Never commit to main. Always branch first.
 - Commit format: `type(scope): description`
 - Types: feat, fix, test, docs, chore, refactor
-- PR titles to `main` must follow Conventional Commits because CI validates the
-  title and Release Please uses conventional commits for semver releases.
+- PR titles to `main` should follow Conventional Commits because CI validates
+  the title and Release Please uses conventional commits for semver releases;
+  legacy `[type] description` titles are accepted during transition.
 - Release Please starts from `v0.1.0`: `fix:` creates patch releases, `feat:`
   creates minor releases, and `!` or `BREAKING CHANGE:` creates major releases.
 - CI builds both release binaries with `go build -buildvcs=false` to avoid
@@ -102,6 +103,10 @@ container recreation.
 - Secrets via `${VAR}` from `.env`
 - DB networks: `*-internal` with `internal: true`
 - App networks: `apps`
+- Homarr is pinned to `ghcr.io/homarr-labs/homarr:v1.61.0`, persists `/appdata`
+  in `homarr_data`, and uses native Authentik OIDC for the root homepage.
+- Authentik mounts `authentik_data:/data` in both server and worker containers
+  so uploaded media and runtime-managed files survive container recreation.
 - Port exposure is configurable with `serve_mode` / `--serve-mode`:
   `public` binds host ports to `127.0.0.1` for Caddy, `local` binds to
   `0.0.0.0` for LAN access.

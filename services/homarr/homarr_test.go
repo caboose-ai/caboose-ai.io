@@ -155,9 +155,20 @@ func TestEnsureDefaultBoardSeedsServiceApps(t *testing.T) {
 		`delete from item_layout`,
 		`delete from item`,
 		`delete from app`,
+		`run(boardId, "Home", 0)`,
+		`update board set is_public = 0 where id = ?`,
+		`insert into boardGroupPermission`,
+		`permission) values (?, ?, ?) on conflict`,
+		`{name: "everyone", permission: "view"}`,
+		`{name: "authentik Admins", permission: "full"}`,
 		`insert into app`,
 		`insert into item`,
 		`insert into item_layout`,
+		`homelab_tablet_layout`,
+		`homelab_desktop_layout`,
+		`column_count = excluded.column_count`,
+		`breakpoint = excluded.breakpoint`,
+		`on conflict(item_id, section_id, layout_id) do update`,
 	} {
 		if !strings.Contains(script, want) {
 			t.Fatalf("seed script missing %q:\n%s", want, script)

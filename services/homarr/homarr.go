@@ -51,8 +51,6 @@ type seededApp struct {
 	Name    string `json:"name"`
 	Href    string `json:"href"`
 	IconURL string `json:"iconUrl"`
-	X       int    `json:"x"`
-	Y       int    `json:"y"`
 }
 
 func New(ak *authentik.Client, s secrets.SecretStore, url string, httpClient runner.HTTPClient, dockerExec *docker.ExecClient, container string, apps ...App) *Configurator {
@@ -221,19 +219,39 @@ const Database = require("better-sqlite3");
 const db = new Database("/appdata/db/db.sqlite");
 const boardId = "homelab_default_board";
 const sectionId = "homelab_default_section";
-const layoutId = "homelab_default_layout";
 const apps = __HOMELAB_APPS__;
+const boardGroups = [
+  {name: "everyone", permission: "view"},
+  {name: "authentik Admins", permission: "full"},
+];
+const layouts = [
+  {id: "homelab_default_layout", name: "Mobile", columns: 2, breakpoint: 0, perRow: 1},
+  {id: "homelab_tablet_layout", name: "Tablet", columns: 6, breakpoint: 768, perRow: 3},
+  {id: "homelab_desktop_layout", name: "Desktop", columns: 12, breakpoint: 1200, perRow: 6},
+];
 const allowedAppIds = new Set(apps.map((app) => app.id));
 const allowedItemIds = new Set(apps.map((app) => app.itemId));
 const boardSetting = {json: {homeBoardId: boardId, mobileHomeBoardId: boardId, enableStatusByDefault: true, forceDisableStatus: false}};
 db.transaction(() => {
   if (!db.prepare("select id from board where id = ?").get(boardId)) {
-    db.prepare("insert into board (id, name, is_public, creator_id) values (?, ?, ?, null)").run(boardId, "Home", 1);
+    db.prepare("insert into board (id, name, is_public, creator_id) values (?, ?, ?, null)").run(boardId, "Home", 0);
     db.prepare("insert into section (id, board_id, kind, x_offset, y_offset) values (?, ?, ?, ?, ?)").run(sectionId, boardId, "empty", 0, 0);
-    db.prepare("insert into layout (id, name, board_id, column_count, breakpoint) values (?, ?, ?, ?, ?)").run(layoutId, "Base", boardId, 12, 0);
+  }
+  db.prepare("update board set is_public = 0 where id = ?").run(boardId);
+  const upsertLayout = db.prepare("insert into layout (id, name, board_id, column_count, breakpoint) values (?, ?, ?, ?, ?) on conflict(id) do update set name = excluded.name, board_id = excluded.board_id, column_count = excluded.column_count, breakpoint = excluded.breakpoint");
+  const upsertItemLayout = db.prepare("insert into item_layout (item_id, section_id, layout_id, x_offset, y_offset, width, height) values (?, ?, ?, ?, ?, ?, ?) on conflict(item_id, section_id, layout_id) do update set x_offset = excluded.x_offset, y_offset = excluded.y_offset, width = excluded.width, height = excluded.height");
+  const upsertBoardGroupPermission = db.prepare("insert into boardGroupPermission (board_id, group_id, permission) values (?, ?, ?) on conflict(board_id, group_id, permission) do nothing");
+  for (const layout of layouts) {
+    upsertLayout.run(layout.id, layout.name, boardId, layout.columns, layout.breakpoint);
   }
   db.prepare("update serverSetting set value = ? where setting_key = ?").run(JSON.stringify(boardSetting), "board");
   db.prepare("update \"group\" set home_board_id = ?, mobile_home_board_id = ? where name in (?, ?)").run(boardId, boardId, "everyone", "authentik Admins");
+  for (const group of boardGroups) {
+    const row = db.prepare("select id from \"group\" where name = ?").get(group.name);
+    if (row) {
+      upsertBoardGroupPermission.run(boardId, row.id, group.permission);
+    }
+  }
   for (const row of db.prepare("select id from item where id like 'homelab_item_%'").all()) {
     if (!allowedItemIds.has(row.id)) {
       db.prepare("delete from item_layout where item_id = ?").run(row.id);
@@ -255,9 +273,11 @@ db.transaction(() => {
       const options = {json: {appId: app.id, openInNewTab: true, pingEnabled: true, showTitle: true, layout: "bottom", descriptionDisplayMode: "hidden"}};
       db.prepare("insert into item (id, board_id, kind, options, advanced_options) values (?, ?, 'app', ?, ?)").run(app.itemId, boardId, JSON.stringify(options), JSON.stringify({json: {}}));
     }
-    if (!db.prepare("select item_id from item_layout where item_id = ? and section_id = ? and layout_id = ?").get(app.itemId, sectionId, layoutId)) {
-      db.prepare("insert into item_layout (item_id, section_id, layout_id, x_offset, y_offset, width, height) values (?, ?, ?, ?, ?, ?, ?)").run(app.itemId, sectionId, layoutId, app.x, app.y, 3, 2);
-    }
+  }
+  for (const layout of layouts) {
+    apps.forEach((app, i) => {
+      upsertItemLayout.run(app.itemId, sectionId, layout.id, (i % layout.perRow) * 2, Math.floor(i / layout.perRow), 2, 1);
+    });
   }
 })();
 `
@@ -280,15 +300,12 @@ func seedApps(apps []App) []seededApp {
 			continue
 		}
 		seen[slug] = true
-		i := len(result)
 		result = append(result, seededApp{
 			ID:      "homelab_app_" + slug,
 			ItemID:  "homelab_item_" + slug,
 			Name:    app.Name,
 			Href:    app.URL,
 			IconURL: iconURL(app),
-			X:       (i % 4) * 3,
-			Y:       (i / 4) * 2,
 		})
 	}
 	return result
