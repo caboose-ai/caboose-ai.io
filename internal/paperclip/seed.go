@@ -65,10 +65,9 @@ type AgentSeed struct {
 }
 
 type RoutineSeed struct {
-	Name        string `json:"name"`
+	Title       string `json:"title"`
 	Description string `json:"description"`
-	Schedule    string `json:"schedule"`
-	BudgetCents int    `json:"budgetCents"`
+	Priority    string `json:"priority,omitempty"`
 }
 
 type AuthoritySeed struct {
@@ -120,11 +119,11 @@ func SoftwareShopPlan(repo string) SeedPlan {
 			agent("RDEngineer", "researcher", "R&D Engineer", "CEO/PM", "Evaluates services, agent runtimes, and automation ideas.", repo, 750),
 		},
 		Routines: []RoutineSeed{
-			{Name: "Daily service health and log review", Description: "Check service status, logs, and dashboards; file issues for drift.", Schedule: "daily", BudgetCents: 150},
-			{Name: "Weekly SSO smoke-test report", Description: "Run quick SSO coverage and summarize Authentik/provider drift.", Schedule: "weekly", BudgetCents: 250},
-			{Name: "Weekly dependency/security review", Description: "Review dependency, Semgrep, and secret-handling risk.", Schedule: "weekly", BudgetCents: 250},
-			{Name: "Post-PR verification checklist", Description: "Verify tests, docs, smoke evidence, and approval boundaries after PRs.", Schedule: "event:pull_request", BudgetCents: 200},
-			{Name: "Incident triage when health checks fail", Description: "Open a triage issue when health checks fail and propose non-destructive next steps.", Schedule: "event:health_failure", BudgetCents: 200},
+			{Title: "Daily service health and log review", Description: "Check service status, logs, and dashboards; file issues for drift.", Priority: "medium"},
+			{Title: "Weekly SSO smoke-test report", Description: "Run quick SSO coverage and summarize Authentik/provider drift.", Priority: "medium"},
+			{Title: "Weekly dependency/security review", Description: "Review dependency, Semgrep, and secret-handling risk.", Priority: "medium"},
+			{Title: "Post-PR verification checklist", Description: "Verify tests, docs, smoke evidence, and approval boundaries after PRs.", Priority: "medium"},
+			{Title: "Incident triage when health checks fail", Description: "Open a triage issue when health checks fail and propose non-destructive next steps.", Priority: "high"},
 		},
 		Authority: AuthoritySeed{Policy: "Agents may inspect, branch, test, commit, open PRs, query monitoring, and propose deploy actions. docker, installer, reset, production deploy, secret, firewall, and destructive commands require explicit human approval. Recurring jobs must stay within budget and write audit trails."},
 	}
@@ -151,9 +150,9 @@ func project(name, description, repo string) ProjectSeed {
 func agent(name, role, title, reportsTo, capabilities, repo string, budget int) AgentSeed {
 	return AgentSeed{
 		Name:         name,
-		Role:         role,
+		Role:         paperclipRole(role),
 		Title:        title,
-		ReportsTo:    reportsTo,
+		ReportsTo:    "",
 		Capabilities: capabilities,
 		AdapterType:  "codex_local",
 		AdapterConfig: map[string]any{
@@ -162,6 +161,19 @@ func agent(name, role, title, reportsTo, capabilities, repo string, budget int) 
 			"instructions": GeneratedContextDocument(repo),
 		},
 		BudgetMonthlyCents: budget,
+	}
+}
+
+func paperclipRole(role string) string {
+	switch role {
+	case "owner":
+		return "pm"
+	case "architect":
+		return "cto"
+	case "sre":
+		return "devops"
+	default:
+		return role
 	}
 }
 
@@ -197,7 +209,7 @@ func SeedSoftwareShop(ctx context.Context, client *Client, repo string) (*SeedRe
 		}
 	}
 	for _, r := range plan.Routines {
-		if _, created, err := client.ensureByName(ctx, fmt.Sprintf("/api/companies/%s/routines", company.ID), r.Name, r); err != nil {
+		if _, created, err := client.ensureByTitle(ctx, fmt.Sprintf("/api/companies/%s/routines", company.ID), r.Title, r); err != nil {
 			return nil, err
 		} else {
 			count(report, "routines", created)

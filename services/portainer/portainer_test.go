@@ -2,6 +2,7 @@ package portainer
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
@@ -213,5 +214,47 @@ func TestInitAdmin(t *testing.T) {
 				t.Errorf("alreadyInit = %v, want %v", already, tt.wantAlready)
 			}
 		})
+	}
+}
+
+func TestApplyOAuthEnablesSSO(t *testing.T) {
+	var payload struct {
+		AuthenticationMethod int `json:"AuthenticationMethod"`
+		OAuthSettings        struct {
+			ClientID string `json:"ClientID"`
+			SSO      bool   `json:"SSO"`
+		} `json:"OAuthSettings"`
+	}
+
+	c := &Configurator{
+		PortainerURL: "http://localhost:9000",
+		AuthentikURL: "https://auth.example.com",
+		RedirectURI:  "https://docker.example.com/",
+		HTTP: &mockHTTP{DoFunc: func(req *http.Request) (*http.Response, error) {
+			if req.Method != http.MethodPut || req.URL.Path != "/api/settings" {
+				t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
+			}
+			if req.Header.Get("Authorization") != "Bearer jwt-token" {
+				t.Fatalf("Authorization header = %q", req.Header.Get("Authorization"))
+			}
+			if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+				t.Fatalf("decoding payload: %v", err)
+			}
+			return httpResponse(http.StatusOK, `{}`), nil
+		}},
+	}
+
+	if err := c.applyOAuth(context.Background(), "jwt-token", "client-id", "client-secret"); err != nil {
+		t.Fatalf("applyOAuth: %v", err)
+	}
+
+	if payload.AuthenticationMethod != 3 {
+		t.Fatalf("AuthenticationMethod = %d, want 3", payload.AuthenticationMethod)
+	}
+	if payload.OAuthSettings.ClientID != "client-id" {
+		t.Fatalf("ClientID = %q, want client-id", payload.OAuthSettings.ClientID)
+	}
+	if !payload.OAuthSettings.SSO {
+		t.Fatal("OAuthSettings.SSO = false, want true")
 	}
 }

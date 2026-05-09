@@ -14,7 +14,6 @@ type Config struct {
 	Orchestrator  string           `yaml:"orchestrator"`
 	ServeMode     string           `yaml:"serve_mode"`
 	Kubernetes    KubernetesConfig `yaml:"kubernetes"`
-	N8NUser       string           `yaml:"n8n_user"`
 	Social        SocialConfig     `yaml:"social"`
 	Turnstile     TurnstileConfig  `yaml:"turnstile"`
 	OPVault       string           `yaml:"op_vault"`
@@ -56,7 +55,6 @@ func DefaultConfig() *Config {
 		Kubernetes:    KubernetesConfig{Namespace: "homelab"},
 		OPVault:       "Homelab - Dynamic",
 		OPStaticVault: "Homelab - Static",
-		N8NUser:       "admin",
 		Email:         "cxm6467@gmail.com",
 	}
 }

@@ -23,7 +23,7 @@ func TestProxyFlowsIncludeOpenClaw(t *testing.T) {
 	urls := config.DeriveURLs("example.com")
 	flows := ProxyFlows(urls)
 
-	for _, name := range []string{"dashboard", "dashboard-alias", "ci", "n8n", "openclaw"} {
+	for _, name := range []string{"dashboard", "dashboard-alias", "ci", "openclaw"} {
 		t.Run(name, func(t *testing.T) {
 			if !hasProxyFlow(flows, name) {
 				t.Fatalf("ProxyFlows missing %q", name)

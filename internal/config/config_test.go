@@ -23,7 +23,6 @@ func TestDeriveURLs(t *testing.T) {
 		{"Mattermost", urls.Mattermost, "https://chat.example.com"},
 		{"Dashboard", urls.Dashboard, "https://example.com"},
 		{"DashAlias", urls.DashAlias, "https://dash.example.com"},
-		{"N8N", urls.N8N, "https://n8n.example.com"},
 		{"OpenClaw", urls.OpenClaw, "https://openclaw.example.com"},
 		{"SonarQube", urls.SonarQube, "https://sonar.example.com"},
 		{"Ghost", urls.Ghost, "https://blog.example.com"},
@@ -81,7 +80,6 @@ func TestLoadFromFile(t *testing.T) {
 domain: test.example.com
 email: admin@test.example.com
 compose_dir: /opt/homelab
-n8n_user: testuser
 op_vault: TestVault
 op_static_vault: StaticVault
 orchestrator: kubernetes
@@ -109,9 +107,6 @@ social:
 	}
 	if cfg.ComposeDir != "/opt/homelab" {
 		t.Errorf("ComposeDir = %q", cfg.ComposeDir)
-	}
-	if cfg.N8NUser != "testuser" {
-		t.Errorf("N8NUser = %q", cfg.N8NUser)
 	}
 	if cfg.OPVault != "TestVault" {
 		t.Errorf("OPVault = %q", cfg.OPVault)

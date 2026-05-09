@@ -307,10 +307,6 @@ func (m AppModel) continueSecretsPhase() tea.Cmd {
 			key := def.Key
 			return func() tea.Msg { return views.SecretLoadedMsg{Key: key, Source: "config"} }
 		}
-		if def.Key == "N8N_USER" && m.installer.Config.N8NUser != "" {
-			key := def.Key
-			return func() tea.Msg { return views.SecretLoadedMsg{Key: key, Source: "config"} }
-		}
 		if _, ok := m.promptValues[def.Key]; ok {
 			continue
 		}
@@ -363,7 +359,6 @@ func (m AppModel) continueSecretsPhase() tea.Cmd {
 
 func (m AppModel) runSecretsGeneration(ch chan tea.Msg) tea.Cmd {
 	configEmail := m.installer.Config.Email
-	configN8NUser := m.installer.Config.N8NUser
 	promptVals := make(map[string]string, len(m.promptValues))
 	for k, v := range m.promptValues {
 		promptVals[k] = v
@@ -374,9 +369,6 @@ func (m AppModel) runSecretsGeneration(ch chan tea.Msg) tea.Cmd {
 		err := m.installer.GenerateSecrets(ctx, func(key string) (string, error) {
 			if key == "AUTHENTIK_BOOTSTRAP_EMAIL" && configEmail != "" {
 				return configEmail, nil
-			}
-			if key == "N8N_USER" && configN8NUser != "" {
-				return configN8NUser, nil
 			}
 			if val, ok := promptVals[key]; ok && val != "" {
 				return val, nil

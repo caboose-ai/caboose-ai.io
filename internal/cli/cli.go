@@ -78,9 +78,6 @@ func RunInstall(ctx context.Context, inst *install.Installer) int {
 		if key == "AUTHENTIK_BOOTSTRAP_EMAIL" && inst.Config.Email != "" {
 			return inst.Config.Email, nil
 		}
-		if key == "N8N_USER" && inst.Config.N8NUser != "" {
-			return inst.Config.N8NUser, nil
-		}
 		return "", fmt.Errorf("non-interactive mode requires %s in config file", key)
 	}, func(p install.SecretProgress) {
 		switch p.Action {

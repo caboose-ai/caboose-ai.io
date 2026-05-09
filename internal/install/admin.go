@@ -22,21 +22,45 @@ func (inst *Installer) GenerateAdminRecoveryLink(ctx context.Context, progressFn
 		progressFn = func(string) {}
 	}
 	if inst.State.DryRun {
-		return "https://auth." + inst.Config.Domain + "/if/flow/default-recovery-flow/?token=dry-run", nil
+		return "https://auth." + inst.Config.Domain + "/recovery/use-token/dry-run/", nil
 	}
+	if inst.DockerExec == nil {
+		return "", fmt.Errorf("docker exec client not configured")
+	}
+
 	progressFn("Generating admin recovery link...")
-	user, err := inst.AK.FindUser(ctx, "auth-admin")
+	const container = "authentik-server"
+	running, err := inst.DockerExec.ContainerRunning(ctx, container)
 	if err != nil {
-		return "", fmt.Errorf("finding auth-admin user: %w", err)
+		return "", fmt.Errorf("checking authentik container %q: %w", container, err)
 	}
-	if user == nil {
-		return "", fmt.Errorf("auth-admin user not found")
+	if !running {
+		return "", fmt.Errorf("authentik container %q is not running; start it with: docker compose -f %s/docker-compose.yml up -d authentik-server", container, inst.Config.ComposeDir)
 	}
-	link, err := inst.AK.GenerateRecoveryLink(ctx, user.PK)
+
+	out, err := inst.DockerExec.Exec(ctx, container, "ak", "create_recovery_key", "10", "auth-admin")
 	if err != nil {
-		return "", nil
+		return "", fmt.Errorf("creating recovery key: %w", err)
 	}
-	return link, nil
+	token := parseRecoveryToken(strings.TrimSpace(string(out)))
+	if token == "" {
+		return "", fmt.Errorf("could not parse recovery token from output: %s", string(out))
+	}
+	return fmt.Sprintf("https://auth.%s/recovery/use-token/%s/", inst.Config.Domain, token), nil
+}
+
+func parseRecoveryToken(output string) string {
+	prefix := "/recovery/use-token/"
+	idx := strings.Index(output, prefix)
+	if idx < 0 {
+		return ""
+	}
+	rest := output[idx+len(prefix):]
+	end := strings.Index(rest, "/")
+	if end < 0 {
+		return strings.TrimSpace(rest)
+	}
+	return rest[:end]
 }
 
 func (inst *Installer) ConfigureBrand(ctx context.Context) error {

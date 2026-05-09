@@ -9,19 +9,28 @@ import (
 func TestDefaultProxySpecsIncludePaperclip(t *testing.T) {
 	urls := config.DeriveURLs("example.com")
 
-	var found bool
+	want := map[string]struct {
+		slug string
+		host string
+	}{
+		"ghost-proxy":     {slug: "ghost-proxy", host: "https://blog.example.com"},
+		"paperclip-proxy": {slug: "paperclip-proxy", host: "https://paperclip.example.com"},
+	}
+	found := map[string]bool{}
 	for _, spec := range DefaultProxySpecs(urls) {
-		if spec.Name == "paperclip-proxy" {
-			found = true
-			if spec.Slug != "paperclip-proxy" {
-				t.Fatalf("Slug = %q, want paperclip-proxy", spec.Slug)
+		if expected, ok := want[spec.Name]; ok {
+			found[spec.Name] = true
+			if spec.Slug != expected.slug {
+				t.Fatalf("%s Slug = %q, want %q", spec.Name, spec.Slug, expected.slug)
 			}
-			if spec.ExternalHost != "https://paperclip.example.com" {
-				t.Fatalf("ExternalHost = %q", spec.ExternalHost)
+			if spec.ExternalHost != expected.host {
+				t.Fatalf("%s ExternalHost = %q, want %q", spec.Name, spec.ExternalHost, expected.host)
 			}
 		}
 	}
-	if !found {
-		t.Fatal("paperclip-proxy missing from proxy specs")
+	for name := range want {
+		if !found[name] {
+			t.Fatalf("%s missing from proxy specs", name)
+		}
 	}
 }
