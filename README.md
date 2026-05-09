@@ -38,6 +38,26 @@ container recreation.
 - **`cmd/mcp`** — MCP server exposing homelab tools to AI assistants.
   - Includes `agent_invoke` provider fallback across Ollama, Claude Code, Copilot CLI, and Emberfall.
 
+## Homebrew
+
+The first public distribution path is source-built Homebrew formulae from tagged
+GitHub releases:
+
+```bash
+brew tap caboose-ai/tap
+brew install caboose-homelab
+
+# Optional MCP server binary
+brew install caboose-homelab-mcp
+```
+
+The formulae install `homelab` and `homelab-mcp`. Runtime prerequisites are
+intentionally documented instead of enforced as Homebrew dependencies: Docker
+with Compose for the stack itself, plus either the 1Password CLI or a populated
+compose `.env` fallback for secrets. Caddy and Cloudflare are only needed for
+deployment modes that use the host reverse proxy, TLS, tunnels, or Turnstile
+automation.
+
 ## Service workspaces
 
 Each service has a root-level workspace under `services/<slug>/`. Configured
