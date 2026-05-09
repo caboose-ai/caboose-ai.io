@@ -12,7 +12,6 @@ Go monorepo for a self-hosted homelab infrastructure stack with SSO via Authenti
 | Portainer | `docker.caboose-ai.io` | Docker management UI |
 | Grafana | `grafana.caboose-ai.io` | Dashboards & observability |
 | Open WebUI | `ai.caboose-ai.io` | LLM chat interface (Ollama) |
-| n8n | `n8n.caboose-ai.io` | Workflow automation |
 | SonarQube | `sonar.caboose-ai.io` | Code quality & security |
 | Mattermost | `chat.caboose-ai.io` | Team chat |
 | OpenClaw | `openclaw.caboose-ai.io` | OpenClaw app behind Authentik forward auth |
@@ -26,7 +25,7 @@ All services authenticate through Authentik via OAuth2/OIDC or forward-auth prox
 
 The installer also completes first-run setup for services that expose a product
 setup or local-login boundary before they can participate in the SSO smoke
-suite. SonarQube, n8n, and Mattermost are configured with managed admin
+suite. SonarQube and Mattermost are configured with managed admin
 credentials from 1Password or the compose `.env` fallback, and Mattermost local
 mode is enabled in compose for repeatable bootstrap checks. Woodpecker keeps its
 server data under `/var/lib/woodpecker` so OAuth/session setup survives
@@ -119,7 +118,7 @@ service. Password values are redacted from the evidence log.
 The browser flow covers both native Authentik/OIDC redirects and service
 specific first-run paths. Portainer clicks its visible OAuth login control,
 Mattermost follows the browser handoff and uses the managed local admin account,
-and proxy-gated services such as Woodpecker, n8n, Homarr, and OpenClaw are
+and proxy-gated services such as Woodpecker, Homarr, and OpenClaw are
 validated by reaching their protected landing URLs.
 
 ## Infrastructure

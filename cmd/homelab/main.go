@@ -32,6 +32,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "  migrate    Migrate host services to Docker containers")
 		fmt.Fprintln(os.Stderr, "  oauth-setup Print external OAuth setup and optionally create Turnstile")
 		fmt.Fprintln(os.Stderr, "  service    Inspect or configure one registered service")
+		fmt.Fprintln(os.Stderr, "  recovery   Generate an Authentik admin recovery URL")
 		fmt.Fprintln(os.Stderr, "  paperclip  Manage Paperclip homelab seed data")
 		os.Exit(1)
 	}
@@ -52,7 +53,6 @@ func main() {
 	fs.StringVar(&opts.kubeContext, "kube-context", "", "Kubernetes context name for kubectl")
 	fs.StringVar(&opts.opVault, "op-vault", "", "1Password dynamic vault name")
 	fs.StringVar(&opts.opStaticVault, "op-static-vault", "", "1Password static vault name")
-	fs.StringVar(&opts.n8nUser, "n8n-user", "", "N8N admin username")
 	fs.StringVar(&opts.email, "email", "", "Admin email for Authentik bootstrap")
 	fs.BoolVar(&opts.keepEnv, "keep-env", false, "Preserve .env file during reset")
 	fs.BoolVar(&opts.secretsEnvOnly, "secrets-env-only", false, "Use only compose .env for secrets and skip 1Password login checks")
@@ -77,6 +77,8 @@ func main() {
 		os.Exit(runOAuthSetup(opts))
 	case "service":
 		os.Exit(runService(opts, fs.Args()))
+	case "recovery":
+		os.Exit(runRecovery(opts, fs.Args()))
 	case "paperclip":
 		os.Exit(runPaperclip(opts, fs.Args()))
 	default:
@@ -86,7 +88,7 @@ func main() {
 }
 
 func extractSubcommand(args []string) (string, []string) {
-	known := map[string]bool{"install": true, "reset": true, "migrate": true, "oauth-setup": true, "service": true, "paperclip": true}
+	known := map[string]bool{"install": true, "reset": true, "migrate": true, "oauth-setup": true, "service": true, "recovery": true, "paperclip": true}
 	if len(args) == 0 {
 		return "", nil
 	}
@@ -144,7 +146,6 @@ type cliOpts struct {
 	composeDir     string
 	opVault        string
 	opStaticVault  string
-	n8nUser        string
 	email          string
 	orchestrator   string
 	serveMode      string
@@ -204,9 +205,6 @@ func runInstall(opts cliOpts) int {
 	}
 	if opts.opStaticVault != "" {
 		cfg.OPStaticVault = opts.opStaticVault
-	}
-	if opts.n8nUser != "" {
-		cfg.N8NUser = opts.n8nUser
 	}
 	if opts.email != "" {
 		cfg.Email = opts.email
@@ -440,6 +438,49 @@ func runPaperclip(opts cliOpts, args []string) int {
 		return 1
 	}
 	fmt.Printf("company=%s created=%s existing=%s\n", report.CompanyID, formatCounts(report.Created), formatCounts(report.Existing))
+	return 0
+}
+
+func runRecovery(opts cliOpts, args []string) int {
+	cfg := config.DefaultConfig()
+	if opts.configPath != "" {
+		loaded, err := config.LoadFromFile(opts.configPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
+			return 1
+		}
+		cfg = loaded
+	}
+	if opts.domain != "" {
+		cfg.Domain = opts.domain
+	}
+	if opts.composeDir != "" {
+		cfg.ComposeDir = opts.composeDir
+	}
+	if cfg.Domain == "" {
+		cfg.Domain = "caboose-ai.io"
+	}
+
+	username := "auth-admin"
+	if len(args) > 0 {
+		username = args[0]
+	}
+
+	cmdRunner := runner.NewLocalRunner()
+	exec := docker.NewExecClient(cmdRunner)
+
+	link, err := cli.RunRecovery(context.Background(), exec, cli.RecoveryOptions{
+		Domain:     cfg.Domain,
+		Username:   username,
+		Minutes:    10,
+		ComposeDir: cfg.ComposeDir,
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "recovery failed: %v\n", err)
+		return 1
+	}
+
+	fmt.Println(link)
 	return 0
 }
 

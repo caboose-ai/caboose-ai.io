@@ -40,7 +40,7 @@ services/
 ```
 
 The installer performs first-run setup for services that would otherwise block
-SSO validation behind setup or local product login screens. SonarQube, n8n, and
+SSO validation behind setup or local product login screens. SonarQube and
 Mattermost use managed admin credentials from the split 1Password store or
 `.env` fallback; Mattermost local mode is enabled in compose for repeatable
 bootstrap verification. Woodpecker persists server data at
@@ -72,7 +72,7 @@ bootstrap verification. Woodpecker persists server data at
 - Integration smoke tests in `internal/smoketest/` use build tag `integration` and require a live stack.
 - Browser smoke tests cover native Authentik/OIDC login, service-specific
   handoffs such as Portainer's OAuth button and Mattermost's browser handoff
-  plus local admin login, and proxy-gated landing checks for Woodpecker, n8n,
+  plus local admin login, and proxy-gated landing checks for Woodpecker,
   Homarr, OpenClaw, and Paperclip.
 - Run tests: `go test ./...`
 - Run smoke tests: `mise run sso:check` (full) or `mise run sso:check-quick` (API only)

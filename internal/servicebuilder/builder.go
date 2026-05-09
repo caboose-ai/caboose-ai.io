@@ -14,7 +14,6 @@ import (
 	"github.com/caboose-ai/caboose-ai.io/services/grafana"
 	"github.com/caboose-ai/caboose-ai.io/services/homarr"
 	"github.com/caboose-ai/caboose-ai.io/services/mattermost"
-	"github.com/caboose-ai/caboose-ai.io/services/n8n"
 	openwebui "github.com/caboose-ai/caboose-ai.io/services/open-webui"
 	"github.com/caboose-ai/caboose-ai.io/services/paperclip"
 	"github.com/caboose-ai/caboose-ai.io/services/portainer"
@@ -55,10 +54,6 @@ func Build(ctx context.Context, deps Dependencies) ([]service.ServiceConfigurato
 	if err != nil {
 		return nil, err
 	}
-	n8nPass, err := getSecret("N8N_PASSWORD")
-	if err != nil {
-		return nil, err
-	}
 	sonarAdminPass, err := getSecret("SONAR_ADMIN_PASSWORD")
 	if err != nil {
 		return nil, err
@@ -68,11 +63,11 @@ func Build(ctx context.Context, deps Dependencies) ([]service.ServiceConfigurato
 	}
 
 	portainerAPIURL := urls.Portainer
-	n8nAPIURL := urls.N8N
+	homarrAPIURL := urls.Dashboard
 	sonarAPIURL := urls.SonarQube
 	if deps.Config.Orchestrator == "compose" {
 		portainerAPIURL = "http://127.0.0.1:9000"
-		n8nAPIURL = "http://127.0.0.1:5678"
+		homarrAPIURL = "http://127.0.0.1:7575"
 		sonarAPIURL = "http://127.0.0.1:9005"
 	}
 
@@ -82,13 +77,36 @@ func Build(ctx context.Context, deps Dependencies) ([]service.ServiceConfigurato
 		portainer.New(deps.Authentik, deps.HTTP, deps.Runner, portainerAPIURL, portainerAdminPass, urls.Authentik, urls.Portainer+"/"),
 		grafana.New(deps.Authentik, deps.Secrets),
 		openwebui.New(deps.Authentik, deps.Secrets),
-		homarr.New(deps.Authentik, deps.Secrets),
+		homarr.New(deps.Authentik, deps.Secrets, homarrAPIURL, deps.HTTP, deps.DockerExec, "homarr", homarrApps(urls)...),
 		paperclip.New(deps.Authentik),
-		n8n.New(n8nAPIURL, deps.HTTP, deps.Config.Email, n8nPass),
 		sonarqube.New(sonarAPIURL, deps.HTTP, sonarAdminPass),
 		mattermost.New(deps.DockerExec, deps.Secrets, "mattermost", deps.Config.Email),
 		social.New(deps.Authentik, deps.Config.Social),
 	}, nil
+}
+
+func homarrApps(urls config.URLs) []homarr.App {
+	links := urls.ServiceLinks()
+	apps := make([]homarr.App, 0, len(links))
+	for _, link := range links {
+		if !showInSSODashboard(link.Name) {
+			continue
+		}
+		if link.Name == "Open WebUI" {
+			link.URL = urls.OpenWebUI + "/oauth/oidc/login"
+		}
+		apps = append(apps, homarr.App{Name: link.Name, URL: link.URL})
+	}
+	return apps
+}
+
+func showInSSODashboard(name string) bool {
+	switch name {
+	case "Ghost", "Homarr Alias", "Mattermost", "n8n", "Paperclip", "SonarQube":
+		return false
+	default:
+		return true
+	}
 }
 
 func LoadRegistry(ctx context.Context, manifestRoot string, configurators []service.ServiceConfigurator) (*service.Registry, error) {

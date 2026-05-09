@@ -113,7 +113,10 @@ func (c *Client) GetIdentificationStage(ctx context.Context, flowSlug string) (*
 }
 
 func (c *Client) SetIdentificationStageSources(ctx context.Context, stagePK string, sourcePKs []string) error {
-	body := map[string][]string{"sources": sourcePKs}
+	body := map[string]any{
+		"sources":            sourcePKs,
+		"show_source_labels": false,
+	}
 	_, err := c.Patch(ctx, fmt.Sprintf("/api/v3/stages/identification/%s/", stagePK), body)
 	return err
 }

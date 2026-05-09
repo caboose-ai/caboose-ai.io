@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/caboose-ai/caboose-ai.io/internal/runner"
 )
@@ -19,6 +20,18 @@ func NewExecClient(r runner.CommandRunner) *ExecClient {
 func (c *ExecClient) Exec(ctx context.Context, container string, cmd ...string) ([]byte, error) {
 	args := append([]string{"exec", container}, cmd...)
 	return c.Runner.Run(ctx, "docker", args...)
+}
+
+func (c *ExecClient) ContainerRunning(ctx context.Context, container string) (bool, error) {
+	out, err := c.Runner.Run(ctx, "docker", "inspect", "--format", "{{.State.Running}}", container)
+	if err != nil {
+		msg := strings.ToLower(err.Error())
+		if strings.Contains(msg, "no such object") || strings.Contains(msg, "no such container") {
+			return false, nil
+		}
+		return false, err
+	}
+	return strings.TrimSpace(string(out)) == "true", nil
 }
 
 func (c *ExecClient) ExecAs(ctx context.Context, container, user string, cmd ...string) ([]byte, error) {

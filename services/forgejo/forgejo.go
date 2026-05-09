@@ -79,11 +79,21 @@ func (c *Configurator) Configure(ctx context.Context, opts service.ConfigureOpts
 		if err != nil {
 			return nil, err
 		}
+		if err := c.ensureExternalLoginMapping(ctx, existingID); err != nil {
+			return nil, err
+		}
 		return &service.ConfigureResult{Status: service.StatusUpdated, Message: "Forgejo OIDC updated"}, nil
 	}
 
 	err = c.addOIDC(ctx, provider.ClientID, provider.ClientSecret, discoveryURL)
 	if err != nil {
+		return nil, err
+	}
+	existingID, err = c.authSourceID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := c.ensureExternalLoginMapping(ctx, existingID); err != nil {
 		return nil, err
 	}
 	return &service.ConfigureResult{Status: service.StatusCreated, Message: "Forgejo OIDC created"}, nil
@@ -132,4 +142,45 @@ func (c *Configurator) updateOIDC(ctx context.Context, sourceID, clientID, clien
 		"--scopes", "profile",
 	)
 	return err
+}
+
+func (c *Configurator) ensureExternalLoginMapping(ctx context.Context, sourceID string) error {
+	if sourceID == "" {
+		return fmt.Errorf("Forgejo Authentik login source not found after OIDC configuration")
+	}
+	user, err := c.AK.FindUser(ctx, c.AdminUsername)
+	if err != nil {
+		return fmt.Errorf("fetching Authentik admin user for Forgejo external-login mapping: %w", err)
+	}
+	if user == nil {
+		return fmt.Errorf("Authentik admin user %q not found for Forgejo external-login mapping", c.AdminUsername)
+	}
+	if user.UID == "" {
+		return fmt.Errorf("Authentik admin user %q has empty uid for Forgejo external-login mapping", c.AdminUsername)
+	}
+	email := user.Email
+	if email == "" {
+		email = c.AdminUsername + "@local"
+	}
+
+	sql := fmt.Sprintf(`
+begin;
+insert or replace into external_login_user (external_id, user_id, login_source_id, provider, email, name, nick_name)
+select %[1]s, u.id, %[2]s, 'openidConnect', %[3]s, %[4]s, %[4]s
+from user u
+where u.lower_name = lower(%[4]s);
+commit;`,
+		sqlQuote(user.UID),
+		sqlQuote(sourceID),
+		sqlQuote(email),
+		sqlQuote(c.AdminUsername),
+	)
+	if _, err := c.Docker.Exec(ctx, c.Container, "sqlite3", "/data/gitea/gitea.db", sql); err != nil {
+		return fmt.Errorf("writing Forgejo external-login mapping: %w", err)
+	}
+	return nil
+}
+
+func sqlQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "''") + "'"
 }

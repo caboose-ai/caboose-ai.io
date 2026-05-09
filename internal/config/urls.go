@@ -12,7 +12,6 @@ type URLs struct {
 	Mattermost string
 	Dashboard  string
 	DashAlias  string
-	N8N        string
 	OpenClaw   string
 	SonarQube  string
 	Ghost      string
@@ -36,7 +35,6 @@ func DeriveURLs(domain string) URLs {
 		Mattermost: fmt.Sprintf("https://chat.%s", domain),
 		Dashboard:  fmt.Sprintf("https://%s", domain),
 		DashAlias:  fmt.Sprintf("https://dash.%s", domain),
-		N8N:        fmt.Sprintf("https://n8n.%s", domain),
 		OpenClaw:   fmt.Sprintf("https://openclaw.%s", domain),
 		SonarQube:  fmt.Sprintf("https://sonar.%s", domain),
 		Ghost:      fmt.Sprintf("https://blog.%s", domain),
@@ -53,7 +51,6 @@ func (u URLs) ServiceLinks() []ServiceLink {
 		{Name: "Portainer", URL: u.Portainer},
 		{Name: "Grafana", URL: u.Grafana},
 		{Name: "Open WebUI", URL: u.OpenWebUI},
-		{Name: "n8n", URL: u.N8N},
 		{Name: "SonarQube", URL: u.SonarQube},
 		{Name: "Mattermost", URL: u.Mattermost},
 		{Name: "OpenClaw", URL: u.OpenClaw},

@@ -20,7 +20,6 @@ func TestBuildServicesUsesLocalPortainerAPIForCompose(t *testing.T) {
 		Secrets: &mockSecretStore{data: map[string]string{
 			"GITEA_ADMIN_PASSWORD":     "gitea-pass",
 			"PORTAINER_ADMIN_PASSWORD": "portainer-pass",
-			"N8N_PASSWORD":             "n8n-pass",
 			"SONAR_ADMIN_PASSWORD":     "sonar-pass",
 		}},
 		AK: authentik.NewClient("https://auth.example.com", "token", nil),

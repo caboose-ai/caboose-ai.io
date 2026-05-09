@@ -43,7 +43,7 @@ Go binary is at `/home/caboose/.local/go/bin/go`. If `go` isn't on PATH, use `PA
 - `dev/homelab/` — Docker Compose, Prometheus/Loki/Promtail config, Grafana dashboards, Authentik patches
 
 The installer includes first-run configurators for services that otherwise stop
-at setup or product-local login screens. SonarQube, n8n, and Mattermost use
+at setup or product-local login screens. SonarQube and Mattermost use
 managed admin credentials from the split 1Password store or `.env` fallback;
 Mattermost compose enables local mode so the configurator can verify the
 bootstrap state without interactive browser setup. Woodpecker stores server
@@ -73,7 +73,7 @@ container recreation.
 - Integration smoke tests in `internal/smoketest/` use build tag `integration` and require a live stack
 - Browser smoke tests exercise both Authentik/OIDC login and service-specific
   handoffs, including Portainer's OAuth button, Mattermost's browser handoff and
-  local admin login, and proxy-gated landing checks for Woodpecker, n8n,
+  local admin login, and proxy-gated landing checks for Woodpecker,
   Homarr, OpenClaw, and Paperclip.
 
 ### Git
@@ -125,7 +125,7 @@ container recreation.
 
 - Domain: `caboose-ai.io`
 - Auth: `auth.caboose-ai.io` (Authentik)
-- Services: git, ci, docker, grafana, ai, n8n, sonar, chat, openclaw, blog, paperclip, dash
+- Services: git, ci, docker, grafana, ai, sonar, chat, openclaw, blog, paperclip, dash
 - Observability: Prometheus (metrics), Loki + Promtail (logs), Grafana (dashboards)
 - Caddy reverse proxy on the host
 - Cloudflare tunnel for `chat` and `sonar` subdomains

@@ -32,57 +32,41 @@ func httpResponse(status int, body string) *http.Response {
 
 func TestGenerateAdminRecoveryLink(t *testing.T) {
 	tests := []struct {
-		name     string
-		dryRun   bool
-		httpFunc func(req *http.Request) (*http.Response, error)
-		wantLink string
-		wantErr  string
+		name       string
+		dryRun     bool
+		inspect    []byte
+		inspectErr error
+		exec       []byte
+		execErr    error
+		wantLink   string
+		wantErr    string
 	}{
 		{
-			name:   "dry run returns dummy link",
-			dryRun: true,
-			// httpFunc not needed for dry run
-			wantLink: "https://auth.example.com/if/flow/default-recovery-flow/?token=dry-run",
+			name:     "dry run returns dummy link",
+			dryRun:   true,
+			wantLink: "https://auth.example.com/recovery/use-token/dry-run/",
 		},
 		{
-			name: "user found returns recovery link",
-			httpFunc: func(req *http.Request) (*http.Response, error) {
-				if strings.Contains(req.URL.Path, "/api/v3/core/users/") && req.Method == http.MethodGet {
-					return httpResponse(200, `{"results":[{"pk":7,"username":"auth-admin"}]}`), nil
-				}
-				if strings.Contains(req.URL.Path, "/recovery/") && req.Method == http.MethodPost {
-					return httpResponse(200, `{"link":"https://auth.example.com/recovery?token=abc123"}`), nil
-				}
-				return httpResponse(404, "not found"), nil
-			},
-			wantLink: "https://auth.example.com/recovery?token=abc123",
+			name:     "running container returns recovery link",
+			inspect:  []byte("true\n"),
+			exec:     []byte("Successfully created recovery link /recovery/use-token/abc123/\n"),
+			wantLink: "https://auth.example.com/recovery/use-token/abc123/",
 		},
 		{
-			name: "user not found returns error",
-			httpFunc: func(req *http.Request) (*http.Response, error) {
-				if strings.Contains(req.URL.Path, "/api/v3/core/users/") && req.Method == http.MethodGet {
-					return httpResponse(200, `{"results":[]}`), nil
-				}
-				return httpResponse(404, "not found"), nil
-			},
-			wantErr: "auth-admin user not found",
+			name:    "stopped container returns action hint",
+			inspect: []byte("false\n"),
+			wantErr: "authentik container \"authentik-server\" is not running",
 		},
 		{
-			name: "FindUser API error",
-			httpFunc: func(req *http.Request) (*http.Response, error) {
-				return nil, fmt.Errorf("connection refused")
-			},
-			wantErr: "finding auth-admin user",
+			name:       "missing container reports not running",
+			inspectErr: fmt.Errorf("docker: exit status 1\nError: No such object: authentik-server"),
+			wantErr:    "authentik container \"authentik-server\" is not running",
 		},
 		{
-			name: "recovery link unavailable returns empty",
-			httpFunc: func(req *http.Request) (*http.Response, error) {
-				if strings.Contains(req.URL.Path, "/api/v3/core/users/") && req.Method == http.MethodGet {
-					return httpResponse(200, `{"results":[{"pk":7,"username":"auth-admin"}]}`), nil
-				}
-				return httpResponse(400, `{"non_field_errors":"No recovery flow set."}`), nil
-			},
-			wantLink: "",
+			name:    "unparseable recovery output returns error",
+			inspect: []byte("true\n"),
+			exec:    []byte("unexpected output"),
+			wantErr: "could not parse recovery token",
 		},
 	}
 
@@ -98,7 +82,10 @@ func TestGenerateAdminRecoveryLink(t *testing.T) {
 			inst.State.DryRun = tt.dryRun
 
 			if !tt.dryRun {
-				inst.AK = authentik.NewClient("http://localhost", "test-token", &mockHTTP{DoFunc: tt.httpFunc})
+				r := runner.NewMockRunner()
+				r.On("docker inspect --format {{.State.Running}} authentik-server", tt.inspect, tt.inspectErr)
+				r.On("docker exec authentik-server ak create_recovery_key 10 auth-admin", tt.exec, tt.execErr)
+				inst.DockerExec = docker.NewExecClient(r)
 			}
 
 			var progressCalls []string

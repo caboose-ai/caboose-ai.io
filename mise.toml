@@ -1,5 +1,6 @@
 [tools]
 go = "latest"
+pnpm = "latest"
 
 [env]
 HOMELAB_DOMAIN = "caboose-ai.io"
@@ -33,20 +34,44 @@ raw = true
 run = "go build -o ./homelab ./cmd/homelab && ./homelab install --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" --serve-mode \"$HOMELAB_SERVE_MODE\""
 
 [tasks.reset]
-description = "Run the verified homelab reset while preserving static external credentials"
-run = "go run ./cmd/homelab reset --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
+description = "Reset homelab stack (keeps .env credentials by default)"
+run = "go run ./cmd/homelab reset --keep-env --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
 
 [tasks."homelab:reset"]
-description = "Run the verified homelab reset while preserving static external credentials"
+description = "Reset homelab stack (keeps .env credentials by default)"
+run = "go run ./cmd/homelab reset --keep-env --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
+
+[tasks."factory-reset"]
+description = "Full factory reset — tears down everything including .env credentials"
+run = "go run ./cmd/homelab reset --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
+
+[tasks."homelab:factory-reset"]
+description = "Full factory reset — tears down everything including .env credentials"
 run = "go run ./cmd/homelab reset --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
 
 [tasks.reinstall]
-description = "Run reset followed by the verified non-interactive install"
-run = "go run ./cmd/homelab reset --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" && go run ./cmd/homelab install --non-interactive --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" --serve-mode \"$HOMELAB_SERVE_MODE\""
+description = "Reset (keep .env) then non-interactive install"
+run = "go run ./cmd/homelab reset --keep-env --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" && go run ./cmd/homelab install --non-interactive --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" --serve-mode \"$HOMELAB_SERVE_MODE\""
 
 [tasks."homelab:reinstall"]
-description = "Run reset followed by the verified non-interactive install"
+description = "Reset (keep .env) then non-interactive install"
+run = "go run ./cmd/homelab reset --keep-env --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" && go run ./cmd/homelab install --non-interactive --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" --serve-mode \"$HOMELAB_SERVE_MODE\""
+
+[tasks."factory-reinstall"]
+description = "Full factory reset then non-interactive install (wipes .env)"
 run = "go run ./cmd/homelab reset --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" && go run ./cmd/homelab install --non-interactive --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" --serve-mode \"$HOMELAB_SERVE_MODE\""
+
+[tasks."homelab:factory-reinstall"]
+description = "Full factory reset then non-interactive install (wipes .env)"
+run = "go run ./cmd/homelab reset --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" && go run ./cmd/homelab install --non-interactive --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" --serve-mode \"$HOMELAB_SERVE_MODE\""
+
+[tasks.recovery]
+description = "Generate an Authentik admin recovery URL"
+run = "go run ./cmd/homelab recovery --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
+
+[tasks."homelab:recovery"]
+description = "Generate an Authentik admin recovery URL"
+run = "go run ./cmd/homelab recovery --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
 
 [tasks."homelab:oauth-setup"]
 description = "Print external OAuth and Turnstile setup values"

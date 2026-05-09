@@ -73,7 +73,6 @@ func ProxyFlows(urls config.URLs) []ProxyFlow {
 		{Name: "dashboard", URL: urls.Dashboard, TargetHost: hostFromURL(urls.Dashboard)},
 		{Name: "dashboard-alias", URL: urls.DashAlias, TargetHost: hostFromURL(urls.Dashboard)},
 		{Name: "ci", URL: urls.CI, TargetHost: hostFromURL(urls.CI)},
-		{Name: "n8n", URL: urls.N8N, TargetHost: hostFromURL(urls.N8N)},
 		{Name: "openclaw", URL: urls.OpenClaw, TargetHost: hostFromURL(urls.OpenClaw)},
 	}
 }

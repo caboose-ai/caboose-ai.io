@@ -33,8 +33,6 @@ func BootstrapSecrets() []SecretDef {
 		{Key: "GRAFANA_ADMIN_PASSWORD", Length: 32, Opts: GenerateOpts{Recipe: "letters,digits,symbols,32"}},
 		{Key: "GITEA_ADMIN_PASSWORD", Length: 32, Opts: GenerateOpts{Recipe: "letters,digits,symbols,32"}},
 		{Key: "PORTAINER_ADMIN_PASSWORD", Length: 32, Opts: GenerateOpts{Recipe: "letters,digits,symbols,32"}},
-		{Key: "N8N_USER", Prompt: true},
-		{Key: "N8N_PASSWORD", Length: 32, Opts: GenerateOpts{Recipe: "letters,digits,symbols,32"}},
 		{Key: "SONAR_ADMIN_PASSWORD", Length: 32, Opts: GenerateOpts{Recipe: "letters,digits,symbols,32"}},
 		{Key: "SONAR_DB_PASS", Length: 32, Opts: GenerateOpts{Recipe: "letters,digits,32"}},
 		{Key: "GHOST_DB_PASS", Length: 32, Opts: GenerateOpts{Recipe: "letters,digits,32"}},

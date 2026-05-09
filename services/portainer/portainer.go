@@ -26,6 +26,12 @@ type Configurator struct {
 	RedirectURI  string
 }
 
+type oauthSettings struct {
+	ClientID       string `json:"ClientID"`
+	UserIdentifier string `json:"UserIdentifier"`
+	SSO            bool   `json:"SSO"`
+}
+
 func New(ak *authentik.Client, httpClient runner.HTTPClient, commandRunner runner.CommandRunner, portainerURL, adminPass, authentikURL, redirectURI string) *Configurator {
 	return &Configurator{
 		AK:           ak,
@@ -47,11 +53,11 @@ func (c *Configurator) CheckConfigured(ctx context.Context) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	clientID, err := c.currentOAuthClient(ctx, jwt)
+	settings, err := c.currentOAuthSettings(ctx, jwt)
 	if err != nil {
 		return false, err
 	}
-	return clientID != "", nil
+	return settings.ClientID != "", nil
 }
 
 func (c *Configurator) Configure(ctx context.Context, opts service.ConfigureOpts) (*service.ConfigureResult, error) {
@@ -87,8 +93,8 @@ func (c *Configurator) Configure(ctx context.Context, opts service.ConfigureOpts
 		return nil, err
 	}
 
-	currentClient, _ := c.currentOAuthClient(ctx, jwt)
-	if currentClient == provider.ClientID && !opts.Force {
+	settings, _ := c.currentOAuthSettings(ctx, jwt)
+	if settings.ClientID == provider.ClientID && settings.UserIdentifier == "email" && settings.SSO && !opts.Force {
 		return &service.ConfigureResult{Status: service.StatusAlreadyConfigured, Message: "Portainer OAuth already configured"}, nil
 	}
 
@@ -229,36 +235,34 @@ func (c *Configurator) getJWT(ctx context.Context) (string, error) {
 	return "", fmt.Errorf("Portainer auth failed after %d attempts", maxRetries)
 }
 
-func (c *Configurator) currentOAuthClient(ctx context.Context, jwt string) (string, error) {
+func (c *Configurator) currentOAuthSettings(ctx context.Context, jwt string) (oauthSettings, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.PortainerURL+"/api/settings", nil)
 	if err != nil {
-		return "", fmt.Errorf("creating Portainer settings request: %w", err)
+		return oauthSettings{}, fmt.Errorf("creating Portainer settings request: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+jwt)
 
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
-		return "", err
+		return oauthSettings{}, err
 	}
 	defer resp.Body.Close()
 
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("reading Portainer settings response: %w", err)
+		return oauthSettings{}, fmt.Errorf("reading Portainer settings response: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("Portainer settings GET returned HTTP %d", resp.StatusCode)
+		return oauthSettings{}, fmt.Errorf("Portainer settings GET returned HTTP %d", resp.StatusCode)
 	}
 
 	var settings struct {
-		OAuthSettings struct {
-			ClientID string `json:"ClientID"`
-		} `json:"OAuthSettings"`
+		OAuthSettings oauthSettings `json:"OAuthSettings"`
 	}
 	if err := json.Unmarshal(data, &settings); err != nil {
-		return "", fmt.Errorf("parsing Portainer settings response: %w", err)
+		return oauthSettings{}, fmt.Errorf("parsing Portainer settings response: %w", err)
 	}
-	return settings.OAuthSettings.ClientID, nil
+	return settings.OAuthSettings, nil
 }
 
 func (c *Configurator) applyOAuth(ctx context.Context, jwt, clientID, clientSecret string) error {
@@ -271,9 +275,10 @@ func (c *Configurator) applyOAuth(ctx context.Context, jwt, clientID, clientSecr
 			"AccessTokenURI":       c.AuthentikURL + "/application/o/token/",
 			"ResourceURI":          c.AuthentikURL + "/application/o/userinfo/",
 			"RedirectURI":          c.RedirectURI,
-			"UserIdentifier":       "preferred_username",
+			"UserIdentifier":       "email",
 			"Scopes":               "openid email profile",
 			"OAuthAutoCreateUsers": true,
+			"SSO":                  true,
 		},
 	}
 

@@ -216,8 +216,6 @@ func serviceURL(urls config.URLs, key string) string {
 		return urls.Dashboard
 	case "dash_alias":
 		return urls.DashAlias
-	case "n8n":
-		return urls.N8N
 	case "openclaw":
 		return urls.OpenClaw
 	case "sonarqube":

@@ -19,8 +19,8 @@ func DefaultProxySpecs(urls config.URLs) []ProxySpec {
 		{Name: "dashboard", Slug: "dashboard", ExternalHost: urls.Dashboard},
 		{Name: "dashboard-alias", Slug: "dashboard-alias", ExternalHost: urls.DashAlias},
 		{Name: "ci-proxy", Slug: "ci-proxy", ExternalHost: urls.CI},
-		{Name: "n8n-proxy", Slug: "n8n-proxy", ExternalHost: urls.N8N},
 		{Name: "openclaw-proxy", Slug: "openclaw-proxy", ExternalHost: urls.OpenClaw},
+		{Name: "ghost-proxy", Slug: "ghost-proxy", ExternalHost: urls.Ghost},
 		{Name: "paperclip-proxy", Slug: "paperclip-proxy", ExternalHost: urls.Paperclip},
 	}
 }
