@@ -2,9 +2,11 @@ bin/
 .claude/
 .env
 .playwright-mcp/
+.remember/
 .superpowers/
 docs/superpowers/
-homelab
+/homelab
+dev/homelab/caddy.paperclip.example
 *.png
 internal/smoketest/testdata/failures/
 internal/smoketest/testdata/evidence/
