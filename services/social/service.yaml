@@ -10,6 +10,10 @@ secrets:
   - GOOGLE_CLIENT_SECRET
 configurator: social
 smoke_flow: social
+dashboard:
+  show: false
+sso:
+  mode: sources
 health:
   url_key: authentik
   path: /api/v3/root/config/

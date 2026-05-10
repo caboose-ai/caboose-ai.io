@@ -11,6 +11,10 @@ may add stricter rules for service-specific risk.
 - The manifest `slug` must match the directory name and service slug.
 - Keep manifest fields aligned with compose, URLs, secrets, health checks,
   configurator registration, smoke tests, and docs.
+- Use `dashboard.show` for Homarr inclusion and `sso.mode` for the service auth
+  contract. Do not duplicate dashboard visibility in Go allow/deny lists.
+- Use `runtime: external` only when a service is deliberately managed outside
+  local compose; external services should not list fake compose services.
 - Use `configurator` only when the service has Go setup logic registered in
   `internal/servicebuilder`.
 - Use `smoke_flow` only when `internal/smoketest` can execute that named flow;
@@ -34,6 +38,10 @@ secrets:
   - PORTAINER_ADMIN_PASSWORD
 configurator: portainer
 smoke_flow: portainer
+dashboard:
+  show: true
+sso:
+  mode: oidc
 health:
   url_key: portainer
   path: /
@@ -50,7 +58,41 @@ display_name: Portainer
 compose_services:
   - portainer
 smoke_flow: portainer
-# slug does not match the directory and docs/health/secrets are incomplete.
+# slug does not match the directory, dashboard/SSO ownership is missing, and
+# docs/health/secrets are incomplete.
+```
+
+Good:
+
+```yaml
+slug: paperclip
+display_name: Paperclip
+url_key: paperclip
+compose_services:
+  - paperclip
+  - paperclip-db
+configurator: paperclip
+smoke_flow: paperclip
+dashboard:
+  show: true
+sso:
+  mode: proxy
+health:
+  url_key: paperclip
+  path: /api/health
+  kind: http
+```
+
+Bad:
+
+```yaml
+slug: paperclip
+display_name: Paperclip
+smoke_flow: paperclip
+health:
+  path: /
+# The flow must resolve in internal/smoketest, dashboard visibility should not
+# be hidden in servicebuilder, and health should use the app health endpoint.
 ```
 
 Good:

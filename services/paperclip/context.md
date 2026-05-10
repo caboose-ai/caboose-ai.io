@@ -12,6 +12,14 @@ Read first:
 - `dev/homelab/docker-compose.yml`
 - `mise.toml`
 
+Connection contract:
+- SSO mode: Authentik forward-auth through `paperclip-proxy`
+- Public URL: `https://paperclip.caboose-ai.io`
+- Compose profile: `paperclip`
+- Health path: `/api/health`
+- Smoke flow: `paperclip`
+- Dashboard: manifest-owned `dashboard.show: true`
+
 Project areas:
 - Homelab Core: installer, reset, compose, Caddy, Authentik
 - SSO and Identity: OAuth/OIDC, proxy apps, smoke flows

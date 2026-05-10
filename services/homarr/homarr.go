@@ -40,6 +40,7 @@ var dashboardIconSlugs = map[string]string{
 	"Mattermost": "mattermost",
 	"Open WebUI": "open-webui",
 	"OpenClaw":   "openclaw",
+	"Paperclip":  "paperclip",
 	"Portainer":  "portainer",
 	"SonarQube":  "sonarqube",
 	"Woodpecker": "woodpecker-ci",

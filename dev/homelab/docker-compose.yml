@@ -380,12 +380,17 @@ services:
     environment:
       HOST: 0.0.0.0
       PORT: "3100"
+      PAPERCLIP_BIND: custom
+      PAPERCLIP_BIND_HOST: 0.0.0.0
       SERVE_UI: "true"
       PAPERCLIP_HOME: /paperclip
       PAPERCLIP_CONFIG: /paperclip/instances/default/config.json
       PAPERCLIP_PUBLIC_URL: "${PAPERCLIP_PUBLIC_URL:-https://paperclip.caboose-ai.io}"
       PAPERCLIP_DEPLOYMENT_MODE: authenticated
-      PAPERCLIP_DEPLOYMENT_EXPOSURE: private
+      PAPERCLIP_DEPLOYMENT_EXPOSURE: public
+      PAPERCLIP_AUTH_BASE_URL_MODE: explicit
+      PAPERCLIP_AUTH_PUBLIC_BASE_URL: "${PAPERCLIP_PUBLIC_URL:-https://paperclip.caboose-ai.io}"
+      PAPERCLIP_ALLOWED_HOSTNAMES: "${PAPERCLIP_ALLOWED_HOSTNAMES:-paperclip.caboose-ai.io}"
       PAPERCLIP_TELEMETRY_DISABLED: "1"
       DO_NOT_TRACK: "1"
       BETTER_AUTH_SECRET: "${PAPERCLIP_AUTH_SECRET}"

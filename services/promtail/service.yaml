@@ -5,7 +5,10 @@ compose_services:
   - promtail
 secrets: []
 configurator: ""
-smoke_flow: promtail
+dashboard:
+  show: false
+sso:
+  mode: none
 health:
   kind: container
 docs:

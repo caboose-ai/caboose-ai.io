@@ -75,6 +75,9 @@ container recreation.
   handoffs, including Portainer's OAuth button, Mattermost's browser handoff and
   local admin login, Homarr native Authentik/OIDC, and proxy-gated landing
   checks for Woodpecker, OpenClaw, and Paperclip.
+- `homelab service <slug> smoke` runs the manifest-owned `smoke_flow`; do not
+  declare a `smoke_flow` unless `internal/smoketest` has an executable flow with
+  that exact name.
 
 ### Git
 - Never commit to main. Always branch first.
@@ -87,6 +90,9 @@ container recreation.
   creates minor releases, and `!` or `BREAKING CHANGE:` creates major releases.
 - CI builds both release binaries with `go build -buildvcs=false` to avoid
   Go VCS stamping failures in linked worktrees or source archive contexts.
+- Direct `homelab reset` requires `--yes` unless `--dry-run`; live Docker,
+  SQLite, secret, reset, and destructive filesystem changes require explicit
+  human approval.
 
 ### Documentation
 - Every PR to main that changes code or infrastructure MUST update docs.
@@ -130,7 +136,9 @@ container recreation.
 8. Add or update `internal/smoketest/flows.go` when the service has native
    login, first-run setup, or proxy-gated landing behavior that must be proven
    by the live SSO browser test.
-8. For Paperclip-style control-plane services, add or update `services/<slug>/service.yaml` and any seed/context document.
+9. Set manifest `dashboard` and `sso` metadata; Homarr dashboard inclusion comes
+   from `dashboard.show`, not a hard-coded service list.
+10. For Paperclip-style control-plane services, add or update `services/<slug>/service.yaml` and any seed/context document.
 
 ## Live Environment
 
@@ -141,4 +149,6 @@ container recreation.
 - Caddy reverse proxy on the host
 - Cloudflare tunnel for `chat` and `sonar` subdomains
 - Ollama on host for local LLM inference
-- Paperclip runs behind the compose `paperclip` profile with Authentik forward-auth provider `paperclip-proxy`; seed it with `homelab paperclip seed-company --profile software-shop --repo /home/caboose/dev/caboose-ai.io`.
+- Paperclip runs behind the compose `paperclip` profile with Authentik forward-auth provider `paperclip-proxy`; start it with `mise run paperclip:up`, verify it with `mise run paperclip:smoke`, and seed it with `homelab paperclip seed-company --profile software-shop --repo /home/caboose/dev/caboose-ai.io`.
+- OpenClaw is an external runtime tracked by manifest, URL, Authentik proxy,
+  dashboard, smoke, and health metadata; do not add a fake compose service for it.

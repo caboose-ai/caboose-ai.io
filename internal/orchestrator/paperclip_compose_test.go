@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -54,8 +55,23 @@ func TestPaperclipComposeProfile(t *testing.T) {
 	if paperclip.Environment["PAPERCLIP_DEPLOYMENT_MODE"] != "authenticated" {
 		t.Fatalf("PAPERCLIP_DEPLOYMENT_MODE = %q", paperclip.Environment["PAPERCLIP_DEPLOYMENT_MODE"])
 	}
-	if paperclip.Environment["PAPERCLIP_DEPLOYMENT_EXPOSURE"] != "private" {
+	if paperclip.Environment["PAPERCLIP_DEPLOYMENT_EXPOSURE"] != "public" {
 		t.Fatalf("PAPERCLIP_DEPLOYMENT_EXPOSURE = %q", paperclip.Environment["PAPERCLIP_DEPLOYMENT_EXPOSURE"])
+	}
+	if paperclip.Environment["PAPERCLIP_BIND"] != "custom" {
+		t.Fatalf("PAPERCLIP_BIND = %q", paperclip.Environment["PAPERCLIP_BIND"])
+	}
+	if paperclip.Environment["PAPERCLIP_BIND_HOST"] != "0.0.0.0" {
+		t.Fatalf("PAPERCLIP_BIND_HOST = %q", paperclip.Environment["PAPERCLIP_BIND_HOST"])
+	}
+	if paperclip.Environment["PAPERCLIP_AUTH_BASE_URL_MODE"] != "explicit" {
+		t.Fatalf("PAPERCLIP_AUTH_BASE_URL_MODE = %q", paperclip.Environment["PAPERCLIP_AUTH_BASE_URL_MODE"])
+	}
+	if paperclip.Environment["PAPERCLIP_AUTH_PUBLIC_BASE_URL"] != "${PAPERCLIP_PUBLIC_URL:-https://paperclip.caboose-ai.io}" {
+		t.Fatalf("PAPERCLIP_AUTH_PUBLIC_BASE_URL = %q", paperclip.Environment["PAPERCLIP_AUTH_PUBLIC_BASE_URL"])
+	}
+	if paperclip.Environment["PAPERCLIP_ALLOWED_HOSTNAMES"] != "${PAPERCLIP_ALLOWED_HOSTNAMES:-paperclip.caboose-ai.io}" {
+		t.Fatalf("PAPERCLIP_ALLOWED_HOSTNAMES = %q", paperclip.Environment["PAPERCLIP_ALLOWED_HOSTNAMES"])
 	}
 	if paperclip.Environment["PAPERCLIP_TELEMETRY_DISABLED"] != "1" {
 		t.Fatalf("PAPERCLIP_TELEMETRY_DISABLED = %q", paperclip.Environment["PAPERCLIP_TELEMETRY_DISABLED"])
@@ -67,17 +83,46 @@ func TestPaperclipComposeProfile(t *testing.T) {
 		t.Fatalf("PAPERCLIP_AGENT_JWT_SECRET = %q", paperclip.Environment["PAPERCLIP_AGENT_JWT_SECRET"])
 	}
 
-	if _, ok := compose.Services["paperclip-db"]; !ok {
+	paperclipDB, ok := compose.Services["paperclip-db"]
+	if !ok {
 		t.Fatal("paperclip-db service missing")
+	}
+	if !contains(paperclipDB.Profiles, "paperclip") {
+		t.Fatalf("paperclip-db profiles = %v", paperclipDB.Profiles)
 	}
 	if _, ok := compose.Volumes["paperclip_db"]; !ok {
 		t.Fatal("paperclip_db volume missing")
 	}
 }
 
+func TestPaperclipEnvExampleIncludesRequiredSecrets(t *testing.T) {
+	data, err := os.ReadFile("../../dev/homelab/.env.example")
+	if err != nil {
+		t.Fatalf("read env example: %v", err)
+	}
+	for _, want := range []string{
+		"PAPERCLIP_DB_PASS=CHANGE_ME",
+		"PAPERCLIP_AUTH_SECRET=CHANGE_ME",
+		"PAPERCLIP_PUBLIC_URL=https://paperclip.caboose-ai.io",
+	} {
+		if !containsLine(string(data), want) {
+			t.Fatalf(".env.example missing %q", want)
+		}
+	}
+}
+
 func contains(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+func containsLine(text, want string) bool {
+	for _, line := range strings.Split(text, "\n") {
+		if line == want {
 			return true
 		}
 	}

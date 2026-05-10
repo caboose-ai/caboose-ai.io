@@ -7,6 +7,10 @@ secrets:
   - GITEA_ADMIN_PASSWORD
 configurator: forgejo
 smoke_flow: forgejo
+dashboard:
+  show: true
+sso:
+  mode: oidc
 health:
   url_key: forgejo
   path: /

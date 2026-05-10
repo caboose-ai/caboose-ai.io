@@ -5,7 +5,10 @@ compose_services:
   - loki
 secrets: []
 configurator: ""
-smoke_flow: loki
+dashboard:
+  show: false
+sso:
+  mode: none
 health:
   path: http://127.0.0.1:3100/ready
   kind: http

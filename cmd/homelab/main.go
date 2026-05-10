@@ -43,6 +43,7 @@ func main() {
 	fs.BoolVar(&opts.force, "force", false, "Force re-creation of existing resources")
 	fs.BoolVar(&opts.verbose, "verbose", false, "Show detailed output")
 	fs.BoolVar(&opts.nonInteractive, "non-interactive", false, "Run without TUI prompts")
+	fs.BoolVar(&opts.yes, "yes", false, "Confirm destructive operations")
 	fs.StringVar(&opts.configPath, "config", "", "Path to YAML config file")
 	fs.StringVar(&opts.domain, "domain", "", "Homelab domain (e.g. caboose-ai.io)")
 	fs.StringVar(&opts.composeDir, "compose-dir", "", "Path to docker-compose.yml directory")
@@ -154,6 +155,7 @@ type cliOpts struct {
 	kubeContext    string
 	keepEnv        bool
 	secretsEnvOnly bool
+	yes            bool
 
 	createTurnstile     bool
 	cloudflareAccountID string
@@ -246,6 +248,11 @@ func runInstall(opts cliOpts) int {
 }
 
 func runReset(opts cliOpts) int {
+	if err := validateResetConfirmation(opts); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+
 	var cfg *config.Config
 
 	if opts.configPath != "" {
@@ -293,6 +300,13 @@ func runReset(opts cliOpts) int {
 	inst := install.New(cfg, secretStore, cmdRunner, httpClient)
 	inst.State.KeepEnv = opts.keepEnv
 	return cli.RunReset(context.Background(), inst)
+}
+
+func validateResetConfirmation(opts cliOpts) error {
+	if opts.dryRun || opts.yes {
+		return nil
+	}
+	return fmt.Errorf("homelab reset is destructive; rerun with --yes to confirm or --dry-run to preview")
 }
 
 func secretStoreForConfig(cfg *config.Config, r runner.CommandRunner) secrets.SecretStore {

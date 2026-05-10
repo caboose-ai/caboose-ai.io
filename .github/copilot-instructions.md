@@ -74,6 +74,8 @@ bootstrap verification. Woodpecker persists server data at
   handoffs such as Portainer's OAuth button and Mattermost's browser handoff
   plus local admin login, Homarr native Authentik/OIDC login, and proxy-gated
   landing checks for Woodpecker, OpenClaw, and Paperclip.
+- `homelab service <slug> smoke` runs the manifest-owned `smoke_flow`; leave
+  health-only services without a flow.
 - Run tests: `go test ./...`
 - Run smoke tests: `mise run sso:check` (full) or `mise run sso:check-quick` (API only)
 
@@ -119,6 +121,9 @@ bootstrap verification. Woodpecker persists server data at
   `feat:` is minor, and `!` or `BREAKING CHANGE:` is major.
 - CI builds `cmd/homelab` and `cmd/mcp` with `-buildvcs=false` so release
   checks do not depend on Go VCS stamping.
+- Direct `homelab reset` requires `--yes` unless `--dry-run`; live Docker,
+  SQLite, secret, reset, and destructive filesystem changes require explicit
+  human approval.
 
 ## Documentation
 
@@ -143,7 +148,9 @@ bootstrap verification. Woodpecker persists server data at
 8. Add any secrets to `secrets/store.go` `BootstrapSecrets()`
 9. Update `internal/smoketest/flows.go` when the service needs a browser proof
    for native login, first-run setup, or proxy-gated landing behavior.
-9. Add or update `services/<slug>/service.yaml` when the service participates in the service-workspace surface.
+10. Add manifest `dashboard` and `sso` metadata so Homarr and docs follow the
+    service contract instead of a hard-coded inclusion list.
+11. Add or update `services/<slug>/service.yaml` when the service participates in the service-workspace surface.
 
 ### Adding a new Authentik API method
 

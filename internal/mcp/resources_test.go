@@ -95,6 +95,73 @@ func TestHandleServiceStatusResource(t *testing.T) {
 	}
 }
 
+func TestHandleServiceStatusResourceIncludesAllManifestComposeServices(t *testing.T) {
+	r := &mockRunner{output: []byte(`[{"Name":"paperclip","State":"running"},{"Name":"paperclip-db","State":"running"}]`)}
+	s := &Server{
+		compose: docker.NewComposeClient(r, "/test"),
+		registry: service.NewRegistry(map[string]service.Manifest{
+			"paperclip": {
+				Slug:            "paperclip",
+				DisplayName:     "Paperclip",
+				ComposeServices: []string{"paperclip", "paperclip-db"},
+			},
+		}, nil),
+	}
+
+	req := &sdkmcp.ReadResourceRequest{
+		Params: &sdkmcp.ReadResourceParams{URI: "homelab://services/paperclip/status"},
+	}
+
+	result, err := s.handleServiceStatusResource(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	text := result.Contents[0].Text
+	for _, want := range []string{`"paperclip": true`, `"paperclip-db": true`} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("status response missing %s: %q", want, text)
+		}
+	}
+}
+
+func TestHandleServiceStatusResourceSkipsComposeForExternalRuntime(t *testing.T) {
+	r := &mockRunner{err: context.Canceled}
+	s := &Server{
+		compose: docker.NewComposeClient(r, "/test"),
+		registry: service.NewRegistry(map[string]service.Manifest{
+			"openclaw": {
+				Slug:        "openclaw",
+				DisplayName: "OpenClaw",
+				Runtime:     service.RuntimeExternal,
+				URLKey:      "openclaw",
+				SmokeFlow:   "openclaw",
+			},
+		}, nil),
+	}
+
+	req := &sdkmcp.ReadResourceRequest{
+		Params: &sdkmcp.ReadResourceParams{URI: "homelab://services/openclaw/status"},
+	}
+
+	result, err := s.handleServiceStatusResource(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(r.lastArgs) != 0 {
+		t.Fatalf("compose runner args = %v, want none", r.lastArgs)
+	}
+	text := result.Contents[0].Text
+	if !strings.Contains(text, `"runtime": "external"`) {
+		t.Errorf("expected external runtime in status: %q", text)
+	}
+	if !strings.Contains(text, "external service has no local compose container") {
+		t.Errorf("expected no local compose message: %q", text)
+	}
+	if strings.Contains(text, `"error"`) {
+		t.Errorf("external service status should not report compose error: %q", text)
+	}
+}
+
 func TestHandleDiagnoseServicePrompt(t *testing.T) {
 	r := &mockRunner{output: []byte("some log output")}
 	s := &Server{

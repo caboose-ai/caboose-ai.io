@@ -63,37 +63,67 @@ func (s *Server) registerStaticResource(uri, name, description, filename string)
 }
 
 type serviceStatus struct {
-	Service    string `json:"service"`
-	Running    bool   `json:"running"`
-	Healthy    *bool  `json:"healthy,omitempty"`
-	Configured *bool  `json:"configured,omitempty"`
-	Error      string `json:"error,omitempty"`
+	Service        string          `json:"service"`
+	Runtime        service.Runtime `json:"runtime,omitempty"`
+	Running        bool            `json:"running"`
+	ComposeRunning map[string]bool `json:"compose_running,omitempty"`
+	Healthy        *bool           `json:"healthy,omitempty"`
+	Configured     *bool           `json:"configured,omitempty"`
+	Status         string          `json:"status,omitempty"`
+	Message        string          `json:"message,omitempty"`
+	Error          string          `json:"error,omitempty"`
 }
 
 func (s *Server) handleServiceStatusResource(ctx context.Context, req *sdkmcp.ReadResourceRequest) (*sdkmcp.ReadResourceResult, error) {
-	service := extractServiceFromURI(req.Params.URI)
-	if service == "" {
+	serviceName := extractServiceFromURI(req.Params.URI)
+	if serviceName == "" {
 		return nil, fmt.Errorf("could not extract service name from URI %q", req.Params.URI)
 	}
 
-	status := serviceStatus{Service: service}
+	status := serviceStatus{Service: serviceName}
 
-	composeService := service
+	composeServices := []string{serviceName}
+	runtime := service.RuntimeCompose
 	if s.registry != nil {
-		if manifest, ok := s.registry.Manifest(service); ok && len(manifest.ComposeServices) > 0 {
-			composeService = manifest.ComposeServices[0]
+		if manifest, ok := s.registry.Manifest(serviceName); ok {
+			runtime = manifest.Runtime
+			status.Runtime = manifest.Runtime
+			if len(manifest.ComposeServices) > 0 {
+				composeServices = manifest.ComposeServices
+			}
 		}
 	}
 
-	running, err := s.compose.IsRunning(ctx, composeService)
-	if err != nil {
-		status.Error = err.Error()
+	if runtime == service.RuntimeExternal {
+		status.Status = "external_no_local_container"
+		status.Message = "external service has no local compose container"
+	} else if len(composeServices) == 1 {
+		running, err := s.compose.IsRunning(ctx, composeServices[0])
+		if err != nil {
+			status.Error = err.Error()
+		} else {
+			status.Running = running
+		}
 	} else {
-		status.Running = running
+		status.ComposeRunning = make(map[string]bool, len(composeServices))
+		allRunning := true
+		for _, composeService := range composeServices {
+			running, err := s.compose.IsRunning(ctx, composeService)
+			if err != nil {
+				status.Error = err.Error()
+				allRunning = false
+				continue
+			}
+			status.ComposeRunning[composeService] = running
+			if !running {
+				allRunning = false
+			}
+		}
+		status.Running = allRunning
 	}
 
 	for _, c := range s.checkers {
-		if strings.EqualFold(c.Name(), service) {
+		if strings.EqualFold(c.Name(), serviceName) {
 			healthy := c.Check(ctx) == nil
 			status.Healthy = &healthy
 			break
@@ -101,7 +131,7 @@ func (s *Server) handleServiceStatusResource(ctx context.Context, req *sdkmcp.Re
 	}
 
 	for _, svc := range s.configurators() {
-		if strings.EqualFold(svc.Slug(), service) || strings.EqualFold(svc.Name(), service) {
+		if strings.EqualFold(svc.Slug(), serviceName) || strings.EqualFold(svc.Name(), serviceName) {
 			configured, _ := svc.CheckConfigured(ctx)
 			status.Configured = &configured
 			break

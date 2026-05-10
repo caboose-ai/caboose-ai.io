@@ -137,6 +137,7 @@ func TestEnsureDefaultBoardSeedsServiceApps(t *testing.T) {
 	cfg.Apps = []App{
 		{Name: "Forgejo", URL: "https://git.example.com"},
 		{Name: "Grafana", URL: "https://grafana.example.com"},
+		{Name: "Paperclip", URL: "https://paperclip.example.com"},
 	}
 
 	if err := cfg.ensureDefaultBoard(context.Background()); err != nil {
@@ -152,6 +153,11 @@ func TestEnsureDefaultBoardSeedsServiceApps(t *testing.T) {
 		`"name":"Grafana"`,
 		`"href":"https://grafana.example.com"`,
 		`"iconUrl":"https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/grafana.svg"`,
+		`"name":"Paperclip"`,
+		`"href":"https://paperclip.example.com"`,
+		`"iconUrl":"https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/paperclip.svg"`,
+		`homelab_app_paperclip`,
+		`homelab_item_paperclip`,
 		`delete from item_layout`,
 		`delete from item`,
 		`delete from app`,

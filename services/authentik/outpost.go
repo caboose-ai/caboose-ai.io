@@ -7,9 +7,10 @@ import (
 )
 
 type ProxyProvider struct {
-	PK   int    `json:"pk"`
-	Name string `json:"name"`
-	Mode string `json:"mode"`
+	PK           int    `json:"pk"`
+	Name         string `json:"name"`
+	Mode         string `json:"mode"`
+	ExternalHost string `json:"external_host"`
 }
 
 type proxyProviderList struct {
@@ -22,6 +23,11 @@ type CreateProxyProviderParams struct {
 	InvalidationFlow  string `json:"invalidation_flow"`
 	Mode              string `json:"mode"`
 	ExternalHost      string `json:"external_host"`
+}
+
+type UpdateProxyProviderParams struct {
+	Mode         string `json:"mode,omitempty"`
+	ExternalHost string `json:"external_host,omitempty"`
 }
 
 func (c *Client) GetProxyProvider(ctx context.Context, name string) (*ProxyProvider, error) {
@@ -51,6 +57,11 @@ func (c *Client) CreateProxyProvider(ctx context.Context, params CreateProxyProv
 		return nil, fmt.Errorf("parsing created proxy provider: %w", err)
 	}
 	return &p, nil
+}
+
+func (c *Client) UpdateProxyProvider(ctx context.Context, pk int, params UpdateProxyProviderParams) error {
+	_, err := c.Patch(ctx, fmt.Sprintf("/api/v3/providers/proxy/%d/", pk), params)
+	return err
 }
 
 type Outpost struct {

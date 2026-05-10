@@ -13,6 +13,10 @@ secrets:
   - AUTHENTIK_PG_PASS
 configurator: ""
 smoke_flow: authentik
+dashboard:
+  show: true
+sso:
+  mode: identity_provider
 health:
   url_key: authentik
   path: /api/v3/root/config/

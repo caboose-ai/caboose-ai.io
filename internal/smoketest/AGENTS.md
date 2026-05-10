@@ -23,7 +23,7 @@ These instructions apply to `internal/smoketest/`.
 Good:
 
 ```go
-flow, ok := SmokeFlowByName(name)
+flow, ok := SmokeFlowByName(urls, name)
 if !ok {
     t.Fatalf("unknown smoke flow %q", name)
 }
@@ -54,3 +54,4 @@ t.Logf("using token %s and password %s", token, password)
 - `go test ./internal/smoketest`
 - `go test -tags integration ./internal/smoketest/ -run TestSSO_Config -v`
 - For one targeted flow: `go test -tags integration ./internal/smoketest/ -run TestSSO_ServiceSmoke -v -args -smoke-flow <name>`
+- For Paperclip specifically: `go test -tags integration ./internal/smoketest/ -run TestSSO_ServiceSmoke -v -args -smoke-flow paperclip`

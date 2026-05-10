@@ -8,6 +8,10 @@ secrets:
   - MATTERMOST_DB_PASS
 configurator: mattermost
 smoke_flow: mattermost
+dashboard:
+  show: false
+sso:
+  mode: local
 health:
   url_key: mattermost
   path: /

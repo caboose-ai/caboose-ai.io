@@ -8,6 +8,11 @@ secrets:
   - OPEN_WEBUI_OAUTH_CLIENT_SECRET
 configurator: open-webui
 smoke_flow: open-webui
+dashboard:
+  show: true
+  path: /oauth/oidc/login
+sso:
+  mode: oidc
 health:
   url_key: open_webui
   path: /
