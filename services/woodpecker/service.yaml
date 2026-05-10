@@ -10,6 +10,10 @@ secrets:
   - WOODPECKER_AGENT_SECRET
 configurator: woodpecker
 smoke_flow: woodpecker
+dashboard:
+  show: true
+sso:
+  mode: proxy
 health:
   url_key: woodpecker
   path: /

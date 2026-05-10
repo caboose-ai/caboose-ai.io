@@ -9,6 +9,10 @@ secrets:
   - HOMARR_SECRET_ENCRYPTION_KEY
 configurator: homarr
 smoke_flow: homarr
+dashboard:
+  show: true
+sso:
+  mode: oidc
 health:
   url_key: dashboard
   path: /

@@ -11,21 +11,40 @@ import (
 )
 
 type Manifest struct {
-	Slug            string     `json:"slug" yaml:"slug"`
-	DisplayName     string     `json:"display_name" yaml:"display_name"`
-	URLKey          string     `json:"url_key" yaml:"url_key"`
-	ComposeServices []string   `json:"compose_services" yaml:"compose_services"`
-	Secrets         []string   `json:"secrets" yaml:"secrets"`
-	Configurator    string     `json:"configurator" yaml:"configurator"`
-	SmokeFlow       string     `json:"smoke_flow" yaml:"smoke_flow"`
-	Health          HealthSpec `json:"health" yaml:"health"`
-	Docs            []string   `json:"docs" yaml:"docs"`
+	Slug            string        `json:"slug" yaml:"slug"`
+	DisplayName     string        `json:"display_name" yaml:"display_name"`
+	Runtime         Runtime       `json:"runtime" yaml:"runtime"`
+	URLKey          string        `json:"url_key" yaml:"url_key"`
+	ComposeServices []string      `json:"compose_services" yaml:"compose_services"`
+	Secrets         []string      `json:"secrets" yaml:"secrets"`
+	Configurator    string        `json:"configurator" yaml:"configurator"`
+	SmokeFlow       string        `json:"smoke_flow" yaml:"smoke_flow"`
+	Dashboard       DashboardSpec `json:"dashboard" yaml:"dashboard"`
+	SSO             SSOSpec       `json:"sso" yaml:"sso"`
+	Health          HealthSpec    `json:"health" yaml:"health"`
+	Docs            []string      `json:"docs" yaml:"docs"`
 }
 
 type HealthSpec struct {
 	URLKey string `json:"url_key,omitempty" yaml:"url_key,omitempty"`
 	Path   string `json:"path,omitempty" yaml:"path,omitempty"`
 	Kind   string `json:"kind,omitempty" yaml:"kind,omitempty"`
+}
+
+type Runtime string
+
+const (
+	RuntimeCompose  Runtime = "compose"
+	RuntimeExternal Runtime = "external"
+)
+
+type DashboardSpec struct {
+	Show *bool  `json:"show,omitempty" yaml:"show,omitempty"`
+	Path string `json:"path,omitempty" yaml:"path,omitempty"`
+}
+
+type SSOSpec struct {
+	Mode string `json:"mode,omitempty" yaml:"mode,omitempty"`
 }
 
 type Registry struct {
@@ -39,6 +58,7 @@ func NewRegistry(manifests map[string]Manifest, configurators []ServiceConfigura
 		if manifest.Slug == "" {
 			manifest.Slug = slug
 		}
+		manifest = normalizeManifest(manifest)
 		normalized[strings.ToLower(manifest.Slug)] = manifest
 	}
 
@@ -110,9 +130,29 @@ func LoadManifests(root string) (map[string]Manifest, error) {
 		if manifest.Slug != entry.Name() {
 			return nil, fmt.Errorf("%s: slug %q must match directory %q", path, manifest.Slug, entry.Name())
 		}
+		manifest = normalizeManifest(manifest)
+		if !manifest.Runtime.Valid() {
+			return nil, fmt.Errorf("%s: runtime %q must be one of: %s, %s", path, manifest.Runtime, RuntimeCompose, RuntimeExternal)
+		}
 		manifests[manifest.Slug] = manifest
 	}
 	return manifests, nil
+}
+
+func normalizeManifest(manifest Manifest) Manifest {
+	if manifest.Runtime == "" {
+		manifest.Runtime = RuntimeCompose
+	}
+	return manifest
+}
+
+func (r Runtime) Valid() bool {
+	switch r {
+	case RuntimeCompose, RuntimeExternal:
+		return true
+	default:
+		return false
+	}
 }
 
 func FindManifestRoot(start string) (string, error) {

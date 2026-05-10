@@ -9,6 +9,10 @@ secrets:
   - GRAFANA_ADMIN_PASSWORD
 configurator: grafana
 smoke_flow: grafana
+dashboard:
+  show: true
+sso:
+  mode: oidc
 health:
   url_key: grafana
   path: /api/health

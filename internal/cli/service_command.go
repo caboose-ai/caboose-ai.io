@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 
@@ -54,7 +55,7 @@ func RunServiceCommand(ctx context.Context, cfg *config.Config, r runner.Command
 	compose := docker.NewComposeClient(r, cfg.ComposeDir)
 	switch action {
 	case "status":
-		return runServiceStatus(ctx, compose, manifest)
+		return runServiceStatus(ctx, compose, runner.NewHTTPClient(), cfg.URLs(), manifest)
 	case "logs":
 		return runServiceLogs(ctx, compose, manifest)
 	case "open":
@@ -93,11 +94,27 @@ func isServiceAction(value string) bool {
 	}
 }
 
-func runServiceStatus(ctx context.Context, compose *docker.ComposeClient, manifest service.Manifest) int {
+func runServiceStatus(ctx context.Context, compose *docker.ComposeClient, httpClient runner.HTTPClient, urls config.URLs, manifest service.Manifest) int {
 	status := map[string]any{
 		"service":          manifest.Slug,
 		"display_name":     manifest.DisplayName,
+		"runtime":          manifest.Runtime,
 		"compose_services": manifest.ComposeServices,
+	}
+	if manifest.Runtime == service.RuntimeExternal {
+		status["status"] = "external_no_local_container"
+		status["message"] = "external service has no local compose container"
+		if healthURL := serviceHealthURL(urls, manifest); healthURL != "" {
+			status["health_url"] = healthURL
+			healthy, err := checkServiceHealth(ctx, httpClient, healthURL)
+			status["healthy"] = healthy
+			if err != nil {
+				status["health_error"] = err.Error()
+			}
+		}
+		data, _ := json.MarshalIndent(status, "", "  ")
+		fmt.Println(string(data))
+		return 0
 	}
 	running := map[string]bool{}
 	for _, composeService := range manifest.ComposeServices {
@@ -115,6 +132,10 @@ func runServiceStatus(ctx context.Context, compose *docker.ComposeClient, manife
 }
 
 func runServiceLogs(ctx context.Context, compose *docker.ComposeClient, manifest service.Manifest) int {
+	if manifest.Runtime == service.RuntimeExternal {
+		fmt.Printf("service %q uses external runtime; no compose logs are available\n", manifest.Slug)
+		return 0
+	}
 	if len(manifest.ComposeServices) == 0 {
 		fmt.Fprintf(os.Stderr, "service %q has no compose services\n", manifest.Slug)
 		return 1
@@ -128,6 +149,38 @@ func runServiceLogs(ctx context.Context, compose *docker.ComposeClient, manifest
 		fmt.Printf("==> %s\n%s", composeService, string(out))
 	}
 	return 0
+}
+
+func serviceHealthURL(urls config.URLs, manifest service.Manifest) string {
+	key := manifest.Health.URLKey
+	if key == "" {
+		key = manifest.URLKey
+	}
+	base := serviceURL(urls, key)
+	if base == "" {
+		return ""
+	}
+	path := manifest.Health.Path
+	if path == "" {
+		path = "/"
+	}
+	return strings.TrimRight(base, "/") + "/" + strings.TrimLeft(path, "/")
+}
+
+func checkServiceHealth(ctx context.Context, client runner.HTTPClient, healthURL string) (bool, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, healthURL, nil)
+	if err != nil {
+		return false, err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= http.StatusBadRequest {
+		return false, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	return true, nil
 }
 
 func runServiceOpen(cfg *config.Config, manifest service.Manifest) int {
@@ -145,7 +198,7 @@ func runServiceSmoke(ctx context.Context, r runner.CommandRunner, manifest servi
 		fmt.Fprintf(os.Stderr, "service %q does not define a smoke flow\n", manifest.Slug)
 		return 1
 	}
-	out, err := r.Run(ctx, "go", "test", "-tags", "integration", "./internal/smoketest/", "-run", "TestSSO_Config", "-v")
+	out, err := r.Run(ctx, "go", "test", "-tags", "integration", "./internal/smoketest/", "-run", "TestSSO_ServiceSmoke", "-v", "-args", "-smoke-flow", manifest.SmokeFlow)
 	if len(out) > 0 {
 		fmt.Print(string(out))
 	}
@@ -222,6 +275,8 @@ func serviceURL(urls config.URLs, key string) string {
 		return urls.SonarQube
 	case "ghost":
 		return urls.Ghost
+	case "paperclip":
+		return urls.Paperclip
 	case "ci":
 		return urls.CI
 	default:

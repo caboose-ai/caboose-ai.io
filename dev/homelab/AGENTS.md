@@ -18,6 +18,8 @@ These instructions apply to `dev/homelab/`.
   profiles.
 - Prefer Go installer paths in `cmd/homelab` and `internal/install` for new
   behavior. Keep shell scripts here for legacy compatibility or diagnosis.
+- Direct reset flows must be explicit: `homelab reset` requires `--yes` unless
+  it is run with `--dry-run`.
 
 ## Good And Bad Examples
 
@@ -53,6 +55,28 @@ Bad:
 ```yaml
 networks:
   service-internal: {}
+```
+
+Good:
+
+```yaml
+profiles:
+  - paperclip
+environment:
+  PAPERCLIP_DEPLOYMENT_MODE: authenticated
+  PAPERCLIP_DEPLOYMENT_EXPOSURE: public
+  PAPERCLIP_AUTH_PUBLIC_BASE_URL: "${PAPERCLIP_PUBLIC_URL:-https://paperclip.caboose-ai.io}"
+  PAPERCLIP_ALLOWED_HOSTNAMES: "${PAPERCLIP_ALLOWED_HOSTNAMES:-paperclip.caboose-ai.io}"
+```
+
+Bad:
+
+```yaml
+environment:
+  PAPERCLIP_DEPLOYMENT_EXPOSURE: private
+  BETTER_AUTH_SECRET: "plaintext-secret"
+# Public reverse-proxied Paperclip needs explicit public auth URL settings, and
+# secrets must come from env substitution or the managed secret store.
 ```
 
 ## Validation

@@ -8,6 +8,10 @@ secrets:
   - GHOST_DB_PASS
 configurator: ""
 smoke_flow: ghost
+dashboard:
+  show: false
+sso:
+  mode: proxy
 health:
   url_key: ghost
   path: /

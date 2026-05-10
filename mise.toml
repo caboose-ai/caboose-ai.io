@@ -35,35 +35,35 @@ run = "go build -o ./homelab ./cmd/homelab && ./homelab install --domain \"$HOME
 
 [tasks.reset]
 description = "Reset homelab stack (keeps .env credentials by default)"
-run = "go run ./cmd/homelab reset --keep-env --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
+run = "go run ./cmd/homelab reset --yes --keep-env --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
 
 [tasks."homelab:reset"]
 description = "Reset homelab stack (keeps .env credentials by default)"
-run = "go run ./cmd/homelab reset --keep-env --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
+run = "go run ./cmd/homelab reset --yes --keep-env --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
 
 [tasks."factory-reset"]
 description = "Full factory reset — tears down everything including .env credentials"
-run = "go run ./cmd/homelab reset --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
+run = "go run ./cmd/homelab reset --yes --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
 
 [tasks."homelab:factory-reset"]
 description = "Full factory reset — tears down everything including .env credentials"
-run = "go run ./cmd/homelab reset --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
+run = "go run ./cmd/homelab reset --yes --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
 
 [tasks.reinstall]
 description = "Reset (keep .env) then non-interactive install"
-run = "go run ./cmd/homelab reset --keep-env --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" && go run ./cmd/homelab install --non-interactive --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" --serve-mode \"$HOMELAB_SERVE_MODE\""
+run = "go run ./cmd/homelab reset --yes --keep-env --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" && go run ./cmd/homelab install --non-interactive --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" --serve-mode \"$HOMELAB_SERVE_MODE\""
 
 [tasks."homelab:reinstall"]
 description = "Reset (keep .env) then non-interactive install"
-run = "go run ./cmd/homelab reset --keep-env --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" && go run ./cmd/homelab install --non-interactive --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" --serve-mode \"$HOMELAB_SERVE_MODE\""
+run = "go run ./cmd/homelab reset --yes --keep-env --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" && go run ./cmd/homelab install --non-interactive --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" --serve-mode \"$HOMELAB_SERVE_MODE\""
 
 [tasks."factory-reinstall"]
 description = "Full factory reset then non-interactive install (wipes .env)"
-run = "go run ./cmd/homelab reset --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" && go run ./cmd/homelab install --non-interactive --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" --serve-mode \"$HOMELAB_SERVE_MODE\""
+run = "go run ./cmd/homelab reset --yes --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" && go run ./cmd/homelab install --non-interactive --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" --serve-mode \"$HOMELAB_SERVE_MODE\""
 
 [tasks."homelab:factory-reinstall"]
 description = "Full factory reset then non-interactive install (wipes .env)"
-run = "go run ./cmd/homelab reset --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" && go run ./cmd/homelab install --non-interactive --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" --serve-mode \"$HOMELAB_SERVE_MODE\""
+run = "go run ./cmd/homelab reset --yes --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" && go run ./cmd/homelab install --non-interactive --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" --serve-mode \"$HOMELAB_SERVE_MODE\""
 
 [tasks.recovery]
 description = "Generate an Authentik admin recovery URL"
@@ -80,6 +80,22 @@ run = "go run ./cmd/homelab oauth-setup --domain \"$HOMELAB_DOMAIN\""
 [tasks."paperclip:seed"]
 description = "Seed the Paperclip software-shop company profile"
 run = "go run ./cmd/homelab paperclip seed-company --profile software-shop --repo /home/caboose/dev/caboose-ai.io"
+
+[tasks."paperclip:up"]
+description = "Start the optional Paperclip profile"
+run = "docker compose -f \"$HOMELAB_COMPOSE_DIR/docker-compose.yml\" --profile paperclip up -d paperclip paperclip-db"
+
+[tasks."paperclip:down"]
+description = "Stop the optional Paperclip profile"
+run = "docker compose -f \"$HOMELAB_COMPOSE_DIR/docker-compose.yml\" --profile paperclip stop paperclip paperclip-db"
+
+[tasks."paperclip:status"]
+description = "Show Paperclip service status"
+run = "go run ./cmd/homelab service --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" paperclip status"
+
+[tasks."paperclip:smoke"]
+description = "Run the targeted Paperclip SSO smoke flow"
+run = "go run ./cmd/homelab service --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" paperclip smoke"
 
 [tasks."homelab:create-turnstile"]
 description = "Create or verify the Cloudflare Turnstile widget via API"
@@ -135,4 +151,4 @@ run = "SMOKETEST_EVIDENCE=1 go test -tags integration ./internal/smoketest/ -run
 
 [tasks."homelab:e2e-reset"]
 description = "Destructive reset, install, then browser SSO evidence test"
-run = "go run ./cmd/homelab reset --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" && go run ./cmd/homelab install --non-interactive --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" --serve-mode \"$HOMELAB_SERVE_MODE\" && SMOKETEST_EVIDENCE=1 go test -tags integration ./internal/smoketest/ -run 'TestSSO_Config|TestSSO_Endpoints|TestSSO_BrowserFlows' -v -timeout 15m"
+run = "go run ./cmd/homelab reset --yes --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" && go run ./cmd/homelab install --non-interactive --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" --serve-mode \"$HOMELAB_SERVE_MODE\" && SMOKETEST_EVIDENCE=1 go test -tags integration ./internal/smoketest/ -run 'TestSSO_Config|TestSSO_Endpoints|TestSSO_BrowserFlows' -v -timeout 15m"

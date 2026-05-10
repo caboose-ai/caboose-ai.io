@@ -18,9 +18,18 @@ type ServiceFlow struct {
 }
 
 type ProxyFlow struct {
-	Name       string
-	URL        string
-	TargetHost string
+	Name               string
+	URL                string
+	TargetHost         string
+	HealthURL          string
+	HealthBodyContains []string
+	RejectText         []string
+}
+
+type SmokeFlow struct {
+	Name  string
+	OAuth *ServiceFlow
+	Proxy *ProxyFlow
 }
 
 func OAuthServiceFlows(urls config.URLs) []ServiceFlow {
@@ -75,4 +84,39 @@ func ProxyFlows(urls config.URLs) []ProxyFlow {
 		{Name: "ci", URL: urls.CI, TargetHost: hostFromURL(urls.CI)},
 		{Name: "openclaw", URL: urls.OpenClaw, TargetHost: hostFromURL(urls.OpenClaw)},
 	}
+}
+
+func targetedProxyFlows(urls config.URLs) []ProxyFlow {
+	flows := append([]ProxyFlow{}, ProxyFlows(urls)...)
+	flows = append(flows,
+		ProxyFlow{Name: "authentik", URL: urls.Authentik, TargetHost: hostFromURL(urls.Authentik)},
+		ProxyFlow{Name: "social", URL: urls.Authentik, TargetHost: hostFromURL(urls.Authentik)},
+		ProxyFlow{Name: "woodpecker", URL: urls.CI, TargetHost: hostFromURL(urls.CI)},
+		ProxyFlow{Name: "ghost", URL: urls.Ghost, TargetHost: hostFromURL(urls.Ghost)},
+		ProxyFlow{
+			Name:               "paperclip",
+			URL:                urls.Paperclip,
+			TargetHost:         hostFromURL(urls.Paperclip),
+			HealthURL:          "http://127.0.0.1:3100/api/health",
+			HealthBodyContains: []string{`"status"`, `"ok"`, `"deploymentMode"`, `"authenticated"`},
+			RejectText:         []string{"bad gateway", "connection refused", "upstream"},
+		},
+	)
+	return flows
+}
+
+func SmokeFlowByName(urls config.URLs, name string) (SmokeFlow, bool) {
+	for _, svc := range OAuthServiceFlows(urls) {
+		if svc.Name == name {
+			svc := svc
+			return SmokeFlow{Name: name, OAuth: &svc}, true
+		}
+	}
+	for _, svc := range targetedProxyFlows(urls) {
+		if svc.Name == name {
+			svc := svc
+			return SmokeFlow{Name: name, Proxy: &svc}, true
+		}
+	}
+	return SmokeFlow{}, false
 }

@@ -5,7 +5,10 @@ compose_services:
   - cadvisor
 secrets: []
 configurator: ""
-smoke_flow: cadvisor
+dashboard:
+  show: false
+sso:
+  mode: none
 health:
   path: http://127.0.0.1:8181/healthz
   kind: http

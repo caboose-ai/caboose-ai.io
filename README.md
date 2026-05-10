@@ -112,7 +112,10 @@ mise run service:status -- forgejo
 mise run service:configure -- mattermost --dry-run
 mise run service:smoke -- forgejo
 
-# Seed the Paperclip software-shop company
+# Optional Paperclip profile
+mise run paperclip:up
+mise run paperclip:status
+mise run paperclip:smoke
 mise run paperclip:seed
 
 # Migrate host Mattermost to Docker
@@ -131,6 +134,12 @@ HOMELAB_SERVE_MODE=local mise run install
 `127.0.0.1` for Caddy/TLS reverse proxying. `local` binds them to `0.0.0.0`
 for LAN access while keeping the same service URLs and Authentik callback
 configuration.
+
+Direct `homelab reset` is destructive and requires `--yes` unless `--dry-run`
+is used. The recurring `mise` reset/reinstall tasks pass `--yes` explicitly so
+automation remains intentional and auditable. Homarr SQLite board seeding and
+other live Docker, SQLite, secret, reset, or destructive filesystem mutations
+require explicit human approval before being run against live state.
 
 ## Testing
 
@@ -153,8 +162,9 @@ The browser flow covers both native Authentik/OIDC redirects and service
 specific first-run paths. Portainer clicks its visible OAuth login control,
 Mattermost follows the browser handoff and uses the managed local admin account,
 Homarr validates the native Authentik/OIDC dashboard login, while
-proxy-gated services such as Woodpecker and OpenClaw are validated by reaching
-their protected landing URLs.
+proxy-gated services such as Woodpecker, OpenClaw, and Paperclip are validated
+by reaching their protected landing URLs. Per-service smoke commands run the
+manifest-owned flow, for example `mise run paperclip:smoke`.
 
 ## Infrastructure
 
@@ -162,7 +172,9 @@ their protected landing URLs.
 - **Docker Compose** at `dev/homelab/docker-compose.yml` — all services
 - **Homarr** homepage — pinned to `ghcr.io/homarr-labs/homarr:v1.61.0`, stores dashboard state in `homarr_data:/appdata`, and uses native Authentik OIDC for `caboose-ai.io`
 - **Authentik** state — `/data` is persisted in the `authentik_data` volume for uploaded media and runtime-managed files
-- **Paperclip** profile (`docker compose --profile paperclip ...`) — built from upstream tag `v2026.428.0`, backed by `paperclip-db`, and Authentik-gated through `paperclip-proxy`
+- **Paperclip** profile (`docker compose --profile paperclip ...`) — built from upstream tag `v2026.428.0`, backed by `paperclip-db`, configured for authenticated public exposure at `paperclip.caboose-ai.io`, and Authentik-gated through `paperclip-proxy`
+- **OpenClaw** external runtime — tracked for URL, Authentik proxy, dashboard,
+  smoke, and health metadata without claiming a local compose service
 - **Cloudflare tunnel** for `chat` and `sonar` subdomains
 - **1Password** for secret storage (with `.env` fallback)
 - **Prometheus + Loki** for metrics and logs, visualized in Grafana

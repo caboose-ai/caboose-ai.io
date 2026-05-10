@@ -12,9 +12,13 @@ secrets:
   - ANTHROPIC_API_KEY
 configurator: paperclip
 smoke_flow: paperclip
+dashboard:
+  show: true
+sso:
+  mode: proxy
 health:
   url_key: paperclip
-  path: /
+  path: /api/health
   kind: http
 docs:
   - README.md

@@ -3,12 +3,18 @@
 package smoketest
 
 import (
+	"context"
+	"flag"
+	"io"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/go-rod/rod"
 )
+
+var smokeFlowName = flag.String("smoke-flow", "", "target one SSO smoke flow by name")
 
 func TestSSO_BrowserFlows(t *testing.T) {
 	s := NewSuite(t)
@@ -27,10 +33,35 @@ func TestSSO_BrowserFlows(t *testing.T) {
 	t.Run("ProxyFlows", func(t *testing.T) {
 		for _, svc := range ProxyFlows(s.URLs) {
 			t.Run(svc.Name, func(t *testing.T) {
-				testProxyFlow(t, s, svc.Name, svc.TargetHost, svc.URL)
+				testProxyFlow(t, s, svc)
 			})
 		}
 	})
+}
+
+func TestSSO_ServiceSmoke(t *testing.T) {
+	if *smokeFlowName == "" {
+		t.Fatal("-smoke-flow is required")
+	}
+
+	s := NewSuite(t)
+	skipIfNoBrowser(t)
+	s.InitBrowser(t)
+	s.SetupAdminPassword(t)
+
+	flow, ok := SmokeFlowByName(s.URLs, *smokeFlowName)
+	if !ok {
+		t.Fatalf("unknown smoke flow %q", *smokeFlowName)
+	}
+	if flow.OAuth != nil {
+		testOAuthFlow(t, s, *flow.OAuth)
+		return
+	}
+	if flow.Proxy != nil {
+		testProxyFlow(t, s, *flow.Proxy)
+		return
+	}
+	t.Fatalf("smoke flow %q has no executable target", *smokeFlowName)
 }
 
 func testOAuthFlow(t *testing.T, s *Suite, svc ServiceFlow) {
@@ -163,10 +194,10 @@ func linkForgejoAccount(t *testing.T, s *Suite, page *rod.Page) {
 	s.WaitStable(t, page, "forgejo linked account landing")
 }
 
-func testProxyFlow(t *testing.T, s *Suite, name, targetHost, url string) {
+func testProxyFlow(t *testing.T, s *Suite, svc ProxyFlow) {
 	t.Helper()
 
-	basePage := s.Browser.MustPage(url)
+	basePage := s.Browser.MustPage(svc.URL)
 	s.handleDialogs(basePage)
 	defer func() {
 		s.ScreenshotOnFailure(t, basePage)
@@ -174,22 +205,70 @@ func testProxyFlow(t *testing.T, s *Suite, name, targetHost, url string) {
 	}()
 
 	page := basePage.Timeout(60 * time.Second)
-	s.WaitStable(t, page, name+" proxy page")
-	s.Record(t, page, "open", name+" proxy URL", map[string]string{"url": url})
+	s.WaitStable(t, page, svc.Name+" proxy page")
+	s.Record(t, page, "open", svc.Name+" proxy URL", map[string]string{"url": svc.URL})
 
 	currentURL := page.MustInfo().URL
 
 	if strings.Contains(currentURL, "auth."+s.Domain) {
 		s.LoginToAuthentik(t, page)
-		s.WaitStable(t, page, name+" proxy landing page")
+		s.WaitStable(t, page, svc.Name+" proxy landing page")
 		currentURL = page.MustInfo().URL
 	}
 
-	if !strings.Contains(currentURL, targetHost) {
-		t.Errorf("expected to reach %s, got %s", targetHost, currentURL)
+	if !strings.Contains(currentURL, svc.TargetHost) {
+		t.Errorf("expected to reach %s, got %s", svc.TargetHost, currentURL)
 	}
-	s.Record(t, page, "reached", name, map[string]string{"url": currentURL})
-	t.Logf("%s: reached %s", name, currentURL)
+	rejectProxyErrorPage(t, page, svc)
+	if svc.HealthURL != "" {
+		checkProxyFlowHealth(t, s, svc)
+	}
+	s.Record(t, page, "reached", svc.Name, map[string]string{"url": currentURL})
+	t.Logf("%s: reached %s", svc.Name, currentURL)
+}
+
+func rejectProxyErrorPage(t *testing.T, page *rod.Page, svc ProxyFlow) {
+	t.Helper()
+
+	rejectText := append([]string{"bad gateway", "connection refused", "upstream"}, svc.RejectText...)
+	body, err := page.Element("body")
+	if err != nil {
+		return
+	}
+	text, err := body.Text()
+	if err != nil {
+		return
+	}
+	text = strings.ToLower(text)
+	for _, reject := range rejectText {
+		if strings.Contains(text, reject) {
+			t.Fatalf("%s proxy page contains upstream error marker %q", svc.Name, reject)
+		}
+	}
+}
+
+func checkProxyFlowHealth(t *testing.T, s *Suite, svc ProxyFlow) {
+	t.Helper()
+
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, svc.HealthURL, nil)
+	if err != nil {
+		t.Fatalf("%s health request: %v", svc.Name, err)
+	}
+	resp, err := s.HTTP.Do(req)
+	if err != nil {
+		t.Fatalf("%s health check failed at %s: %v", svc.Name, svc.HealthURL, err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= http.StatusBadRequest {
+		t.Fatalf("%s health returned HTTP %d: %s", svc.Name, resp.StatusCode, string(body))
+	}
+	bodyText := string(body)
+	for _, want := range svc.HealthBodyContains {
+		if !strings.Contains(bodyText, want) {
+			t.Fatalf("%s health body missing %q: %s", svc.Name, want, bodyText)
+		}
+	}
 }
 
 func isLoggedInURL(currentURL, host string) bool {

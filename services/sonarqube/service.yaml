@@ -8,7 +8,10 @@ secrets:
   - SONAR_ADMIN_PASSWORD
   - SONAR_DB_PASS
 configurator: sonarqube
-smoke_flow: sonarqube
+dashboard:
+  show: false
+sso:
+  mode: local
 health:
   url_key: sonarqube
   path: /

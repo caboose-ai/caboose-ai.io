@@ -5,7 +5,10 @@ compose_services:
   - prometheus
 secrets: []
 configurator: ""
-smoke_flow: prometheus
+dashboard:
+  show: false
+sso:
+  mode: none
 health:
   path: http://127.0.0.1:9090/-/healthy
   kind: http

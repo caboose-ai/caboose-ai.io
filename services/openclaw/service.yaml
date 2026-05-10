@@ -1,11 +1,14 @@
 slug: openclaw
 display_name: OpenClaw
+runtime: external
 url_key: openclaw
-compose_services:
-  - openclaw
 secrets: []
 configurator: ""
 smoke_flow: openclaw
+dashboard:
+  show: true
+sso:
+  mode: proxy
 health:
   url_key: openclaw
   path: /

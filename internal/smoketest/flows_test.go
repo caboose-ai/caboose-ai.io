@@ -32,6 +32,19 @@ func TestProxyFlowsIncludeOpenClaw(t *testing.T) {
 	}
 }
 
+func TestTargetedProxyFlowsIncludePaperclip(t *testing.T) {
+	urls := config.DeriveURLs("example.com")
+	flows := targetedProxyFlows(urls)
+
+	for _, name := range []string{"ghost", "paperclip", "woodpecker"} {
+		t.Run(name, func(t *testing.T) {
+			if !hasProxyFlow(flows, name) {
+				t.Fatalf("targetedProxyFlows missing %q", name)
+			}
+		})
+	}
+}
+
 func hasServiceFlow(flows []ServiceFlow, name string) bool {
 	for _, flow := range flows {
 		if flow.Name == name {

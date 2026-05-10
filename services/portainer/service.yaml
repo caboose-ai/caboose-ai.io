@@ -7,6 +7,10 @@ secrets:
   - PORTAINER_ADMIN_PASSWORD
 configurator: portainer
 smoke_flow: portainer
+dashboard:
+  show: true
+sso:
+  mode: oidc
 health:
   url_key: portainer
   path: /
