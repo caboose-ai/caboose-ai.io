@@ -97,6 +97,18 @@ run = "go run ./cmd/homelab service --domain \"$HOMELAB_DOMAIN\" --compose-dir \
 description = "Run the smoke flow for one registered service"
 run = "go run ./cmd/homelab service --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" smoke"
 
+[tasks."openclaw:status"]
+description = "Show OpenClaw daemon and model status"
+run = "openclaw daemon status && openclaw models status --json"
+
+[tasks."openclaw:restart"]
+description = "Restart the OpenClaw gateway daemon"
+run = "openclaw daemon restart"
+
+[tasks."openclaw:smoke"]
+description = "Run a one-shot OpenClaw Ollama gateway smoke check"
+run = "openclaw infer model run --gateway --prompt 'Reply with exactly: ok' --json"
+
 [tasks.mcp]
 description = "Build and run the MCP server"
 run = "go build -o ./mcp-server ./cmd/mcp && ./mcp-server"
