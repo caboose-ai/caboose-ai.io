@@ -373,38 +373,30 @@ services:
     build:
       context: https://github.com/paperclipai/paperclip.git#v2026.428.0
     container_name: paperclip
+    network_mode: host
     profiles:
       - paperclip
-    ports:
-      - "${HOMELAB_BIND_ADDRESS:-127.0.0.1}:3100:3100"
     environment:
-      HOST: 0.0.0.0
+      HOST: 127.0.0.1
       PORT: "3100"
-      PAPERCLIP_BIND: custom
-      PAPERCLIP_BIND_HOST: 0.0.0.0
+      PAPERCLIP_BIND: loopback
       SERVE_UI: "true"
       PAPERCLIP_HOME: /paperclip
       PAPERCLIP_CONFIG: /paperclip/instances/default/config.json
       PAPERCLIP_PUBLIC_URL: "${PAPERCLIP_PUBLIC_URL:-https://paperclip.caboose-ai.io}"
-      PAPERCLIP_DEPLOYMENT_MODE: authenticated
-      PAPERCLIP_DEPLOYMENT_EXPOSURE: public
-      PAPERCLIP_AUTH_BASE_URL_MODE: explicit
-      PAPERCLIP_AUTH_PUBLIC_BASE_URL: "${PAPERCLIP_PUBLIC_URL:-https://paperclip.caboose-ai.io}"
-      PAPERCLIP_ALLOWED_HOSTNAMES: "${PAPERCLIP_ALLOWED_HOSTNAMES:-paperclip.caboose-ai.io}"
+      PAPERCLIP_DEPLOYMENT_MODE: local_trusted
+      PAPERCLIP_DEPLOYMENT_EXPOSURE: private
       PAPERCLIP_TELEMETRY_DISABLED: "1"
       DO_NOT_TRACK: "1"
       BETTER_AUTH_SECRET: "${PAPERCLIP_AUTH_SECRET}"
       PAPERCLIP_AGENT_JWT_SECRET: "${PAPERCLIP_AUTH_SECRET}"
-      DATABASE_URL: "postgres://paperclip:${PAPERCLIP_DB_PASS}@paperclip-db:5432/paperclip?sslmode=disable"
+      DATABASE_URL: "postgres://paperclip:${PAPERCLIP_DB_PASS}@127.0.0.1:5433/paperclip?sslmode=disable"
       OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
       ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
     depends_on:
       - paperclip-db
     volumes:
       - paperclip_data:/paperclip
-    networks:
-      - paperclip-internal
-      - apps
     restart: unless-stopped
 
   paperclip-db:
@@ -412,6 +404,8 @@ services:
     container_name: paperclip-db
     profiles:
       - paperclip
+    ports:
+      - "${PAPERCLIP_DB_BIND_ADDRESS:-127.0.0.1}:5433:5432"
     environment:
       POSTGRES_USER: paperclip
       POSTGRES_PASSWORD: ${PAPERCLIP_DB_PASS}
@@ -496,7 +490,7 @@ networks:
   sonarqube-internal:
     driver: bridge
     internal: true
-  # Paperclip DB tier — isolated from the app network.
+  # Paperclip DB tier — host-loopback port is used by the Paperclip app running
+  # in host network mode so the app can bind local_trusted loopback.
   paperclip-internal:
     driver: bridge
-    internal: true

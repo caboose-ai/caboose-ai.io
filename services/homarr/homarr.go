@@ -46,6 +46,10 @@ var dashboardIconSlugs = map[string]string{
 	"Woodpecker": "woodpecker-ci",
 }
 
+var dashboardIconURLs = map[string]string{
+	"Paperclip": "https://api.iconify.design/lucide:paperclip.svg?color=%2360a5fa",
+}
+
 type seededApp struct {
 	ID      string `json:"id"`
 	ItemID  string `json:"itemId"`
@@ -313,6 +317,9 @@ func seedApps(apps []App) []seededApp {
 }
 
 func iconURL(app App) string {
+	if icon, ok := dashboardIconURLs[app.Name]; ok {
+		return icon
+	}
 	if icon, ok := dashboardIconSlugs[app.Name]; ok {
 		return "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/" + icon + ".svg"
 	}

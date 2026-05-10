@@ -149,6 +149,6 @@ container recreation.
 - Caddy reverse proxy on the host
 - Cloudflare tunnel for `chat` and `sonar` subdomains
 - Ollama on host for local LLM inference
-- Paperclip runs behind the compose `paperclip` profile with Authentik forward-auth provider `paperclip-proxy`; start it with `mise run paperclip:up`, verify it with `mise run paperclip:smoke`, and seed it with `homelab paperclip seed-company --profile software-shop --repo /home/caboose/dev/caboose-ai.io`.
+- Paperclip runs behind the compose `paperclip` profile with Authentik forward-auth provider `paperclip-proxy`; Paperclip itself uses `local_trusted` mode on host loopback so Authentik is the only browser login. Start it with `mise run paperclip:up`, verify it with `mise run paperclip:smoke`, and seed it with `homelab paperclip seed-company --profile software-shop --repo /home/caboose/dev/caboose-ai.io`.
 - OpenClaw is an external runtime tracked by manifest, URL, Authentik proxy,
   dashboard, smoke, and health metadata; do not add a fake compose service for it.
