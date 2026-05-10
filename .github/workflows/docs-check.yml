@@ -27,6 +27,7 @@ jobs:
 
           while IFS= read -r file; do
             case "$file" in
+              AGENTS.md|*/AGENTS.md) continue ;;
               internal/*|cmd/*) has_code_changes=true ;;
               dev/homelab/docker-compose.yml) has_compose_changes=true ;;
               CLAUDE.md|.github/copilot-instructions.md|README.md) has_doc_updates=true ;;
