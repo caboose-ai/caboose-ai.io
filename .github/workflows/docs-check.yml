@@ -10,7 +10,7 @@ jobs:
     env:
       DOCS_EXEMPT: ${{ contains(github.event.pull_request.labels.*.name, 'docs-exempt') }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
