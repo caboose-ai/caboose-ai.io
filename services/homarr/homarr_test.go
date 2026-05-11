@@ -155,7 +155,7 @@ func TestEnsureDefaultBoardSeedsServiceApps(t *testing.T) {
 		`"iconUrl":"https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/grafana.svg"`,
 		`"name":"Paperclip"`,
 		`"href":"https://paperclip.example.com"`,
-		`"iconUrl":"https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/paperclip.svg"`,
+		`"iconUrl":"https://api.iconify.design/lucide:paperclip.svg?color=%2360a5fa"`,
 		`homelab_app_paperclip`,
 		`homelab_item_paperclip`,
 		`delete from item_layout`,

@@ -19,6 +19,8 @@ func TestPaperclipComposeProfile(t *testing.T) {
 			Image       string            `yaml:"image"`
 			Build       map[string]string `yaml:"build"`
 			Profiles    []string          `yaml:"profiles"`
+			Ports       []string          `yaml:"ports"`
+			NetworkMode string            `yaml:"network_mode"`
 			Environment map[string]string `yaml:"environment"`
 			DependsOn   []string          `yaml:"depends_on"`
 			Volumes     []string          `yaml:"volumes"`
@@ -46,32 +48,35 @@ func TestPaperclipComposeProfile(t *testing.T) {
 	if !contains(paperclip.DependsOn, "paperclip-db") {
 		t.Fatalf("paperclip depends_on = %v", paperclip.DependsOn)
 	}
+	if paperclip.NetworkMode != "host" {
+		t.Fatalf("paperclip network_mode = %q", paperclip.NetworkMode)
+	}
+	if len(paperclip.Ports) != 0 {
+		t.Fatalf("paperclip ports = %v, want none with host networking", paperclip.Ports)
+	}
+	if len(paperclip.Networks) != 0 {
+		t.Fatalf("paperclip networks = %v, want none with host networking", paperclip.Networks)
+	}
 	if paperclip.Environment["PAPERCLIP_PUBLIC_URL"] != "${PAPERCLIP_PUBLIC_URL:-https://paperclip.caboose-ai.io}" {
 		t.Fatalf("PAPERCLIP_PUBLIC_URL = %q", paperclip.Environment["PAPERCLIP_PUBLIC_URL"])
 	}
 	if paperclip.Environment["SERVE_UI"] != "true" {
 		t.Fatalf("SERVE_UI = %q", paperclip.Environment["SERVE_UI"])
 	}
-	if paperclip.Environment["PAPERCLIP_DEPLOYMENT_MODE"] != "authenticated" {
+	if paperclip.Environment["HOST"] != "127.0.0.1" {
+		t.Fatalf("HOST = %q", paperclip.Environment["HOST"])
+	}
+	if paperclip.Environment["PAPERCLIP_DEPLOYMENT_MODE"] != "local_trusted" {
 		t.Fatalf("PAPERCLIP_DEPLOYMENT_MODE = %q", paperclip.Environment["PAPERCLIP_DEPLOYMENT_MODE"])
 	}
-	if paperclip.Environment["PAPERCLIP_DEPLOYMENT_EXPOSURE"] != "public" {
+	if paperclip.Environment["PAPERCLIP_DEPLOYMENT_EXPOSURE"] != "private" {
 		t.Fatalf("PAPERCLIP_DEPLOYMENT_EXPOSURE = %q", paperclip.Environment["PAPERCLIP_DEPLOYMENT_EXPOSURE"])
 	}
-	if paperclip.Environment["PAPERCLIP_BIND"] != "custom" {
+	if paperclip.Environment["PAPERCLIP_BIND"] != "loopback" {
 		t.Fatalf("PAPERCLIP_BIND = %q", paperclip.Environment["PAPERCLIP_BIND"])
 	}
-	if paperclip.Environment["PAPERCLIP_BIND_HOST"] != "0.0.0.0" {
-		t.Fatalf("PAPERCLIP_BIND_HOST = %q", paperclip.Environment["PAPERCLIP_BIND_HOST"])
-	}
-	if paperclip.Environment["PAPERCLIP_AUTH_BASE_URL_MODE"] != "explicit" {
-		t.Fatalf("PAPERCLIP_AUTH_BASE_URL_MODE = %q", paperclip.Environment["PAPERCLIP_AUTH_BASE_URL_MODE"])
-	}
-	if paperclip.Environment["PAPERCLIP_AUTH_PUBLIC_BASE_URL"] != "${PAPERCLIP_PUBLIC_URL:-https://paperclip.caboose-ai.io}" {
-		t.Fatalf("PAPERCLIP_AUTH_PUBLIC_BASE_URL = %q", paperclip.Environment["PAPERCLIP_AUTH_PUBLIC_BASE_URL"])
-	}
-	if paperclip.Environment["PAPERCLIP_ALLOWED_HOSTNAMES"] != "${PAPERCLIP_ALLOWED_HOSTNAMES:-paperclip.caboose-ai.io}" {
-		t.Fatalf("PAPERCLIP_ALLOWED_HOSTNAMES = %q", paperclip.Environment["PAPERCLIP_ALLOWED_HOSTNAMES"])
+	if paperclip.Environment["DATABASE_URL"] != "postgres://paperclip:${PAPERCLIP_DB_PASS}@127.0.0.1:5433/paperclip?sslmode=disable" {
+		t.Fatalf("DATABASE_URL = %q", paperclip.Environment["DATABASE_URL"])
 	}
 	if paperclip.Environment["PAPERCLIP_TELEMETRY_DISABLED"] != "1" {
 		t.Fatalf("PAPERCLIP_TELEMETRY_DISABLED = %q", paperclip.Environment["PAPERCLIP_TELEMETRY_DISABLED"])
@@ -90,6 +95,12 @@ func TestPaperclipComposeProfile(t *testing.T) {
 	if !contains(paperclipDB.Profiles, "paperclip") {
 		t.Fatalf("paperclip-db profiles = %v", paperclipDB.Profiles)
 	}
+	if !contains(paperclipDB.Ports, "${PAPERCLIP_DB_BIND_ADDRESS:-127.0.0.1}:5433:5432") {
+		t.Fatalf("paperclip-db ports = %v", paperclipDB.Ports)
+	}
+	if !contains(paperclipDB.Networks, "paperclip-internal") {
+		t.Fatalf("paperclip-db networks = %v", paperclipDB.Networks)
+	}
 	if _, ok := compose.Volumes["paperclip_db"]; !ok {
 		t.Fatal("paperclip_db volume missing")
 	}
@@ -102,6 +113,7 @@ func TestPaperclipEnvExampleIncludesRequiredSecrets(t *testing.T) {
 	}
 	for _, want := range []string{
 		"PAPERCLIP_DB_PASS=CHANGE_ME",
+		"PAPERCLIP_DB_BIND_ADDRESS=127.0.0.1",
 		"PAPERCLIP_AUTH_SECRET=CHANGE_ME",
 		"PAPERCLIP_PUBLIC_URL=https://paperclip.caboose-ai.io",
 	} {

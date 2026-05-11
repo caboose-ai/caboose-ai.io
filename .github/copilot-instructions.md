@@ -27,7 +27,7 @@ internal/
   tui/                  Bubbletea TUI (app model, views, components, styles)
   service/              Shared service manifest, registry, and configurator types
   servicebuilder/       Central service configurator construction
-  paperclip/            Paperclip bootstrap client and software-shop seed profile
+  paperclip/            Paperclip bootstrap client, local_trusted proxy mode, and software-shop seed profile
   mcp/                  MCP server, tools, resources
   cli/                  Non-interactive CLI runner
   migrate/              Host-to-Docker migration orchestrators

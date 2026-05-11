@@ -2,8 +2,9 @@
 
 Paperclip is an optional multi-agent workspace service behind the compose
 `paperclip` profile. It is exposed at `paperclip.caboose-ai.io`, protected by
-the Authentik forward-auth provider `paperclip-proxy`, and shown on Homarr once
-the targeted `paperclip` smoke flow is part of the repo.
+the Authentik forward-auth provider `paperclip-proxy`, and shown on Homarr.
+Paperclip itself runs in `local_trusted` mode on host loopback so Authentik is
+the only browser login prompt.
 
 ## Operations
 
@@ -18,8 +19,8 @@ mise run paperclip:seed
 and reads `PAPERCLIP_API_KEY` from the environment or configured secret store
 when the API requires bearer auth.
 
-If `PAPERCLIP_PUBLIC_URL` is overridden for a non-default domain, set
-`PAPERCLIP_ALLOWED_HOSTNAMES` to the matching hostname.
+If `PAPERCLIP_PUBLIC_URL` is overridden for a non-default domain, update the
+matching Authentik proxy provider and Caddy route.
 
 ## Service Contract
 

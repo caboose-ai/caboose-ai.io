@@ -12,8 +12,10 @@ These instructions apply to `dev/homelab/`.
 - Keep database-only networks marked `internal: true`.
 - App-facing services that need Authentik token exchange should join the `apps`
   network.
-- Use `HOMELAB_BIND_ADDRESS` and `serve_mode` behavior for host port exposure
-  instead of hardcoding `0.0.0.0` or `127.0.0.1`.
+- Use `HOMELAB_BIND_ADDRESS` and `serve_mode` behavior for app host port
+  exposure instead of hardcoding `0.0.0.0` or `127.0.0.1`. Paperclip DB is the
+  exception: keep its host port on `PAPERCLIP_DB_BIND_ADDRESS`, defaulting to
+  loopback, because the app reaches it from host-network mode.
 - Optional services that should not block default startup should use Compose
   profiles.
 - Prefer Go installer paths in `cmd/homelab` and `internal/install` for new
@@ -62,21 +64,23 @@ Good:
 ```yaml
 profiles:
   - paperclip
+network_mode: host
 environment:
-  PAPERCLIP_DEPLOYMENT_MODE: authenticated
-  PAPERCLIP_DEPLOYMENT_EXPOSURE: public
-  PAPERCLIP_AUTH_PUBLIC_BASE_URL: "${PAPERCLIP_PUBLIC_URL:-https://paperclip.caboose-ai.io}"
-  PAPERCLIP_ALLOWED_HOSTNAMES: "${PAPERCLIP_ALLOWED_HOSTNAMES:-paperclip.caboose-ai.io}"
+  HOST: 127.0.0.1
+  PAPERCLIP_BIND: loopback
+  PAPERCLIP_DEPLOYMENT_MODE: local_trusted
+  PAPERCLIP_DEPLOYMENT_EXPOSURE: private
 ```
 
 Bad:
 
 ```yaml
 environment:
-  PAPERCLIP_DEPLOYMENT_EXPOSURE: private
+  PAPERCLIP_DEPLOYMENT_MODE: authenticated
+  PAPERCLIP_DEPLOYMENT_EXPOSURE: public
   BETTER_AUTH_SECRET: "plaintext-secret"
-# Public reverse-proxied Paperclip needs explicit public auth URL settings, and
-# secrets must come from env substitution or the managed secret store.
+# Public reverse-proxied Paperclip should rely on Authentik forward auth for the
+# browser login; secrets must come from env substitution or the managed store.
 ```
 
 ## Validation

@@ -172,7 +172,7 @@ manifest-owned flow, for example `mise run paperclip:smoke`.
 - **Docker Compose** at `dev/homelab/docker-compose.yml` — all services
 - **Homarr** homepage — pinned to `ghcr.io/homarr-labs/homarr:v1.61.0`, stores dashboard state in `homarr_data:/appdata`, and uses native Authentik OIDC for `caboose-ai.io`
 - **Authentik** state — `/data` is persisted in the `authentik_data` volume for uploaded media and runtime-managed files
-- **Paperclip** profile (`docker compose --profile paperclip ...`) — built from upstream tag `v2026.428.0`, backed by `paperclip-db`, configured for authenticated public exposure at `paperclip.caboose-ai.io`, and Authentik-gated through `paperclip-proxy`
+- **Paperclip** profile (`docker compose --profile paperclip ...`) — built from upstream tag `v2026.428.0`, backed by `paperclip-db`, bound to host loopback in `local_trusted` mode, and Authentik-gated publicly through `paperclip-proxy`
 - **OpenClaw** external runtime — tracked for URL, Authentik proxy, dashboard,
   smoke, and health metadata without claiming a local compose service
 - **Cloudflare tunnel** for `chat` and `sonar` subdomains
