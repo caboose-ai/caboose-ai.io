@@ -494,3 +494,4 @@ networks:
   # in host network mode so the app can bind local_trusted loopback.
   paperclip-internal:
     driver: bridge
+    internal: true
