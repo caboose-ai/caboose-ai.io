@@ -219,6 +219,9 @@ func testProxyFlow(t *testing.T, s *Suite, svc ProxyFlow) {
 	if !strings.Contains(currentURL, svc.TargetHost) {
 		t.Errorf("expected to reach %s, got %s", svc.TargetHost, currentURL)
 	}
+	if !isLoggedInURL(currentURL, svc.TargetHost) {
+		t.Errorf("expected %s to finish logged in, got %s", svc.Name, currentURL)
+	}
 	rejectProxyErrorPage(t, page, svc)
 	if svc.HealthURL != "" {
 		checkProxyFlowHealth(t, s, svc)
@@ -269,23 +272,4 @@ func checkProxyFlowHealth(t *testing.T, s *Suite, svc ProxyFlow) {
 			t.Fatalf("%s health body missing %q: %s", svc.Name, want, bodyText)
 		}
 	}
-}
-
-func isLoggedInURL(currentURL, host string) bool {
-	if !strings.Contains(currentURL, host) {
-		return false
-	}
-	failMarkers := []string{
-		"/login",
-		"/auth",
-		"/error",
-		"/user/link_account",
-		"#!/auth",
-	}
-	for _, marker := range failMarkers {
-		if strings.Contains(currentURL, marker) {
-			return false
-		}
-	}
-	return true
 }
