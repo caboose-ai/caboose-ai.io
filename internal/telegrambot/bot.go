@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/caboose-ai/caboose-ai.io/internal/runner"
 )
@@ -219,7 +220,10 @@ func (b *Bot) HandleMessage(ctx context.Context, msg Message) []string {
 	if msg.Chat.Type != "private" {
 		return []string{"Telegram Agent Bridge only accepts private chat messages."}
 	}
-	if msg.Chat.ID != msg.From.ID || !b.authorized(msg.Chat.ID) {
+	if msg.Chat.ID != msg.From.ID {
+		return []string{"Telegram Agent Bridge only accepts private chat messages."}
+	}
+	if !b.authorized(msg.Chat.ID) {
 		return []string{"Unauthorized Telegram chat."}
 	}
 
@@ -511,11 +515,10 @@ func extractModelText(out []byte) string {
 }
 
 func splitTelegram(text string) []string {
-	text = strings.TrimSpace(text)
-	if text == "" {
+	runes := trimRuneSpace([]rune(text))
+	if len(runes) == 0 {
 		return []string{""}
 	}
-	runes := []rune(text)
 	var chunks []string
 	for len(runes) > maxTelegramMessage {
 		cut := -1
@@ -529,9 +532,21 @@ func splitTelegram(text string) []string {
 		if cut < maxTelegramMessage/2 {
 			cut = maxTelegramMessage
 		}
-		chunks = append(chunks, strings.TrimSpace(string(runes[:cut])))
-		runes = []rune(strings.TrimSpace(string(runes[cut:])))
+		chunks = append(chunks, string(trimRuneSpace(runes[:cut])))
+		runes = trimRuneSpace(runes[cut:])
 	}
-	chunks = append(chunks, strings.TrimSpace(string(runes)))
+	chunks = append(chunks, string(trimRuneSpace(runes)))
 	return chunks
+}
+
+func trimRuneSpace(text []rune) []rune {
+	start := 0
+	end := len(text)
+	for start < end && unicode.IsSpace(text[start]) {
+		start++
+	}
+	for end > start && unicode.IsSpace(text[end-1]) {
+		end--
+	}
+	return text[start:end]
 }
