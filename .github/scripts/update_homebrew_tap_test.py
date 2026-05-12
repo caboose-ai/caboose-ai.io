@@ -11,6 +11,12 @@ HOMELAB_FORMULA = '''class CabooseHomelab < Formula
   url "https://github.com/caboose-ai/caboose-ai.io/archive/refs/tags/v0.1.0.tar.gz"
   sha256 "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
   license "Apache-2.0"
+
+  test do
+    output = shell_output("#{bin}/homelab 2>&1", 1)
+    assert_match "Usage: homelab  [flags]", output
+    assert_match "Bootstrap the homelab SSO stack", output
+  end
 end
 '''
 
@@ -48,14 +54,31 @@ class UpdateHomebrewTapTest(unittest.TestCase):
                 'archive/refs/tags/v0.2.0.tar.gz"'
             )
             expected_sha = f'sha256 "{"f" * 64}"'
+            expected_usage = 'assert_match "Usage: homelab <command> [flags]", output'
 
             self.assertEqual([homelab, mcp], updated)
             self.assertIn(expected_url, homelab.read_text())
             self.assertIn(expected_sha, homelab.read_text())
+            self.assertIn(expected_usage, homelab.read_text())
+            self.assertNotIn('Usage: homelab  [flags]', homelab.read_text())
             self.assertIn(expected_url, mcp.read_text())
             self.assertIn(expected_sha, mcp.read_text())
             self.assertNotIn("v0.1.0", homelab.read_text())
             self.assertNotIn("aaaaaaaa", mcp.read_text())
+
+    def test_homelab_formula_without_usage_assertion_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "caboose-homelab.rb"
+            old_usage = 'assert_match "Usage: homelab  [flags]", output\n'
+            path.write_text(HOMELAB_FORMULA.replace(old_usage, ""))
+
+            with self.assertRaisesRegex(ValueError, "homelab usage assertion"):
+                update_homebrew_tap.update_formula(
+                    path=path,
+                    tag="v0.2.0",
+                    sha256="f" * 64,
+                    source_repo="caboose-ai/caboose-ai.io",
+                )
 
     def test_missing_formula_fails(self):
         with tempfile.TemporaryDirectory() as tmp:
