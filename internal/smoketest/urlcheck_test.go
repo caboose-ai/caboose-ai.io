@@ -17,6 +17,7 @@ func TestIsLoggedInURL(t *testing.T) {
 		{name: "link account", url: "https://openclaw.example.com/user/link_account", want: false},
 		{name: "auth hash", url: "https://openclaw.example.com/#!/auth", want: false},
 		{name: "wrong host", url: "https://auth.example.com/", want: false},
+		{name: "redirect query on wrong host", url: "https://idp.example.com/flow/default/?next=https%3A%2F%2Fopenclaw.example.com%2Fchat", want: false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := isLoggedInURL(tc.url, host); got != tc.want {

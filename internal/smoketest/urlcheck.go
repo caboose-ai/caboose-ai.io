@@ -1,9 +1,13 @@
 package smoketest
 
-import "strings"
+import (
+	"net/url"
+	"strings"
+)
 
 func isLoggedInURL(currentURL, host string) bool {
-	if !strings.Contains(currentURL, host) {
+	u, err := url.Parse(currentURL)
+	if err != nil || u.Hostname() != host {
 		return false
 	}
 	failMarkers := []string{
