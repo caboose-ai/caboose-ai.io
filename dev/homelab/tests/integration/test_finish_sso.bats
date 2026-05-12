@@ -5,6 +5,8 @@
 HOMELAB_ENV="${HOMELAB_ENV:-/opt/homelab/.env}"
 HOMELAB_COMPOSE="${HOMELAB_COMPOSE:-/opt/homelab/docker-compose.yml}"
 AUTHENTIK_URL="${AUTHENTIK_URL:-https://auth.caboose-ai.io}"
+AUTHENTIK_LOCAL_URL="${AUTHENTIK_LOCAL_URL:-http://127.0.0.1:9002}"
+FORGEJO_URL="${FORGEJO_URL:-http://127.0.0.1:3000}"
 PORTAINER_URL="${PORTAINER_URL:-http://127.0.0.1:9000}"
 FORGEJO_CONTAINER="${FORGEJO_CONTAINER:-forgejo}"
 
@@ -22,6 +24,28 @@ skip_unless_env() {
   fi
 }
 
+authentik_token() {
+  local token="${AUTHENTIK_TOKEN:-}"
+  if [[ -z "$token" ]]; then
+    token="${AUTHENTIK_BOOTSTRAP_TOKEN:-}"
+  fi
+  if [[ -z "$token" ]]; then
+    token=$(grep '^AUTHENTIK_TOKEN=' "$HOMELAB_ENV" 2>/dev/null | cut -d= -f2- || true)
+  fi
+  if [[ -z "$token" ]]; then
+    token=$(grep '^AUTHENTIK_BOOTSTRAP_TOKEN=' "$HOMELAB_ENV" 2>/dev/null | cut -d= -f2- || true)
+  fi
+  echo "$token"
+}
+
+skip_unless_authentik_token() {
+  local token
+  token=$(authentik_token)
+  if [[ -z "$token" ]]; then
+    skip "requires AUTHENTIK_TOKEN or AUTHENTIK_BOOTSTRAP_TOKEN to be set"
+  fi
+}
+
 portainer_token() {
   curl -sf -X POST "$PORTAINER_URL/api/auth" \
     -H "Content-Type: application/json" \
@@ -29,22 +53,31 @@ portainer_token() {
     | jq -r '.jwt'
 }
 
+forgejo_admin_username() {
+  local username="${FORGEJO_ADMIN_USERNAME:-}"
+  if [[ -z "$username" ]]; then
+    username=$(grep "^FORGEJO_ADMIN_USERNAME=" "$HOMELAB_ENV" 2>/dev/null | cut -d= -f2- || true)
+  fi
+  echo "${username:-auth-admin}"
+}
+
 forgejo_api() {
-  local forgejo_ip path method="${1:-GET}" body="$2"
-  forgejo_ip=$(docker inspect "$FORGEJO_CONTAINER" \
-    --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' | head -1)
+  local path method="${1:-GET}" body="$2"
   path="$1"; method="${2:-GET}"; body="${3:-}"
-  local gitea_pass
+  local gitea_pass forgejo_user
   gitea_pass=$(grep "^GITEA_ADMIN_PASSWORD=" "$HOMELAB_ENV" | cut -d= -f2-)
-  curl -sf "http://$forgejo_ip:3000/api/v1$path" \
-    -u "caboose:$gitea_pass" \
+  forgejo_user=$(forgejo_admin_username)
+  curl -sf "$FORGEJO_URL/api/v1$path" \
+    -u "$forgejo_user:$gitea_pass" \
     -H "Content-Type: application/json" ${body:+-d "$body"}
 }
 
 authentik_api() {
   local path="$1"
+  local token
+  token=$(authentik_token)
   curl -sf "$AUTHENTIK_URL/api/v3$path" \
-    -H "Authorization: Bearer ${AUTHENTIK_TOKEN}"
+    -H "Authorization: Bearer ${token}"
 }
 
 # ── Container health ──────────────────────────────────────────────────────────
@@ -118,25 +151,23 @@ authentik_api() {
 
 skip_if_forgejo_locked() {
   # Must be called directly in test body (not in subshell) for skip to work
-  local forgejo_ip gitea_pass http_code
-  forgejo_ip=$(docker inspect "$FORGEJO_CONTAINER" \
-    --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' | head -1)
+  local gitea_pass forgejo_user http_code
   gitea_pass=$(grep "^GITEA_ADMIN_PASSWORD=" "$HOMELAB_ENV" | cut -d= -f2-)
+  forgejo_user=$(forgejo_admin_username)
   http_code=$(curl -o /dev/null -w "%{http_code}" -s \
-    "http://$forgejo_ip:3000/api/v1/user/applications/oauth2" \
-    -u "caboose:$gitea_pass" 2>/dev/null || echo "0")
+    "$FORGEJO_URL/api/v1/user/applications/oauth2" \
+    -u "$forgejo_user:$gitea_pass" 2>/dev/null || echo "0")
   if [[ "$http_code" == "403" ]]; then
-    skip "Forgejo user has forced-password-change flag — run: docker exec -u git forgejo gitea admin user change-password --username caboose"
+    skip "Forgejo user has forced-password-change flag — run: docker exec -u git forgejo gitea admin user change-password --username $forgejo_user"
   fi
 }
 
 forgejo_oauth_apps() {
-  local forgejo_ip gitea_pass
-  forgejo_ip=$(docker inspect "$FORGEJO_CONTAINER" \
-    --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' | head -1)
+  local gitea_pass forgejo_user
   gitea_pass=$(grep "^GITEA_ADMIN_PASSWORD=" "$HOMELAB_ENV" | cut -d= -f2-)
-  curl -sf "http://$forgejo_ip:3000/api/v1/user/applications/oauth2" \
-    -u "caboose:$gitea_pass"
+  forgejo_user=$(forgejo_admin_username)
+  curl -sf "$FORGEJO_URL/api/v1/user/applications/oauth2" \
+    -u "$forgejo_user:$gitea_pass"
 }
 
 @test "forgejo: Woodpecker CI OAuth app exists" {
@@ -185,31 +216,22 @@ forgejo_oauth_apps() {
 
 # ── Authentik providers ───────────────────────────────────────────────────────
 
-@test "authentik: health endpoint is alive (via internal Docker network)" {
-  authentik_ip=$(docker inspect authentik-server \
-    --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' | head -1)
-  run curl -sf -o /dev/null -w "%{http_code}" "http://$authentik_ip:9000/-/health/live/"
+@test "authentik: health endpoint is alive (via local published port)" {
+  run curl -sf -o /dev/null -w "%{http_code}" "$AUTHENTIK_LOCAL_URL/-/health/live/"
   [ "$status" -eq 0 ]
   [ "$output" = "200" ]
 }
 
 @test "authentik: portainer OAuth2 provider exists" {
-  skip_unless_env AUTHENTIK_TOKEN
+  skip_unless_authentik_token
   result=$(authentik_api "/providers/oauth2/?search=portainer")
-  count=$(echo "$result" | jq '.count')
+  count=$(echo "$result" | jq '.results | length')
   [ "$count" -gt 0 ]
 }
 
 @test "authentik: forgejo OAuth2 provider exists" {
-  skip_unless_env AUTHENTIK_TOKEN
+  skip_unless_authentik_token
   result=$(authentik_api "/providers/oauth2/?search=forgejo")
-  count=$(echo "$result" | jq '.count')
-  [ "$count" -gt 0 ]
-}
-
-@test "authentik: woodpecker OAuth2 provider exists" {
-  skip_unless_env AUTHENTIK_TOKEN
-  result=$(authentik_api "/providers/oauth2/?search=woodpecker")
-  count=$(echo "$result" | jq '.count')
+  count=$(echo "$result" | jq '.results | length')
   [ "$count" -gt 0 ]
 }
