@@ -149,8 +149,9 @@ func recoverAuthentikTokenFromContainer(ctx context.Context) (string, error) {
 }
 
 const (
-	turnstileTestSiteKey = "1x00000000000000000000AA"
-	turnstileTestSecret  = "1x0000000000000000000000000000000AA"
+	turnstileTestSiteKey      = "1x00000000000000000000AA"
+	turnstileTestSecret       = "1x0000000000000000000000000000000AA"
+	authentikUsernameSelector = `input[name='uidField'], input[name='username'], input[autocomplete='username'], input[type='email'], input[placeholder*='Email or Username']`
 )
 
 func (s *Suite) InitBrowser(t *testing.T) {
@@ -318,9 +319,10 @@ func (s *Suite) LoginToAuthentik(t *testing.T, page *rod.Page) {
 
 	s.handleDialogs(page)
 
-	uid, err := page.ElementByJS(deepQueryOne(`input[name='uidField']`))
+	uid, err := page.Timeout(5 * time.Second).ElementByJS(deepQueryOne(authentikUsernameSelector))
 	if err != nil {
-		t.Fatalf("waiting for uidField: %v", err)
+		s.ScreenshotOnFailure(t, page)
+		t.Fatalf("waiting for authentik username field matching %q: %v", authentikUsernameSelector, err)
 	}
 	s.Input(t, page, uid, "authentik username", "auth-admin", false)
 
