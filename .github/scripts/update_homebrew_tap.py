@@ -9,6 +9,9 @@ FORMULAE = (
     "Formula/caboose-homelab-mcp.rb",
 )
 
+HOMELAB_FORMULA_NAME = "caboose-homelab.rb"
+HOMELAB_USAGE_ASSERTION = 'assert_match "Usage: homelab <command> [flags]", output'
+
 TAG_RE = re.compile(r"^v\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
@@ -21,6 +24,20 @@ def validate_tag(tag: str) -> None:
 def validate_sha256(sha256: str) -> None:
     if not SHA256_RE.match(sha256):
         raise ValueError("sha256 must be 64 lowercase hex characters")
+
+
+def update_homelab_test_assertion(path: Path, formula: str) -> str:
+    if path.name == HOMELAB_FORMULA_NAME:
+        formula, usage_count = re.subn(
+            r'^\s*assert_match "Usage: homelab [^"]*", output',
+            f"    {HOMELAB_USAGE_ASSERTION}",
+            formula,
+            count=1,
+            flags=re.MULTILINE,
+        )
+        if usage_count != 1:
+            raise ValueError(f"{path} does not contain exactly one homelab usage assertion")
+    return formula
 
 
 def update_formula(path: Path, tag: str, sha256: str, source_repo: str) -> None:
@@ -48,6 +65,8 @@ def update_formula(path: Path, tag: str, sha256: str, source_repo: str) -> None:
         raise ValueError(f"{path} does not contain exactly one source archive url")
     if sha_count != 1:
         raise ValueError(f"{path} does not contain exactly one sha256")
+
+    formula = update_homelab_test_assertion(path, formula)
 
     path.write_text(formula)
 

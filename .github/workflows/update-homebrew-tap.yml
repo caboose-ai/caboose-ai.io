@@ -105,7 +105,7 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Commit and push tap update branch
+      - name: Prepare local tap update branch
         if: steps.diff.outputs.changed == 'true'
         working-directory: tap
         env:
@@ -117,6 +117,24 @@ jobs:
           git switch -C "$BRANCH"
           git add Formula/caboose-homelab.rb Formula/caboose-homelab-mcp.rb
           git commit -m "chore: update caboose-ai.io to ${{ steps.release.outputs.tag }}"
+
+      - name: Set up Homebrew
+        uses: Homebrew/actions/setup-homebrew@main
+
+      - name: Smoke test Homebrew formulae
+        working-directory: source
+        env:
+          HOMEBREW_NO_ANALYTICS: "1"
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_CLEANUP: "1"
+        run: uv run python .github/scripts/brew_release_smoke.py --tap-dir ../tap
+
+      - name: Push tap update branch
+        if: steps.diff.outputs.changed == 'true'
+        working-directory: tap
+        env:
+          BRANCH: update/caboose-ai-io-${{ steps.release.outputs.tag }}
+        run: |
           git push --force-with-lease origin "HEAD:$BRANCH"
 
       - name: Open or reuse tap pull request

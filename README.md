@@ -75,7 +75,8 @@ breaking changes produce major releases. Release Please opens the version bump
 PR and publishes the GitHub release when that PR is merged. Published releases
 then trigger the Homebrew tap update workflow, which requires the
 `HOMEBREW_TAP_TOKEN` Actions secret, computes the tagged source archive SHA,
-updates both tap formulae, and opens or reuses a pull request in
+updates both tap formulae, installs and `brew test`s both updated formulae, and
+opens or reuses a pull request in
 `caboose-ai/homebrew-tap`. The tap update workflow can also be rerun manually
 with a release tag.
 
