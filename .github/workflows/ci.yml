@@ -49,6 +49,8 @@ jobs:
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: false
 
       - name: Run release helper tests
         run: uv run python -m unittest discover -s .github/scripts -p '*_test.py'
