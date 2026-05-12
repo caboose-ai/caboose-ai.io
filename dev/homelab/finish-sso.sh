@@ -6,6 +6,7 @@ set -euo pipefail
 
 AUTHENTIK_URL="https://auth.caboose-ai.io"
 PORTAINER_URL="http://127.0.0.1:9000"
+FORGEJO_URL="${FORGEJO_URL:-http://127.0.0.1:3000}"
 FORGEJO_CONTAINER="forgejo"
 HOMELAB_ENV="${HOMELAB_ENV:-/opt/homelab/.env}"
 HOMELAB_COMPOSE="${HOMELAB_COMPOSE:-/opt/homelab/docker-compose.yml}"
@@ -41,16 +42,25 @@ get_authentik_provider() {
     | head -1
 }
 
+forgejo_admin_username() {
+  local username="${FORGEJO_ADMIN_USERNAME:-}"
+  if [[ -z "$username" ]]; then
+    username=$(grep "^FORGEJO_ADMIN_USERNAME=" "$HOMELAB_ENV" 2>/dev/null | cut -d= -f2- || true)
+  fi
+  echo "${username:-auth-admin}"
+}
+
 # ── Step 1: Reset Forgejo password-change flag ────────────────────────────────
 
 step1_reset_forgejo_password() {
   echo "==> Step 1: Resetting Forgejo password-change flag..."
-  local gitea_pass
+  local gitea_pass forgejo_user
   gitea_pass=$(grep "^GITEA_ADMIN_PASSWORD=" "$HOMELAB_ENV" | cut -d= -f2-)
   [[ -z "$gitea_pass" ]] && { echo "ERROR: GITEA_ADMIN_PASSWORD not in $HOMELAB_ENV"; exit 1; }
+  forgejo_user=$(forgejo_admin_username)
 
   docker exec -u git "$FORGEJO_CONTAINER" gitea admin user change-password \
-    --username caboose --password "$gitea_pass" 2>&1
+    --username "$forgejo_user" --password "$gitea_pass" 2>&1
   echo "✓ Forgejo password-change flag cleared"
 }
 
@@ -61,25 +71,26 @@ WOODPECKER_CLIENT_SECRET=""
 
 step2_create_woodpecker_oauth_app() {
   echo "==> Step 2: Creating Woodpecker OAuth2 app in Forgejo..."
-  local gitea_pass forgejo_ip forgejo_url existing_id result
+  local gitea_pass forgejo_user forgejo_url forgejo_auth existing_id result
 
   gitea_pass=$(grep "^GITEA_ADMIN_PASSWORD=" "$HOMELAB_ENV" | cut -d= -f2-)
-  forgejo_ip=$(docker inspect forgejo --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}')
-  forgejo_url="http://$forgejo_ip:3000"
+  forgejo_user=$(forgejo_admin_username)
+  forgejo_url="$FORGEJO_URL"
+  forgejo_auth="$forgejo_user:$gitea_pass"
 
-  existing_id=$(get_forgejo_oauth_app_id "$forgejo_url" "caboose:$gitea_pass" "Woodpecker CI")
+  existing_id=$(get_forgejo_oauth_app_id "$forgejo_url" "$forgejo_auth" "Woodpecker CI")
 
   if [[ -n "$existing_id" ]]; then
     echo "   Woodpecker CI app already exists (ID: $existing_id)"
     echo "   NOTE: Re-run requires deleting the existing app in Forgejo UI to regenerate secret."
     echo "   Fetching existing client_id..."
     WOODPECKER_CLIENT_ID=$(curl -sf "$forgejo_url/api/v1/user/applications/oauth2" \
-      -u "caboose:$gitea_pass" \
+      -u "$forgejo_auth" \
       | jq -r ".[] | select(.id == $existing_id) | .client_id")
     echo "   client_id: $WOODPECKER_CLIENT_ID (secret not re-fetchable)"
   else
     result=$(curl -sf -X POST "$forgejo_url/api/v1/user/applications/oauth2" \
-      -u "caboose:$gitea_pass" \
+      -u "$forgejo_auth" \
       -H "Content-Type: application/json" \
       -d '{"name":"Woodpecker CI","redirect_uris":["https://ci.caboose-ai.io/authorize"]}')
     WOODPECKER_CLIENT_ID=$(echo "$result" | jq -r '.client_id')
