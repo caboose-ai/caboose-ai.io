@@ -220,9 +220,6 @@ func (b *Bot) HandleMessage(ctx context.Context, msg Message) []string {
 	if msg.Chat.Type != "private" {
 		return []string{"Telegram Agent Bridge only accepts private chat messages."}
 	}
-	if msg.Chat.ID != msg.From.ID {
-		return []string{"Telegram Agent Bridge only accepts private chat messages."}
-	}
 	if !b.authorized(msg.Chat.ID) {
 		return []string{"Unauthorized Telegram chat."}
 	}
