@@ -121,6 +121,9 @@ bootstrap verification. Woodpecker persists server data at
 - Release Please uses conventional commits from `main` to open release PRs and
   publish GitHub releases. Starting version is `v0.1.0`; `fix:` is patch,
   `feat:` is minor, and `!` or `BREAKING CHANGE:` is major.
+- Published releases trigger `.github/workflows/update-homebrew-tap.yml`, which
+  uses the `HOMEBREW_TAP_TOKEN` Actions secret to update
+  `caboose-ai/homebrew-tap` formulae and open or reuse a tap PR.
 - CI builds `cmd/homelab` and `cmd/mcp` with `-buildvcs=false` so release
   checks do not depend on Go VCS stamping.
 - Direct `homelab reset` requires `--yes` unless `--dry-run`; live Docker,
