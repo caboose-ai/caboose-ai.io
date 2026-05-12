@@ -2,10 +2,11 @@
 
 ## Project Overview
 
-Go monorepo for a homelab SSO infrastructure stack. Two binaries:
+Go monorepo for a homelab SSO infrastructure stack. Three binaries:
 - `cmd/homelab` — TUI installer that bootstraps Authentik SSO + all services
 - `cmd/mcp` — MCP server exposing homelab tools to AI assistants
   - `agent_invoke` provider fallback supports Ollama, Claude Code, Copilot CLI, and Emberfall
+- `cmd/telegram-agent` — private Telegram bot for allowlisted OpenClaw-backed agent control
 
 Service implementation packages live under `services/<slug>/`; shared internal
 packages live under `internal/`. No public API surface.
@@ -28,6 +29,7 @@ internal/
   service/              Shared service manifest, registry, and configurator types
   servicebuilder/       Central service configurator construction
   paperclip/            Paperclip bootstrap client, local_trusted proxy mode, and software-shop seed profile
+  telegrambot/          Telegram allowlist bot and OpenClaw model command bridge
   mcp/                  MCP server, tools, resources
   cli/                  Non-interactive CLI runner
   migrate/              Host-to-Docker migration orchestrators
@@ -166,6 +168,7 @@ CLOUDFLARE_ACCOUNT_ID=... CLOUDFLARE_API_TOKEN=... go run ./cmd/homelab oauth-se
 go run ./cmd/homelab install --domain caboose-ai.io --compose-dir dev/homelab
 go run ./cmd/homelab service --domain caboose-ai.io --compose-dir dev/homelab forgejo status
 go run ./cmd/homelab paperclip seed-company --profile software-shop --repo /home/caboose/dev/caboose-ai.io
+go run ./cmd/telegram-agent notify "task finished"
 ```
 
 ### Building

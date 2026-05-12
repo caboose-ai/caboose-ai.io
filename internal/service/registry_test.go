@@ -27,7 +27,7 @@ func TestLoadManifestsIncludesConfiguredAndOperationalServices(t *testing.T) {
 		t.Fatalf("LoadManifests: %v", err)
 	}
 
-	for _, slug := range []string{"forgejo", "openclaw", "paperclip"} {
+	for _, slug := range []string{"forgejo", "openclaw", "paperclip", "telegram-agent"} {
 		if _, ok := manifests[slug]; !ok {
 			t.Fatalf("manifest %q missing from loaded registry", slug)
 		}
@@ -43,6 +43,12 @@ func TestLoadManifestsIncludesConfiguredAndOperationalServices(t *testing.T) {
 	}
 	if len(manifests["openclaw"].ComposeServices) != 0 {
 		t.Fatalf("openclaw compose services = %v, want none", manifests["openclaw"].ComposeServices)
+	}
+	if manifests["telegram-agent"].Runtime != RuntimeExternal {
+		t.Fatalf("telegram-agent runtime = %q, want %q", manifests["telegram-agent"].Runtime, RuntimeExternal)
+	}
+	if len(manifests["telegram-agent"].ComposeServices) != 0 {
+		t.Fatalf("telegram-agent compose services = %v, want none", manifests["telegram-agent"].ComposeServices)
 	}
 }
 

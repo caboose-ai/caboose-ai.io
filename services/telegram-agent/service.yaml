@@ -1,0 +1,15 @@
+slug: telegram-agent
+display_name: Telegram Agent Bridge
+runtime: external
+url_key: ""
+compose_services: []
+secrets:
+  - TELEGRAM_BOT_TOKEN
+  - TELEGRAM_ALLOWED_USER_IDS
+configurator: ""
+dashboard:
+  show: false
+sso:
+  mode: telegram-allowlist
+docs:
+  - README.md

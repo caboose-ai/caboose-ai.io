@@ -17,11 +17,12 @@ Go monorepo for a self-hosted homelab infrastructure stack with SSO via Authenti
 | OpenClaw | `openclaw.caboose-ai.io` | OpenClaw app behind Authentik forward auth |
 | Ghost | `blog.caboose-ai.io` | Blog |
 | Paperclip | `paperclip.caboose-ai.io` | AI-labor control plane for the homelab software shop |
+| Telegram Agent Bridge | — | Private Telegram bot for OpenClaw-backed agent control |
 | Homarr | `caboose-ai.io` | Native Authentik/OIDC dashboard homepage |
 | Prometheus | — | Metrics collection |
 | Loki + Promtail | — | Log aggregation |
 
-All services authenticate through Authentik via OAuth2/OIDC or forward-auth proxy. The installer keeps Authentik applications open (`policy_engine_mode=all`) so provider-level SSO decisions control access consistently. The social login configurator promotes managed GitHub and Google sources, while generic source upserts preserve the existing promotion state unless explicitly changed.
+Browser-facing services authenticate through Authentik via OAuth2/OIDC or forward-auth proxy. The installer keeps Authentik applications open (`policy_engine_mode=all`) so provider-level SSO decisions control access consistently. The social login configurator promotes managed GitHub and Google sources, while generic source upserts preserve the existing promotion state unless explicitly changed. Telegram Agent Bridge is not public web surface; it is a host-run bot protected by a Telegram user-ID allowlist.
 
 The installer also completes first-run setup for services that expose a product
 setup or local-login boundary before they can participate in the SSO smoke
@@ -37,6 +38,7 @@ container recreation.
   - Includes `homelab service <slug> <status|configure|logs|smoke|open>` for per-service operations backed by `services/<slug>/service.yaml`.
 - **`cmd/mcp`** — MCP server exposing homelab tools to AI assistants.
   - Includes `agent_invoke` provider fallback across Ollama, Claude Code, Copilot CLI, and Emberfall.
+- **`cmd/telegram-agent`** — Private Telegram bot that runs local OpenClaw gateway prompts and role-scoped agent prompts for allowlisted Telegram users.
 
 ## Homebrew
 
@@ -118,6 +120,10 @@ mise run paperclip:status
 mise run paperclip:smoke
 mise run paperclip:seed
 
+# Telegram agent bridge
+mise run telegram-agent:run
+mise run telegram-agent:notify -- "Homelab task finished."
+
 # Migrate host Mattermost to Docker
 go run ./cmd/homelab migrate
 ```
@@ -175,6 +181,9 @@ manifest-owned flow, for example `mise run paperclip:smoke`.
 - **Paperclip** profile (`docker compose --profile paperclip ...`) — built from upstream tag `v2026.428.0`, backed by `paperclip-db`, bound to host loopback in `local_trusted` mode, and Authentik-gated publicly through `paperclip-proxy`
 - **OpenClaw** external runtime — tracked for URL, Authentik proxy, dashboard,
   smoke, and health metadata without claiming a local compose service
+- **Telegram Agent Bridge** external runtime — host-run long-polling bot that
+  uses `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOWED_USER_IDS`, and the local OpenClaw
+  CLI instead of a compose service or public route
 - **Cloudflare tunnel** for `chat` and `sonar` subdomains
 - **1Password** for secret storage (with `.env` fallback)
 - **Prometheus + Loki** for metrics and logs, visualized in Grafana
