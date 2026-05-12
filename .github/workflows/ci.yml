@@ -47,6 +47,12 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
 
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v8.1.0
+
+      - name: Run release helper tests
+        run: uv run python -m unittest discover -s .github/scripts -p '*_test.py'
+
       - name: Set up Go
         uses: actions/setup-go@v6
         with:

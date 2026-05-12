@@ -91,6 +91,9 @@ container recreation.
   legacy `[type] description` titles are accepted during transition.
 - Release Please starts from `v0.1.0`: `fix:` creates patch releases, `feat:`
   creates minor releases, and `!` or `BREAKING CHANGE:` creates major releases.
+- Published releases trigger `.github/workflows/update-homebrew-tap.yml`, which
+  uses the `HOMEBREW_TAP_TOKEN` Actions secret to update
+  `caboose-ai/homebrew-tap` formulae and open or reuse a tap PR.
 - CI builds both release binaries with `go build -buildvcs=false` to avoid
   Go VCS stamping failures in linked worktrees or source archive contexts.
 - Direct `homelab reset` requires `--yes` unless `--dry-run`; live Docker,

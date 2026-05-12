@@ -1,0 +1,150 @@
+name: Update Homebrew Tap
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish to the Homebrew tap, for example v0.1.1
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  update-homebrew-tap:
+    name: Update tap formulae
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve release tag
+        id: release
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          tag="${RELEASE_TAG:-$INPUT_TAG}"
+          if [[ -z "$tag" ]]; then
+            echo "::error::Release tag is required."
+            exit 1
+          fi
+          if [[ ! "$tag" =~ ^v[0-9]+[.][0-9]+[.][0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Release tag must look like vX.Y.Z."
+            exit 1
+          fi
+
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Require tap token
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          if [[ -z "$HOMEBREW_TAP_TOKEN" ]]; then
+            echo "::error::HOMEBREW_TAP_TOKEN must be set with write access to caboose-ai/homebrew-tap."
+            exit 1
+          fi
+
+      - name: Check out source repo
+        uses: actions/checkout@v6
+        with:
+          path: source
+
+      - name: Check out Homebrew tap
+        uses: actions/checkout@v6
+        with:
+          repository: caboose-ai/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v8.1.0
+
+      - name: Compute source archive checksum
+        id: archive
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          url="https://github.com/caboose-ai/caboose-ai.io/archive/refs/tags/${TAG}.tar.gz"
+          sha256="$(curl -fsSL "$url" | shasum -a 256 | awk '{print $1}')"
+          if [[ ! "$sha256" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "::error::Computed SHA256 is invalid."
+            exit 1
+          fi
+
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "sha256=$sha256" >> "$GITHUB_OUTPUT"
+          echo "Computed $sha256 for $url"
+
+      - name: Update formulae
+        run: |
+          uv run python source/.github/scripts/update_homebrew_tap.py \
+            --tap-dir tap \
+            --tag "${{ steps.release.outputs.tag }}" \
+            --sha256 "${{ steps.archive.outputs.sha256 }}"
+
+      - name: Validate formula syntax
+        working-directory: tap
+        run: |
+          ruby -c Formula/caboose-homelab.rb
+          ruby -c Formula/caboose-homelab-mcp.rb
+
+      - name: Check for formula changes
+        id: diff
+        working-directory: tap
+        run: |
+          git diff -- Formula/caboose-homelab.rb Formula/caboose-homelab-mcp.rb
+          if git diff --quiet -- Formula/caboose-homelab.rb Formula/caboose-homelab-mcp.rb; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Formulae already point at ${{ steps.release.outputs.tag }}."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit and push tap update branch
+        if: steps.diff.outputs.changed == 'true'
+        working-directory: tap
+        env:
+          BRANCH: update/caboose-ai-io-${{ steps.release.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin "+refs/heads/${BRANCH}:refs/remotes/origin/${BRANCH}" || true
+          git switch -C "$BRANCH"
+          git add Formula/caboose-homelab.rb Formula/caboose-homelab-mcp.rb
+          git commit -m "chore: update caboose-ai.io to ${{ steps.release.outputs.tag }}"
+          git push --force-with-lease origin "HEAD:$BRANCH"
+
+      - name: Open or reuse tap pull request
+        if: steps.diff.outputs.changed == 'true'
+        working-directory: tap
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          BRANCH: update/caboose-ai-io-${{ steps.release.outputs.tag }}
+          TAG: ${{ steps.release.outputs.tag }}
+          SHA256: ${{ steps.archive.outputs.sha256 }}
+          ARCHIVE_URL: ${{ steps.archive.outputs.url }}
+        run: |
+          existing_url="$(gh pr list --repo caboose-ai/homebrew-tap --head "$BRANCH" --json url --jq '.[0].url')"
+          if [[ -n "$existing_url" ]]; then
+            echo "Tap pull request already exists: $existing_url"
+            exit 0
+          fi
+
+          cat > pr-body.md <<BODY
+          Updates caboose-homelab and caboose-homelab-mcp to ${TAG}.
+
+          Source archive: ${ARCHIVE_URL}
+          SHA256: ${SHA256}
+
+          Triggered by caboose-ai/caboose-ai.io release ${TAG}.
+          BODY
+
+          gh pr create \
+            --repo caboose-ai/homebrew-tap \
+            --base main \
+            --head "$BRANCH" \
+            --title "chore: update caboose-ai.io to ${TAG}" \
+            --body-file pr-body.md

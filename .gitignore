@@ -8,5 +8,7 @@ docs/superpowers/
 /homelab
 dev/homelab/caddy.paperclip.example
 *.png
+__pycache__/
+*.pyc
 internal/smoketest/testdata/failures/
 internal/smoketest/testdata/evidence/
