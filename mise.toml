@@ -125,6 +125,18 @@ run = "openclaw daemon restart"
 description = "Run a one-shot OpenClaw Ollama gateway smoke check"
 run = "openclaw infer model run --gateway --prompt 'Reply with exactly: ok' --json"
 
+[tasks."telegram-agent:build"]
+description = "Build the Telegram agent bridge"
+run = "go build -buildvcs=false -o ./telegram-agent ./cmd/telegram-agent"
+
+[tasks."telegram-agent:run"]
+description = "Run the Telegram agent bridge with long polling"
+run = "go run ./cmd/telegram-agent"
+
+[tasks."telegram-agent:notify"]
+description = "Send a one-shot Telegram notification to configured allowed users"
+run = "go run ./cmd/telegram-agent notify"
+
 [tasks.mcp]
 description = "Build and run the MCP server"
 run = "go build -o ./mcp-server ./cmd/mcp && ./mcp-server"

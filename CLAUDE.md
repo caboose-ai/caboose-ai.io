@@ -2,10 +2,11 @@
 
 ## Project
 
-Go monorepo for a homelab SSO infrastructure stack. Two binaries:
+Go monorepo for a homelab SSO infrastructure stack. Three binaries:
 - `cmd/homelab` — Bubbletea TUI installer that bootstraps Authentik SSO + all services
 - `cmd/mcp` — MCP server exposing homelab tools to AI assistants
   - `agent_invoke` supports provider fallback: Ollama, Claude Code, Copilot CLI, Emberfall
+- `cmd/telegram-agent` — private Telegram bot for allowlisted OpenClaw-backed agent control
 
 Service implementation packages live under `services/<slug>/`; shared internal
 packages remain under `internal/`. No public API.
@@ -18,6 +19,7 @@ go test ./...                     # run all tests
 go test ./internal/install/ -v    # test a specific package
 go run ./cmd/homelab oauth-setup --domain caboose-ai.io  # print external OAuth/Turnstile setup
 go run ./cmd/homelab service --domain caboose-ai.io forgejo status  # inspect one service
+go run ./cmd/telegram-agent notify "task finished"  # send a Telegram completion notice
 CLOUDFLARE_ACCOUNT_ID=... CLOUDFLARE_API_TOKEN=... go run ./cmd/homelab oauth-setup --domain caboose-ai.io --create-turnstile  # create Turnstile via API
 mise run sso:check                # full SSO smoke tests (requires live stack)
 mise run sso:check-quick          # API config checks only
@@ -33,6 +35,7 @@ Go binary is at `/home/caboose/.local/go/bin/go`. If `go` isn't on PATH, use `PA
 - `internal/service/` — Shared service manifest, registry, and `ServiceConfigurator` types
 - `internal/servicebuilder/` — Central service configurator construction for installer and MCP
 - `internal/paperclip/` — Paperclip bootstrap client and software-shop seed profile
+- `internal/telegrambot/` — Telegram long-poll bot, allowlist checks, model selection, and OpenClaw command invocation
 - `services/<slug>/` — Per-service workspaces with `service.yaml`, `README.md`, and optional Go configurator package
 - `services/authentik/` — Authentik API client, one file per resource type
 - `internal/tui/` — Bubbletea TUI with message-driven phase transitions
@@ -144,7 +147,7 @@ container recreation.
 
 - Domain: `caboose-ai.io`
 - Auth: `auth.caboose-ai.io` (Authentik)
-- Services: git, ci, docker, grafana, ai, sonar, chat, openclaw, blog, paperclip, dash
+- Services: git, ci, docker, grafana, ai, sonar, chat, openclaw, blog, paperclip, telegram-agent, dash
 - Observability: Prometheus (metrics), Loki + Promtail (logs), Grafana (dashboards)
 - Caddy reverse proxy on the host
 - Cloudflare tunnel for `chat` and `sonar` subdomains
@@ -152,3 +155,7 @@ container recreation.
 - Paperclip runs behind the compose `paperclip` profile with Authentik forward-auth provider `paperclip-proxy`; Paperclip itself uses `local_trusted` mode on host loopback so Authentik is the only browser login. Start it with `mise run paperclip:up`, verify it with `mise run paperclip:smoke`, and seed it with `homelab paperclip seed-company --profile software-shop --repo /home/caboose/dev/caboose-ai.io`.
 - OpenClaw is an external runtime tracked by manifest, URL, Authentik proxy,
   dashboard, smoke, and health metadata; do not add a fake compose service for it.
+- Telegram Agent Bridge is an external runtime tracked by manifest and run on
+  the host with `mise run telegram-agent:run`; it uses
+  `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOWED_USER_IDS`, and the local OpenClaw CLI
+  rather than Caddy, Homarr, Authentik, or Docker Compose.
