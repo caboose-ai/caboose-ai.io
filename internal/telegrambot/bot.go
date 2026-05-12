@@ -22,6 +22,7 @@ import (
 const (
 	defaultTelegramAPIBase = "https://api.telegram.org"
 	defaultPollTimeout     = 30
+	openClawInvokeTimeout  = 2 * time.Minute
 	maxTelegramMessage     = 3900
 )
 
@@ -46,11 +47,15 @@ type Config struct {
 }
 
 func ConfigFromEnv() (Config, error) {
+	requireConfirmation, err := envBool("TELEGRAM_REQUIRE_CONFIRMATION", true)
+	if err != nil {
+		return Config{}, err
+	}
 	cfg := Config{
 		BotToken:            strings.TrimSpace(os.Getenv("TELEGRAM_BOT_TOKEN")),
 		DefaultModel:        strings.TrimSpace(os.Getenv("TELEGRAM_DEFAULT_MODEL")),
 		TelegramAPIBase:     strings.TrimSpace(os.Getenv("TELEGRAM_API_BASE")),
-		RequireConfirmation: envBool("TELEGRAM_REQUIRE_CONFIRMATION", true),
+		RequireConfirmation: requireConfirmation,
 	}
 	if cfg.BotToken == "" {
 		return Config{}, errors.New("TELEGRAM_BOT_TOKEN is required")
@@ -191,7 +196,7 @@ func (b *Bot) Run(ctx context.Context) error {
 			replies := b.HandleMessage(ctx, *update.Message)
 			for _, reply := range replies {
 				if err := b.sendMessage(ctx, update.Message.Chat.ID, reply); err != nil {
-					return err
+					continue
 				}
 			}
 		}
@@ -213,6 +218,9 @@ func (b *Bot) HandleMessage(ctx context.Context, msg Message) []string {
 	}
 	if msg.Chat.Type != "private" {
 		return []string{"Telegram Agent Bridge only accepts private chat messages."}
+	}
+	if msg.Chat.ID != msg.From.ID || !b.authorized(msg.Chat.ID) {
+		return []string{"Unauthorized Telegram chat."}
 	}
 
 	text := strings.TrimSpace(msg.Text)
@@ -281,6 +289,9 @@ func (b *Bot) agent(ctx context.Context, userID int64, rest string) []string {
 		confirmed = true
 		rest = strings.TrimSpace(rest[len("confirm "):])
 	}
+	if rest == "" {
+		return []string{"Usage: /agent <role> <task>\nExample: /agent qa run the SSO smoke checks"}
+	}
 	if b.cfg.RequireConfirmation && !confirmed && risky(rest) {
 		return []string{"Confirmation required for write/deploy actions. Re-run as:\n/agent confirm " + rest}
 	}
@@ -295,7 +306,9 @@ func (b *Bot) agent(ctx context.Context, userID int64, rest string) []string {
 }
 
 func (b *Bot) runOpenClaw(ctx context.Context, model, prompt string) []string {
-	out, err := b.runner.Run(ctx, "openclaw", "infer", "model", "run", "--gateway", "--json", "--model", model, "--prompt", prompt)
+	invokeCtx, cancel := context.WithTimeout(ctx, openClawInvokeTimeout)
+	defer cancel()
+	out, err := b.runner.Run(invokeCtx, "openclaw", "infer", "model", "run", "--gateway", "--json", "--model", model, "--prompt", prompt)
 	if err != nil {
 		return []string{"Agent invocation failed:\n" + err.Error()}
 	}
@@ -438,12 +451,19 @@ func splitCSV(raw string) []string {
 	return values
 }
 
-func envBool(key string, fallback bool) bool {
+func envBool(key string, fallback bool) (bool, error) {
 	raw := strings.TrimSpace(strings.ToLower(os.Getenv(key)))
 	if raw == "" {
-		return fallback
+		return fallback, nil
 	}
-	return raw == "1" || raw == "true" || raw == "yes" || raw == "on"
+	switch raw {
+	case "1", "true", "yes", "on":
+		return true, nil
+	case "0", "false", "no", "off":
+		return false, nil
+	default:
+		return false, fmt.Errorf("%s must be a boolean value", key)
+	}
 }
 
 func contains(values []string, want string) bool {
@@ -495,15 +515,23 @@ func splitTelegram(text string) []string {
 	if text == "" {
 		return []string{""}
 	}
+	runes := []rune(text)
 	var chunks []string
-	for len(text) > maxTelegramMessage {
-		cut := strings.LastIndex(text[:maxTelegramMessage], "\n")
+	for len(runes) > maxTelegramMessage {
+		cut := -1
+		prefix := runes[:maxTelegramMessage]
+		for i := len(prefix) - 1; i >= 0; i-- {
+			if prefix[i] == '\n' {
+				cut = i
+				break
+			}
+		}
 		if cut < maxTelegramMessage/2 {
 			cut = maxTelegramMessage
 		}
-		chunks = append(chunks, strings.TrimSpace(text[:cut]))
-		text = strings.TrimSpace(text[cut:])
+		chunks = append(chunks, strings.TrimSpace(string(runes[:cut])))
+		runes = []rune(strings.TrimSpace(string(runes[cut:])))
 	}
-	chunks = append(chunks, text)
+	chunks = append(chunks, strings.TrimSpace(string(runes)))
 	return chunks
 }

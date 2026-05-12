@@ -61,11 +61,16 @@ func notify(ctx context.Context, bot *telegrambot.Bot, args []string) error {
 	if err != nil {
 		return err
 	}
+	var failures []string
 	for _, chatID := range chatIDs {
 		if err := bot.SendText(ctx, chatID, message); err != nil {
-			return fmt.Errorf("sending Telegram message to %d: %w", chatID, err)
+			failures = append(failures, fmt.Sprintf("%d: %v", chatID, err))
+			continue
 		}
 		fmt.Fprintf(os.Stderr, "telegram-agent: sent notification to %d\n", chatID)
+	}
+	if len(failures) > 0 {
+		return fmt.Errorf("sending Telegram message failed for %d chat(s): %s", len(failures), strings.Join(failures, "; "))
 	}
 	return nil
 }

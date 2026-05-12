@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 type runCall struct {
@@ -15,13 +16,18 @@ type runCall struct {
 }
 
 type fakeRunner struct {
-	out   []byte
-	calls []runCall
+	out     []byte
+	err     error
+	calls   []runCall
+	runHook func(ctx context.Context, name string, args ...string) ([]byte, error)
 }
 
 func (r *fakeRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
 	r.calls = append(r.calls, runCall{name: name, args: append([]string{}, args...)})
-	return r.out, nil
+	if r.runHook != nil {
+		return r.runHook(ctx, name, args...)
+	}
+	return r.out, r.err
 }
 
 func (r *fakeRunner) RunWithStdin(ctx context.Context, stdin io.Reader, name string, args ...string) ([]byte, error) {
@@ -60,6 +66,13 @@ func TestConfigFromEnvLoadsDefaultsAndRejectsInvalidDefault(t *testing.T) {
 	t.Setenv("TELEGRAM_ALLOWED_MODELS", "ollama/qwen3:8b")
 	if _, err := ConfigFromEnv(); err == nil {
 		t.Fatal("ConfigFromEnv() error = nil, want invalid default model error")
+	}
+
+	t.Setenv("TELEGRAM_DEFAULT_MODEL", "")
+	t.Setenv("TELEGRAM_ALLOWED_MODELS", "")
+	t.Setenv("TELEGRAM_REQUIRE_CONFIRMATION", "ture")
+	if _, err := ConfigFromEnv(); err == nil {
+		t.Fatal("ConfigFromEnv() error = nil, want invalid TELEGRAM_REQUIRE_CONFIRMATION error")
 	}
 }
 
@@ -211,6 +224,58 @@ func TestRunDropsPendingUpdatesBeforeProcessing(t *testing.T) {
 	}
 }
 
+func TestRunContinuesAfterSendMessageFailure(t *testing.T) {
+	runner := &fakeRunner{out: []byte(`{"text":"ok"}`)}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sendCount := 0
+	client := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		switch {
+		case strings.Contains(req.URL.Path, "getUpdates"):
+			timeout := req.URL.Query().Get("timeout")
+			offset := req.URL.Query().Get("offset")
+			switch {
+			case timeout == "0":
+				return telegramResponse(`{"ok":true,"result":[]}`), nil
+			case timeout == "30" && offset == "":
+				return telegramResponse(`{"ok":true,"result":[{"update_id":1,"message":{"text":"/ask first","from":{"id":123},"chat":{"id":123,"type":"private"}}}]}`), nil
+			case timeout == "30" && offset == "2":
+				return telegramResponse(`{"ok":true,"result":[{"update_id":2,"message":{"text":"/ask second","from":{"id":123},"chat":{"id":123,"type":"private"}}}]}`), nil
+			default:
+				t.Fatalf("unexpected getUpdates query: %s", req.URL.RawQuery)
+			}
+		case strings.Contains(req.URL.Path, "sendMessage"):
+			sendCount++
+			if sendCount == 1 {
+				return &http.Response{
+					StatusCode: http.StatusBadRequest,
+					Body:       io.NopCloser(strings.NewReader(`{"ok":false}`)),
+				}, nil
+			}
+			cancel()
+			return telegramResponse(`{"ok":true,"result":{}}`), nil
+		default:
+			t.Fatalf("unexpected request path: %s", req.URL.Path)
+		}
+		return nil, nil
+	})
+
+	bot, err := New(Config{
+		BotToken:        "token",
+		AllowedUserIDs:  map[int64]bool{123: true},
+		TelegramAPIBase: "https://telegram.test",
+	}, runner, client)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	if err := bot.Run(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Run() error = %v, want context.Canceled", err)
+	}
+	if len(runner.calls) != 2 {
+		t.Fatalf("runner calls = %#v, want two command invocations", runner.calls)
+	}
+}
+
 func TestStatusRunsOpenClawModelStatus(t *testing.T) {
 	runner := &fakeRunner{out: []byte(`{"ready":true}`)}
 	bot := newTestBot(t, runner)
@@ -264,6 +329,47 @@ func TestSendTextSplitsAndPostsToTelegram(t *testing.T) {
 	}
 	if !strings.Contains(bodies[0], "chat_id=123") || !strings.Contains(bodies[1], "chat_id=123") {
 		t.Fatalf("request bodies = %#v", bodies)
+	}
+}
+
+func TestSplitTelegramKeepsUTF8Boundaries(t *testing.T) {
+	input := strings.Repeat("界", maxTelegramMessage+1)
+	chunks := splitTelegram(input)
+	if len(chunks) != 2 {
+		t.Fatalf("chunk count = %d, want 2", len(chunks))
+	}
+	for i, chunk := range chunks {
+		if !utf8.ValidString(chunk) {
+			t.Fatalf("chunk %d is invalid UTF-8", i)
+		}
+	}
+}
+
+func TestAgentConfirmWithoutArgumentsReturnsUsage(t *testing.T) {
+	runner := &fakeRunner{out: []byte(`{"text":"ok"}`)}
+	bot := newTestBot(t, runner)
+	replies := bot.HandleMessage(context.Background(), allowedMessage("/agent confirm"))
+	if len(replies) != 1 || !strings.Contains(replies[0], "Usage: /agent <role> <task>") {
+		t.Fatalf("replies = %#v", replies)
+	}
+	if len(runner.calls) != 0 {
+		t.Fatalf("runner calls = %#v, want none", runner.calls)
+	}
+}
+
+func TestInvokeUsesTimeoutContext(t *testing.T) {
+	runner := &fakeRunner{
+		runHook: func(ctx context.Context, name string, args ...string) ([]byte, error) {
+			if _, ok := ctx.Deadline(); !ok {
+				t.Fatal("runner context has no deadline")
+			}
+			return []byte(`{"text":"ok"}`), nil
+		},
+	}
+	bot := newTestBot(t, runner)
+	replies := bot.HandleMessage(context.Background(), allowedMessage("/ask hello"))
+	if len(replies) != 1 || replies[0] != "ok" {
+		t.Fatalf("replies = %#v", replies)
 	}
 }
 
