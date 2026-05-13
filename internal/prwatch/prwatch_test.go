@@ -247,6 +247,25 @@ func TestAssessIgnoresOutdatedCodexReviewComments(t *testing.T) {
 	}
 }
 
+func TestAssessIgnoresRetargetedOutdatedCodexReviewComments(t *testing.T) {
+	pr := readyPR()
+	pr.HeadRefOID = "current-head"
+	pr.ReviewComments = []ReviewComment{
+		{
+			Author:           User{Login: "chatgpt-codex-connector"},
+			Body:             "Fix this.",
+			CommitID:         "current-head",
+			OriginalCommitID: "old-head",
+		},
+	}
+
+	got := Assess(pr)
+
+	if got.State != Ready {
+		t.Fatalf("Assess().State = %q, want %q; findings=%v", got.State, Ready, got.Findings)
+	}
+}
+
 func TestAssessWaitsOnUnstableMergeStateWhenChecksArePending(t *testing.T) {
 	pr := readyPR()
 	pr.MergeStateStatus = "UNSTABLE"

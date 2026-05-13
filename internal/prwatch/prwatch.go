@@ -61,11 +61,12 @@ type Commit struct {
 }
 
 type ReviewComment struct {
-	Author   User   `json:"user"`
-	Body     string `json:"body"`
-	URL      string `json:"html_url"`
-	Path     string `json:"path"`
-	CommitID string `json:"commit_id"`
+	Author           User   `json:"user"`
+	Body             string `json:"body"`
+	URL              string `json:"html_url"`
+	Path             string `json:"path"`
+	CommitID         string `json:"commit_id"`
+	OriginalCommitID string `json:"original_commit_id"`
 }
 
 type ReviewRequest struct {
@@ -305,12 +306,20 @@ func currentHeadCodexReviewCommentCount(pr PullRequest) int {
 		if !isCodexActor(comment.Author.Login) {
 			continue
 		}
-		if pr.HeadRefOID != "" && comment.CommitID != "" && !strings.EqualFold(strings.TrimSpace(comment.CommitID), strings.TrimSpace(pr.HeadRefOID)) {
+		commentCommitID := reviewCommentCommitID(comment)
+		if pr.HeadRefOID != "" && commentCommitID != "" && !strings.EqualFold(commentCommitID, strings.TrimSpace(pr.HeadRefOID)) {
 			continue
 		}
 		count++
 	}
 	return count
+}
+
+func reviewCommentCommitID(comment ReviewComment) string {
+	if strings.TrimSpace(comment.OriginalCommitID) != "" {
+		return strings.TrimSpace(comment.OriginalCommitID)
+	}
+	return strings.TrimSpace(comment.CommitID)
 }
 
 func pluralize(count int, singular, plural string) string {
