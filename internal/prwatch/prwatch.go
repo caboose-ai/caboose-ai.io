@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 )
 
 type State string
@@ -25,9 +26,11 @@ type PullRequest struct {
 	Comments            []Comment        `json:"comments"`
 	Reviews             []Review         `json:"reviews"`
 	LatestReviews       []Review         `json:"latestReviews"`
+	ReviewComments      []ReviewComment  `json:"reviewComments"`
 	StatusCheckRollup   []map[string]any `json:"statusCheckRollup"`
 	ReviewRequests      []ReviewRequest  `json:"reviewRequests"`
 	HeadRefName         string           `json:"headRefName"`
+	HeadRefOID          string           `json:"headRefOid"`
 	BaseRefName         string           `json:"baseRefName"`
 	HeadRepository      Repository       `json:"headRepository"`
 	HeadRepositoryOwner RepositoryOwner  `json:"headRepositoryOwner"`
@@ -38,16 +41,31 @@ type User struct {
 }
 
 type Comment struct {
-	Author User   `json:"author"`
-	Body   string `json:"body"`
-	URL    string `json:"url"`
+	Author    User   `json:"author"`
+	Body      string `json:"body"`
+	URL       string `json:"url"`
+	CreatedAt string `json:"createdAt"`
 }
 
 type Review struct {
-	Author User   `json:"author"`
-	State  string `json:"state"`
-	Body   string `json:"body"`
-	URL    string `json:"url"`
+	Author      User   `json:"author"`
+	State       string `json:"state"`
+	Body        string `json:"body"`
+	URL         string `json:"url"`
+	SubmittedAt string `json:"submittedAt"`
+	Commit      Commit `json:"commit"`
+}
+
+type Commit struct {
+	OID string `json:"oid"`
+}
+
+type ReviewComment struct {
+	Author   User   `json:"user"`
+	Body     string `json:"body"`
+	URL      string `json:"html_url"`
+	Path     string `json:"path"`
+	CommitID string `json:"commit_id"`
 }
 
 type ReviewRequest struct {
@@ -80,7 +98,7 @@ func Assess(pr PullRequest) Assessment {
 	if strings.EqualFold(pr.ReviewDecision, "CHANGES_REQUESTED") {
 		blockers = append(blockers, "review decision has changes requested")
 	}
-	for _, review := range append(append([]Review{}, pr.LatestReviews...), pr.Reviews...) {
+	for _, review := range pr.LatestReviews {
 		if strings.EqualFold(review.State, "CHANGES_REQUESTED") {
 			reviewer := strings.TrimSpace(review.Author.Login)
 			if reviewer == "" {
@@ -88,6 +106,9 @@ func Assess(pr PullRequest) Assessment {
 			}
 			blockers = append(blockers, fmt.Sprintf("%s has changes requested", reviewer))
 		}
+	}
+	if count := currentHeadCodexReviewCommentCount(pr); count > 0 {
+		blockers = append(blockers, pluralize(count, "Codex review has %d current-head comment", "Codex review has %d current-head comments"))
 	}
 
 	checks := summarizeChecks(pr.StatusCheckRollup)
@@ -100,13 +121,23 @@ func Assess(pr PullRequest) Assessment {
 	}
 
 	switch strings.ToUpper(strings.TrimSpace(pr.MergeStateStatus)) {
-	case "", "CLEAN", "HAS_HOOKS":
+	case "", "CLEAN", "HAS_HOOKS", "DRAFT":
 	case "UNKNOWN":
 		waiting = append(waiting, "merge state is UNKNOWN")
 	case "DIRTY":
 		blockers = append(blockers, "merge state is DIRTY")
 	case "BLOCKED":
-		blockers = append(blockers, "merge state is BLOCKED")
+		if strings.EqualFold(pr.ReviewDecision, "REVIEW_REQUIRED") {
+			notes = append(notes, "human review required")
+		} else {
+			blockers = append(blockers, "merge state is BLOCKED")
+		}
+	case "UNSTABLE":
+		if len(checks.Pending) > 0 {
+			waiting = append(waiting, "merge state is UNSTABLE while checks are pending")
+		} else {
+			blockers = append(blockers, "merge state is UNSTABLE")
+		}
 	default:
 		waiting = append(waiting, fmt.Sprintf("merge state is %s", pr.MergeStateStatus))
 	}
@@ -115,7 +146,7 @@ func Assess(pr PullRequest) Assessment {
 		notes = append(notes, "draft PR: human should mark ready after final review")
 	}
 
-	if !hasCodexReview(pr.Comments, pr.LatestReviews, pr.Reviews) {
+	if !hasCodexReview(pr) {
 		waiting = append(waiting, "Codex review has not completed")
 	} else {
 		notes = append(notes, "Codex review completed")
@@ -196,7 +227,7 @@ func summarizeChecks(items []map[string]any) checkSummary {
 			}
 		case conclusion == "SUCCESS", conclusion == "NEUTRAL", conclusion == "SKIPPED":
 			summary.Passing++
-		case conclusion == "FAILURE", conclusion == "TIMED_OUT", conclusion == "ACTION_REQUIRED", conclusion == "CANCELLED":
+		case conclusion == "FAILURE", conclusion == "TIMED_OUT", conclusion == "ACTION_REQUIRED", conclusion == "CANCELLED", conclusion == "STARTUP_FAILURE", conclusion == "STALE":
 			summary.Blocked = append(summary.Blocked, fmt.Sprintf("%s failed", name))
 		case status == "COMPLETED" && conclusion == "":
 			summary.Pending = append(summary.Pending, fmt.Sprintf("%s completed without a conclusion", name))
@@ -211,20 +242,82 @@ func summarizeChecks(items []map[string]any) checkSummary {
 	return summary
 }
 
-func hasCodexReview(comments []Comment, reviewGroups ...[]Review) bool {
-	for _, comment := range comments {
-		if isCodexActor(comment.Author.Login) && looksLikeCompletedCodexReview(comment.Body) {
+func hasCodexReview(pr PullRequest) bool {
+	latestRequest := latestCodexRequest(pr.Comments)
+	for _, comment := range pr.Comments {
+		if isCodexActor(comment.Author.Login) && looksLikeCompletedCodexReview(comment.Body) && completedAfterRequest(comment.CreatedAt, latestRequest) {
 			return true
 		}
 	}
-	for _, reviews := range reviewGroups {
+	for _, reviews := range [][]Review{pr.LatestReviews, pr.Reviews} {
 		for _, review := range reviews {
-			if isCodexActor(review.Author.Login) && !strings.EqualFold(strings.TrimSpace(review.State), "PENDING") {
+			if isCodexActor(review.Author.Login) &&
+				!strings.EqualFold(strings.TrimSpace(review.State), "PENDING") &&
+				reviewMatchesHead(review, pr.HeadRefOID) &&
+				completedAfterRequest(review.SubmittedAt, latestRequest) {
 				return true
 			}
 		}
 	}
 	return false
+}
+
+func latestCodexRequest(comments []Comment) time.Time {
+	var latest time.Time
+	for _, comment := range comments {
+		if !looksLikeCodexRequest(comment.Body) {
+			continue
+		}
+		createdAt, ok := parseGitHubTime(comment.CreatedAt)
+		if ok && createdAt.After(latest) {
+			latest = createdAt
+		}
+	}
+	return latest
+}
+
+func looksLikeCodexRequest(body string) bool {
+	return strings.EqualFold(strings.TrimSpace(body), "@codex review")
+}
+
+func completedAfterRequest(completedAt string, latestRequest time.Time) bool {
+	if latestRequest.IsZero() {
+		return true
+	}
+	completed, ok := parseGitHubTime(completedAt)
+	return ok && !completed.Before(latestRequest)
+}
+
+func reviewMatchesHead(review Review, headRefOID string) bool {
+	headRefOID = strings.TrimSpace(headRefOID)
+	reviewOID := strings.TrimSpace(review.Commit.OID)
+	return headRefOID == "" || (reviewOID != "" && strings.EqualFold(reviewOID, headRefOID))
+}
+
+func parseGitHubTime(raw string) (time.Time, bool) {
+	parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(raw))
+	return parsed, err == nil
+}
+
+func currentHeadCodexReviewCommentCount(pr PullRequest) int {
+	var count int
+	for _, comment := range pr.ReviewComments {
+		if !isCodexActor(comment.Author.Login) {
+			continue
+		}
+		if pr.HeadRefOID != "" && comment.CommitID != "" && !strings.EqualFold(strings.TrimSpace(comment.CommitID), strings.TrimSpace(pr.HeadRefOID)) {
+			continue
+		}
+		count++
+	}
+	return count
+}
+
+func pluralize(count int, singular, plural string) string {
+	if count == 1 {
+		return fmt.Sprintf(singular, count)
+	}
+	return fmt.Sprintf(plural, count)
 }
 
 func isCodexActor(login string) bool {

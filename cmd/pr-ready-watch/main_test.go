@@ -17,7 +17,7 @@ func TestPRViewArgsUsesExplicitRepoAndPR(t *testing.T) {
 		"view",
 		"6",
 		"--json",
-		"number,title,url,state,isDraft,mergeStateStatus,reviewDecision,statusCheckRollup,comments,reviews,latestReviews,reviewRequests,headRefName,baseRefName,headRepository,headRepositoryOwner",
+		"number,title,url,state,isDraft,mergeStateStatus,reviewDecision,statusCheckRollup,comments,reviews,latestReviews,reviewRequests,headRefName,headRefOid,baseRefName,headRepository,headRepositoryOwner",
 		"--repo",
 		"caboose-ai/ai-skills",
 	}
@@ -56,6 +56,21 @@ func TestTelegramConfigReadsBotTokenFromOnePassword(t *testing.T) {
 	}
 	if cfg.BotToken != "secret-token" {
 		t.Fatalf("BotToken = %q, want secret-token", cfg.BotToken)
+	}
+}
+
+func TestFetchPRLoadsReviewComments(t *testing.T) {
+	mock := runner.NewMockRunner()
+	mock.On("gh pr view 6 --json", []byte(`{"number":6,"headRefOid":"abc123"}`), nil)
+	mock.On("gh api repos/caboose-ai/ai-skills/pulls/6/comments", []byte(`[{"user":{"login":"chatgpt-codex-connector"},"body":"Fix it","commit_id":"abc123"}]`), nil)
+
+	pr, err := fetchPR(context.Background(), mock, options{Repo: "caboose-ai/ai-skills", PRNumber: 6})
+
+	if err != nil {
+		t.Fatalf("fetchPR() error = %v", err)
+	}
+	if len(pr.ReviewComments) != 1 {
+		t.Fatalf("ReviewComments = %v, want one Codex review comment", pr.ReviewComments)
 	}
 }
 

@@ -20,7 +20,7 @@ import (
 	"github.com/caboose-ai/caboose-ai.io/internal/telegrambot"
 )
 
-const githubFields = "number,title,url,state,isDraft,mergeStateStatus,reviewDecision,statusCheckRollup,comments,reviews,latestReviews,reviewRequests,headRefName,baseRefName,headRepository,headRepositoryOwner"
+const githubFields = "number,title,url,state,isDraft,mergeStateStatus,reviewDecision,statusCheckRollup,comments,reviews,latestReviews,reviewRequests,headRefName,headRefOid,baseRefName,headRepository,headRepositoryOwner"
 
 var (
 	errWaiting  = errors.New("PR is still waiting")
@@ -162,7 +162,46 @@ func fetchPR(ctx context.Context, commandRunner runner.CommandRunner, opts optio
 	if err := json.Unmarshal(out, &pr); err != nil {
 		return prwatch.PullRequest{}, fmt.Errorf("parse gh pr view JSON: %w", err)
 	}
+	repo, err := repoName(ctx, commandRunner, opts)
+	if err != nil {
+		return prwatch.PullRequest{}, err
+	}
+	reviewComments, err := fetchReviewComments(ctx, commandRunner, repo, pr.Number)
+	if err != nil {
+		return prwatch.PullRequest{}, err
+	}
+	pr.ReviewComments = reviewComments
 	return pr, nil
+}
+
+func repoName(ctx context.Context, commandRunner runner.CommandRunner, opts options) (string, error) {
+	if strings.TrimSpace(opts.Repo) != "" {
+		return strings.TrimSpace(opts.Repo), nil
+	}
+	out, err := commandRunner.Run(ctx, "gh", "repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner")
+	if err != nil {
+		return "", err
+	}
+	repo := strings.TrimSpace(string(out))
+	if repo == "" {
+		return "", errors.New("gh repo view returned an empty repository name")
+	}
+	return repo, nil
+}
+
+func fetchReviewComments(ctx context.Context, commandRunner runner.CommandRunner, repo string, prNumber int) ([]prwatch.ReviewComment, error) {
+	if strings.TrimSpace(repo) == "" || prNumber <= 0 {
+		return nil, nil
+	}
+	out, err := commandRunner.Run(ctx, "gh", "api", fmt.Sprintf("repos/%s/pulls/%d/comments", repo, prNumber))
+	if err != nil {
+		return nil, err
+	}
+	var comments []prwatch.ReviewComment
+	if err := json.Unmarshal(out, &comments); err != nil {
+		return nil, fmt.Errorf("parse pull review comments JSON: %w", err)
+	}
+	return comments, nil
 }
 
 func prViewArgs(opts options) []string {
