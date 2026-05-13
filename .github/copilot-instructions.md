@@ -80,6 +80,8 @@ bootstrap verification. Woodpecker persists server data at
   health-only services without a flow.
 - Run tests: `go test ./...`
 - Run smoke tests: `mise run sso:check` (full) or `mise run sso:check-quick` (API only)
+- Run MCP endpoint checks: `mise run mcp:probe` locally and `mise run mcp:probe-external` publicly
+- Run MCP access setup via `homelab mcp access setup`, approve client blobs with `homelab mcp access approve`, and request/import/token from `homelab-mcp access`.
 
 ### Naming
 
@@ -172,6 +174,10 @@ go run ./cmd/homelab install --domain caboose-ai.io --compose-dir dev/homelab
 go run ./cmd/homelab service --domain caboose-ai.io --compose-dir dev/homelab forgejo status
 go run ./cmd/homelab paperclip seed-company --profile software-shop --repo /home/caboose/dev/caboose-ai.io
 go run ./cmd/telegram-agent notify "task finished"
+go run ./cmd/mcp access request --name "codex on laptop" --out mcp-request.json
+go run ./cmd/homelab mcp access setup
+go run ./cmd/homelab mcp access approve mcp-request.json --out mcp-release.json
+mise run mcp:setup-external
 ```
 
 ### Building

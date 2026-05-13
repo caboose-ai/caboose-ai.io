@@ -6,11 +6,16 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/caboose-ai/caboose-ai.io/internal/cli"
 	"github.com/caboose-ai/caboose-ai.io/internal/config"
 	mcpserver "github.com/caboose-ai/caboose-ai.io/internal/mcp"
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "access" {
+		os.Exit(cli.RunMCPAccessClient(context.Background(), os.Stdout, os.Stderr, os.Args[2:], cli.MCPAccessClientOptions{}))
+	}
+
 	var (
 		configPath string
 		httpAddr   string

@@ -77,9 +77,13 @@ jobs:
           set -e
           test "$status" -eq 1
           grep -q "Usage: homelab <command> \\[flags\\]" /tmp/homelab.out
+          /tmp/homelab mcp access --help > /tmp/homelab-mcp-admin.out 2>&1
+          grep -q "Usage: homelab mcp access" /tmp/homelab-mcp-admin.out
 
       - name: Build homelab-mcp
         run: |
           go build -trimpath -buildvcs=false -ldflags "-s -w" -o /tmp/homelab-mcp ./cmd/mcp
           /tmp/homelab-mcp -help > /tmp/homelab-mcp.out 2>&1
           grep -q "Path to homelab.yml config file" /tmp/homelab-mcp.out
+          /tmp/homelab-mcp access --help > /tmp/homelab-mcp-access.out 2>&1
+          grep -q "Usage: homelab-mcp access" /tmp/homelab-mcp-access.out

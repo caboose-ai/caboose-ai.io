@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 
@@ -96,7 +97,9 @@ func (s *Server) verifyToken(ctx context.Context, token string, _ *http.Request)
 	urls := s.cfg.URLs()
 	introspectURL := urls.Authentik + "/application/o/introspect/"
 
-	body := strings.NewReader("token=" + token)
+	form := url.Values{}
+	form.Set("token", token)
+	body := strings.NewReader(form.Encode())
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, introspectURL, body)
 	if err != nil {
 		return nil, fmt.Errorf("creating introspection request: %w", err)
