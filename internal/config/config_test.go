@@ -168,6 +168,136 @@ social:
 	}
 }
 
+func TestLoadWithOverridesAppliesCLIValuesAfterFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+	os.WriteFile(path, []byte(`
+domain: file.example.com
+email: admin@file.example.com
+compose_dir: /srv/file
+op_vault: FileDynamic
+op_static_vault: FileStatic
+orchestrator: compose
+serve_mode: public
+kubernetes:
+  namespace: file-ns
+  kubeconfig: /tmp/file-kubeconfig
+  context: file-context
+`), 0644)
+
+	cfg, err := LoadWithOverrides(path, Overrides{
+		Domain:         "cli.example.com",
+		Email:          "admin@cli.example.com",
+		ComposeDir:     "/srv/cli",
+		OPVault:        "CliDynamic",
+		OPStaticVault:  "CliStatic",
+		Orchestrator:   "kubernetes",
+		ServeMode:      "local",
+		KubeNamespace:  "cli-ns",
+		Kubeconfig:     "/tmp/cli-kubeconfig",
+		KubeContext:    "cli-context",
+		DryRun:         true,
+		Force:          true,
+		Verbose:        true,
+		NonInteractive: true,
+		SecretsEnvOnly: true,
+	})
+	if err != nil {
+		t.Fatalf("LoadWithOverrides: %v", err)
+	}
+
+	if cfg.Domain != "cli.example.com" {
+		t.Errorf("Domain = %q", cfg.Domain)
+	}
+	if cfg.Email != "admin@cli.example.com" {
+		t.Errorf("Email = %q", cfg.Email)
+	}
+	if cfg.ComposeDir != "/srv/cli" {
+		t.Errorf("ComposeDir = %q", cfg.ComposeDir)
+	}
+	if cfg.OPVault != "CliDynamic" {
+		t.Errorf("OPVault = %q", cfg.OPVault)
+	}
+	if cfg.OPStaticVault != "CliStatic" {
+		t.Errorf("OPStaticVault = %q", cfg.OPStaticVault)
+	}
+	if cfg.Orchestrator != "kubernetes" {
+		t.Errorf("Orchestrator = %q", cfg.Orchestrator)
+	}
+	if cfg.ServeMode != "local" {
+		t.Errorf("ServeMode = %q", cfg.ServeMode)
+	}
+	if cfg.Kubernetes.Namespace != "cli-ns" {
+		t.Errorf("Kubernetes.Namespace = %q", cfg.Kubernetes.Namespace)
+	}
+	if cfg.Kubernetes.Kubeconfig != "/tmp/cli-kubeconfig" {
+		t.Errorf("Kubernetes.Kubeconfig = %q", cfg.Kubernetes.Kubeconfig)
+	}
+	if cfg.Kubernetes.Context != "cli-context" {
+		t.Errorf("Kubernetes.Context = %q", cfg.Kubernetes.Context)
+	}
+	if !cfg.DryRun || !cfg.Force || !cfg.Verbose || !cfg.NonInteractive || !cfg.SecretsEnvOnly {
+		t.Errorf("runtime flags not applied: %+v", cfg)
+	}
+}
+
+func TestLoadWithOverridesKeepsFileAndDefaultValuesForEmptyStrings(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+	os.WriteFile(path, []byte(`
+domain: file.example.com
+compose_dir: /srv/file
+kubernetes:
+  namespace: file-ns
+`), 0644)
+
+	cfg, err := LoadWithOverrides(path, Overrides{
+		Domain:        "",
+		ComposeDir:    "",
+		KubeNamespace: "",
+	})
+	if err != nil {
+		t.Fatalf("LoadWithOverrides: %v", err)
+	}
+
+	if cfg.Domain != "file.example.com" {
+		t.Errorf("Domain = %q", cfg.Domain)
+	}
+	if cfg.ComposeDir != "/srv/file" {
+		t.Errorf("ComposeDir = %q", cfg.ComposeDir)
+	}
+	if cfg.Kubernetes.Namespace != "file-ns" {
+		t.Errorf("Kubernetes.Namespace = %q", cfg.Kubernetes.Namespace)
+	}
+	if cfg.Email != "cxm6467@gmail.com" {
+		t.Errorf("default Email = %q", cfg.Email)
+	}
+}
+
+func TestLoadWithOverridesUsesDefaultsWhenPathEmpty(t *testing.T) {
+	cfg, err := LoadWithOverrides("", Overrides{
+		Domain:         "cli.example.com",
+		ComposeDir:     "/srv/cli",
+		SecretsEnvOnly: true,
+	})
+	if err != nil {
+		t.Fatalf("LoadWithOverrides: %v", err)
+	}
+
+	if cfg.Domain != "cli.example.com" {
+		t.Errorf("Domain = %q", cfg.Domain)
+	}
+	if cfg.ComposeDir != "/srv/cli" {
+		t.Errorf("ComposeDir = %q", cfg.ComposeDir)
+	}
+	if cfg.Orchestrator != "compose" {
+		t.Errorf("default Orchestrator = %q", cfg.Orchestrator)
+	}
+	if !cfg.SecretsEnvOnly {
+		t.Error("SecretsEnvOnly was not applied")
+	}
+}
+
 func TestValidate(t *testing.T) {
 	cfg := DefaultConfig()
 	if err := cfg.Validate(); err == nil {
