@@ -2,11 +2,12 @@
 
 ## Project Overview
 
-Go monorepo for a homelab SSO infrastructure stack. Three binaries:
+Go monorepo for a homelab SSO infrastructure stack. Four command entrypoints:
 - `cmd/homelab` — TUI installer that bootstraps Authentik SSO + all services
 - `cmd/mcp` — MCP server exposing homelab tools to AI assistants
   - `agent_invoke` provider fallback supports Ollama, Claude Code, Copilot CLI, and Emberfall
 - `cmd/telegram-agent` — private Telegram bot for allowlisted OpenClaw-backed agent control
+- `cmd/pr-ready-watch` — local GitHub PR watcher that notifies Telegram when Codex review and checks are ready for final human review
 
 Service implementation packages live under `services/<slug>/`; shared internal
 packages live under `internal/`. No public API surface.
@@ -29,6 +30,7 @@ internal/
   service/              Shared service manifest, registry, and configurator types
   servicebuilder/       Central service configurator construction
   paperclip/            Paperclip bootstrap client, local_trusted proxy mode, and software-shop seed profile
+  prwatch/              PR readiness classifier for Codex review, checks, requested changes, and merge state
   telegrambot/          Telegram allowlist bot and OpenClaw model command bridge
   mcp/                  MCP server, tools, resources
   cli/                  Non-interactive CLI runner
@@ -125,7 +127,8 @@ bootstrap verification. Woodpecker persists server data at
   `feat:` is minor, and `!` or `BREAKING CHANGE:` is major.
 - Published releases trigger `.github/workflows/update-homebrew-tap.yml`, which
   uses the `HOMEBREW_TAP_TOKEN` Actions secret to update
-  `caboose-ai/homebrew-tap` formulae and open or reuse a tap PR.
+  `caboose-ai/homebrew-tap` formulae, install and `brew test` both updated
+  formulae, and open or reuse a tap PR.
 - CI builds `cmd/homelab` and `cmd/mcp` with `-buildvcs=false` so release
   checks do not depend on Go VCS stamping.
 - Direct `homelab reset` requires `--yes` unless `--dry-run`; live Docker,
@@ -178,6 +181,7 @@ go run ./cmd/mcp access request --name "codex on laptop" --out mcp-request.json
 go run ./cmd/homelab mcp access setup
 go run ./cmd/homelab mcp access approve mcp-request.json --out mcp-release.json
 mise run mcp:setup-external
+go run ./cmd/pr-ready-watch --repo caboose-ai/caboose-ai.io --pr 48 --poll 1m --timeout 10m
 ```
 
 ### Building

@@ -2,11 +2,12 @@
 
 ## Project
 
-Go monorepo for a homelab SSO infrastructure stack. Three binaries:
+Go monorepo for a homelab SSO infrastructure stack. Four command entrypoints:
 - `cmd/homelab` — Bubbletea TUI installer that bootstraps Authentik SSO + all services
 - `cmd/mcp` — MCP server exposing homelab tools to AI assistants
   - `agent_invoke` supports provider fallback: Ollama, Claude Code, Copilot CLI, Emberfall
 - `cmd/telegram-agent` — private Telegram bot for allowlisted OpenClaw-backed agent control
+- `cmd/pr-ready-watch` — local GitHub PR watcher that notifies Telegram when Codex review and checks are ready for final human review
 
 Service implementation packages live under `services/<slug>/`; shared internal
 packages remain under `internal/`. No public API.
@@ -25,6 +26,7 @@ go run ./cmd/homelab mcp access setup  # create MCP OAuth provider/scope
 go run ./cmd/homelab mcp access approve mcp-request.json --out mcp-release.json  # approve MCP client access
 mise run mcp:probe-external       # verify the public Homelab MCP endpoint
 mise run mcp:setup-external       # upsert MCP DNS, install Caddy route, then verify
+go run ./cmd/pr-ready-watch --repo caboose-ai/caboose-ai.io --pr 48 --poll 1m --timeout 10m  # watch a PR for human-review readiness
 CLOUDFLARE_ACCOUNT_ID=... CLOUDFLARE_API_TOKEN=... go run ./cmd/homelab oauth-setup --domain caboose-ai.io --create-turnstile  # create Turnstile via API
 mise run sso:check                # full SSO smoke tests (requires live stack)
 mise run sso:check-quick          # API config checks only
@@ -40,6 +42,7 @@ Go binary is at `/home/caboose/.local/go/bin/go`. If `go` isn't on PATH, use `PA
 - `internal/service/` — Shared service manifest, registry, and `ServiceConfigurator` types
 - `internal/servicebuilder/` — Central service configurator construction for installer and MCP
 - `internal/paperclip/` — Paperclip bootstrap client and software-shop seed profile
+- `internal/prwatch/` — PR readiness classifier for Codex review, checks, requested changes, and merge state
 - `internal/telegrambot/` — Telegram long-poll bot, allowlist checks, model selection, and OpenClaw command invocation
 - `services/<slug>/` — Per-service workspaces with `service.yaml`, `README.md`, and optional Go configurator package
 - `services/authentik/` — Authentik API client, one file per resource type
@@ -98,7 +101,8 @@ container recreation.
   creates minor releases, and `!` or `BREAKING CHANGE:` creates major releases.
 - Published releases trigger `.github/workflows/update-homebrew-tap.yml`, which
   uses the `HOMEBREW_TAP_TOKEN` Actions secret to update
-  `caboose-ai/homebrew-tap` formulae and open or reuse a tap PR.
+  `caboose-ai/homebrew-tap` formulae, install and `brew test` both updated
+  formulae, and open or reuse a tap PR.
 - CI builds both release binaries with `go build -buildvcs=false` to avoid
   Go VCS stamping failures in linked worktrees or source archive contexts.
 - Direct `homelab reset` requires `--yes` unless `--dry-run`; live Docker,
@@ -167,3 +171,7 @@ container recreation.
   the host with `mise run telegram-agent:run`; it uses
   `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOWED_USER_IDS`, and the local OpenClaw CLI
   rather than Caddy, Homarr, Authentik, or Docker Compose.
+- PR readiness notifications are host-run through `cmd/pr-ready-watch` or
+  `mise run pr:watch-ready`; the watcher uses local `gh`, optional 1Password
+  token lookup through `TELEGRAM_BOT_TOKEN_OP_ITEM`, and Telegram allowlist env
+  vars to keep the human as the final PR review handoff.

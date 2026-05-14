@@ -41,6 +41,7 @@ container recreation.
   - Includes `agent_invoke` provider fallback across Ollama, Claude Code, Copilot CLI, and Emberfall.
   - Includes `homelab-mcp access <request|import|token|status>` for admin-approved external client access.
 - **`cmd/telegram-agent`** — Private Telegram bot that runs local OpenClaw gateway prompts and role-scoped agent prompts for allowlisted Telegram users.
+- **`cmd/pr-ready-watch`** — Local GitHub PR watcher that polls Codex review, checks, and review state, then notifies Telegram when the PR is ready for final human review.
 
 ## Homebrew
 
@@ -77,7 +78,8 @@ breaking changes produce major releases. Release Please opens the version bump
 PR and publishes the GitHub release when that PR is merged. Published releases
 then trigger the Homebrew tap update workflow, which requires the
 `HOMEBREW_TAP_TOKEN` Actions secret, computes the tagged source archive SHA,
-updates both tap formulae, and opens or reuses a pull request in
+updates both tap formulae, installs and `brew test`s both updated formulae, and
+opens or reuses a pull request in
 `caboose-ai/homebrew-tap`. The tap update workflow can also be rerun manually
 with a release tag.
 
@@ -144,6 +146,9 @@ homelab mcp access setup
 homelab mcp access approve mcp-request.json --out mcp-release.json
 homelab-mcp access import mcp-release.json
 homelab-mcp access token
+
+# PR readiness watcher
+mise run pr:watch-ready -- --repo caboose-ai/caboose-ai.io --pr 48 --poll 1m --timeout 10m
 
 # Migrate host Mattermost to Docker
 go run ./cmd/homelab migrate
@@ -212,6 +217,8 @@ manifest-owned flow, for example `mise run paperclip:smoke`.
 - **Telegram Agent Bridge** external runtime — host-run long-polling bot that
   uses `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOWED_USER_IDS`, and the local OpenClaw
   CLI instead of a compose service or public route
+- **PR readiness watcher** external runtime — host-run `gh`/Telegram poller
+  for Codex review completion, check state, and final human-review handoff
 - **Cloudflare tunnel** for `chat` and `sonar` subdomains
 - **1Password** for secret storage (with `.env` fallback)
 - **Prometheus + Loki** for metrics and logs, visualized in Grafana
