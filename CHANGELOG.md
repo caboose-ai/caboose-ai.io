@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0](https://github.com/caboose-ai/caboose-ai.io/compare/v0.2.0...v0.3.0) (2026-05-14)
+
+
+### Features
+
+* **mcp:** add approved external access workflow ([#48](https://github.com/caboose-ai/caboose-ai.io/issues/48)) ([48103c5](https://github.com/caboose-ai/caboose-ai.io/commit/48103c54576f266afe1c820a73ebdb00f904f47a))
+* **pr:** add Telegram readiness watcher ([#49](https://github.com/caboose-ai/caboose-ai.io/issues/49)) ([38c1aee](https://github.com/caboose-ai/caboose-ai.io/commit/38c1aee08d4ed946601605994abb0c7277566c59))
+
 ## [0.2.0](https://github.com/caboose-ai/caboose-ai.io/compare/v0.1.0...v0.2.0) (2026-05-12)
 
 
