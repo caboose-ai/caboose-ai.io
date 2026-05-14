@@ -73,6 +73,49 @@ func TestServiceLinksIncludePaperclip(t *testing.T) {
 	}
 }
 
+func TestURLsLookupByKey(t *testing.T) {
+	urls := DeriveURLs("example.com")
+
+	tests := []struct {
+		key  string
+		want string
+	}{
+		{"authentik", "https://auth.example.com"},
+		{"forgejo", "https://git.example.com"},
+		{"open_webui", "https://ai.example.com"},
+		{"open-webui", "https://ai.example.com"},
+		{"sonarqube", "https://sonar.example.com"},
+		{"dashboard", "https://example.com"},
+		{"dash_alias", "https://dash.example.com"},
+		{"paperclip", "https://paperclip.example.com"},
+		{"ci", "https://ci.example.com"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.key, func(t *testing.T) {
+			got, ok := urls.Lookup(tt.key)
+			if !ok {
+				t.Fatalf("Lookup(%q) returned ok=false", tt.key)
+			}
+			if got != tt.want {
+				t.Fatalf("Lookup(%q) = %q, want %q", tt.key, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestURLsLookupUnknownKey(t *testing.T) {
+	urls := DeriveURLs("example.com")
+
+	got, ok := urls.Lookup("missing")
+	if ok {
+		t.Fatalf("Lookup(missing) returned ok=true with %q", got)
+	}
+	if got != "" {
+		t.Fatalf("Lookup(missing) = %q, want empty string", got)
+	}
+}
+
 func TestLoadFromFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")

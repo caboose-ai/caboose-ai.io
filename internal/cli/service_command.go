@@ -250,36 +250,6 @@ func runServiceConfigure(ctx context.Context, cfg *config.Config, r runner.Comma
 }
 
 func serviceURL(urls config.URLs, key string) string {
-	switch strings.ToLower(key) {
-	case "authentik":
-		return urls.Authentik
-	case "forgejo":
-		return urls.Forgejo
-	case "woodpecker":
-		return urls.Woodpecker
-	case "portainer":
-		return urls.Portainer
-	case "grafana":
-		return urls.Grafana
-	case "open_webui":
-		return urls.OpenWebUI
-	case "mattermost":
-		return urls.Mattermost
-	case "dashboard":
-		return urls.Dashboard
-	case "dash_alias":
-		return urls.DashAlias
-	case "openclaw":
-		return urls.OpenClaw
-	case "sonarqube":
-		return urls.SonarQube
-	case "ghost":
-		return urls.Ghost
-	case "paperclip":
-		return urls.Paperclip
-	case "ci":
-		return urls.CI
-	default:
-		return ""
-	}
+	url, _ := urls.Lookup(key)
+	return url
 }

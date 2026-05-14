@@ -26,6 +26,10 @@ export TELEGRAM_ALLOWED_MODELS=github-copilot/claude-opus-4.6,github-copilot/gpt
 export TELEGRAM_REQUIRE_CONFIRMATION=true
 ```
 
+`TELEGRAM_REQUIRE_CONFIRMATION` is retained for compatibility with existing
+host environments. Agent prompts draft plans by default and do not execute
+Paperclip or homelab changes directly from Telegram.
+
 `TELEGRAM_NOTIFY_CHAT_ID` can narrow one-shot notifications to a specific chat
 ID. If it is unset, `telegram-agent notify` sends to all allowed user IDs.
 
@@ -49,8 +53,18 @@ Supported Telegram commands:
 /status
 ```
 
-Write, deploy, restart, commit, push, merge, reset, and delete-style agent
-tasks require `/agent confirm ...` when `TELEGRAM_REQUIRE_CONFIRMATION` is true.
+`/agent <role> <task>` drafts a role-scoped plan. The prompt requires intended
+commands/tools, affected files/services, rollback notes, verification, and the
+required confirmation phrase before any execution.
+
+`/agent confirm <role> <task>` is only a short remote confirmation signal. It is
+not durable approval for broad Paperclip execution. The agent prompt still
+requires human approval before restarts, deploys, destructive operations, or
+other runtime mutations.
+
+Agent plans should prefer self-hosted delivery first: Forgejo/Gitea branches or
+PRs where applicable, Woodpecker CI for validation, and Docker inspection
+through Portainer, MCP, or CLI before changing runtime state.
 
 ## PR Readiness Notifications
 

@@ -25,6 +25,13 @@ Go monorepo for a self-hosted homelab infrastructure stack with SSO via Authenti
 
 Browser-facing services authenticate through Authentik via OAuth2/OIDC or forward-auth proxy. The installer keeps Authentik applications open (`policy_engine_mode=all`) so provider-level SSO decisions control access consistently. The social login configurator promotes managed GitHub and Google sources, while generic source upserts preserve the existing promotion state unless explicitly changed. Telegram Agent Bridge is not public web surface; it is a host-run bot protected by a Telegram user-ID allowlist.
 
+Paperclip-driven agent control uses the self-hosted delivery loop first:
+Forgejo hosts branches and PRs, Woodpecker reports CI verification, and
+Portainer gives Docker visibility for approved operational handoffs. Paperclip
+is the planning and audit ledger; confirmed execution still routes through
+approved OpenClaw, Telegram, MCP, Homelab CLI, PR, or Portainer handoffs, and
+Docker mutations remain confirmation-gated.
+
 The installer also completes first-run setup for services that expose a product
 setup or local-login boundary before they can participate in the SSO smoke
 suite. SonarQube and Mattermost are configured with managed admin
@@ -222,6 +229,10 @@ manifest-owned flow, for example `mise run paperclip:smoke`.
 - **Homarr** homepage — pinned to `ghcr.io/homarr-labs/homarr:v1.61.0`, stores dashboard state in `homarr_data:/appdata`, and uses native Authentik OIDC for `caboose-ai.io`
 - **Authentik** state — `/data` is persisted in the `authentik_data` volume for uploaded media and runtime-managed files
 - **Paperclip** profile (`docker compose --profile paperclip ...`) — built from upstream tag `v2026.428.0`, backed by `paperclip-db`, bound to host loopback in `local_trusted` mode, and Authentik-gated publicly through `paperclip-proxy`
+- **Forgejo + Woodpecker + Portainer** self-hosted delivery loop — Forgejo is
+  the branch/PR source, Woodpecker is the CI verification surface, and
+  Portainer is Docker visibility plus approved operational handoff rather than
+  an unchecked executor
 - **OpenClaw** external runtime — tracked for URL, Authentik proxy, dashboard,
   smoke, and health metadata without claiming a local compose service
 - **Telegram Agent Bridge** external runtime — host-run long-polling bot that

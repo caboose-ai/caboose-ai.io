@@ -106,6 +106,7 @@ func SoftwareShopPlan(repo string) SeedPlan {
 			project("Observability", "Prometheus, Loki, Grafana, health checks, dashboards, and log review.", repo),
 			project("Service Workspaces", "Per-service manifests, configuration, docs, and service lifecycle boundaries.", repo),
 			project("Delivery", "Forgejo, Woodpecker, PRs, release verification, and deployment evidence.", repo),
+			project("Agent Control Plan", "plan-only v1 intake, approval, execution evidence, and follow-up loop for agent work. Use Forgejo/Gitea, Woodpecker, and Portainer as self-hosted delivery/control surfaces; Portainer and Docker mutations remain approval-gated.", repo),
 		},
 		Agents: []AgentSeed{
 			agent("BoardOwner", "owner", "Board/Owner", "", "Human operator with final approval authority.", repo, 0),
@@ -124,13 +125,17 @@ func SoftwareShopPlan(repo string) SeedPlan {
 			{Title: "Weekly dependency/security review", Description: "Review dependency, Semgrep, and secret-handling risk.", Priority: "medium"},
 			{Title: "Post-PR verification checklist", Description: "Verify tests, docs, smoke evidence, and approval boundaries after PRs.", Priority: "medium"},
 			{Title: "Incident triage when health checks fail", Description: "Open a triage issue when health checks fail and propose non-destructive next steps.", Priority: "high"},
+			{Title: "Agent task intake triage", Description: "Classify new agent-control tasks, capture affected services, budget, authority needs, and plan-only next steps.", Priority: "high"},
+			{Title: "Agent plan approval gate", Description: "Review agent plans before any writes, infra mutation, deploy, Docker, Portainer, secret, or token-spending action.", Priority: "high"},
+			{Title: "Agent execution evidence review", Description: "Check PR links, command output, smoke results, Woodpecker status, and rollback notes before accepting execution.", Priority: "medium"},
+			{Title: "Agent follow-up task review", Description: "Convert unresolved findings into follow-up Paperclip tasks with owners, service scope, and approval requirements.", Priority: "medium"},
 		},
-		Authority: AuthoritySeed{Policy: "Agents may inspect, branch, test, commit, open PRs, query monitoring, and propose deploy actions. docker, installer, reset, production deploy, secret, firewall, and destructive commands require explicit human approval. Recurring jobs must stay within budget and write audit trails."},
+		Authority: AuthoritySeed{Policy: "Default mode is plan-only: agents may inspect, branch, test, commit, open PRs, query monitoring, and propose deploy actions. Direct infra execution remains approval-gated. Docker and Portainer mutations, installer, reset, production deploy, secret, firewall, destructive docker commands, and other destructive commands require explicit human approval. Recurring jobs must stay within budget and write audit trails."},
 	}
 }
 
 func GeneratedContextDocument(repo string) string {
-	return fmt.Sprintf("Repo: %s\nKey context: README.md, CLAUDE.md, service manifests, MCP tools, mise tasks, smoke tests, deployment rules, and Authentik SSO contracts. Never deploy, reset, mutate secrets, change firewall rules, or run destructive Docker commands without explicit human approval.", repo)
+	return fmt.Sprintf("Repo: %s\nKey context: README.md, CLAUDE.md, service manifests, MCP tools, mise tasks, smoke tests, deployment rules, and Authentik SSO contracts. Default mode is plan-only. Use Forgejo/Gitea, Woodpecker, and Portainer as self-hosted delivery/control surfaces, but direct infra execution remains approval-gated. Never deploy, reset, mutate secrets, change firewall rules, or run Portainer/Docker mutation commands without explicit human approval.", repo)
 }
 
 func project(name, description, repo string) ProjectSeed {

@@ -19,19 +19,30 @@ mise run paperclip:seed
 and reads `PAPERCLIP_API_KEY` from the environment or configured secret store
 when the API requires bearer auth.
 
-## Agent Planning and Execution
+The seed path creates missing company, goal, project, agent, and routine
+records. It does not update existing Paperclip records in place; when seed
+guidance changes, reseeding adds any new Agent Control Plan project or routine
+records, and existing agent instructions should be reviewed from the Paperclip
+workspace until Paperclip exposes a stable update endpoint for this client.
 
-Paperclip can trigger the homelab agent-control workflow as the task intake,
-planning, and audit surface. Use it to capture the goal, affected services,
-token budget, approval requirements, execution checklist, evidence, PR links,
-and follow-up work.
+## Agent Control Plan v1
 
-The safe default is for Paperclip to plan first and execute only through
-approved control paths: OpenClaw for interactive supervision, Telegram Agent
-Bridge for remote confirmations, Homelab MCP for typed automation tools, and
-the Homelab CLI for deterministic service operations. Write, deploy, restart,
-secret, destructive, and external-token-spending tasks require explicit human
-approval before execution.
+Paperclip is the plan-only v1 intake, planning, approval, evidence, and
+follow-up surface for the homelab agent-control workflow. Use it to capture the
+goal, affected services, token budget, approval requirements, execution
+checklist, evidence, PR links, and follow-up work.
+
+The safe default is `Mode: plan-only`. Agents may inspect, branch, test,
+commit, open PRs, query monitoring, and propose deploy actions. Direct infra
+execution remains approval-gated. Write, deploy, restart, secret, destructive,
+external-token-spending, Portainer, and Docker mutation tasks require explicit
+human approval before execution.
+
+Use the self-hosted delivery loop as the control surface: Forgejo/Gitea for
+branches and PRs, Woodpecker for CI evidence, and Portainer for container state
+review. Portainer and Docker mutations are review inputs until a human approves
+execution through OpenClaw, Telegram Agent Bridge, Homelab MCP, or deterministic
+`mise`/`homelab` commands.
 
 ### Trigger Runbook
 
@@ -47,8 +58,9 @@ approval before execution.
 2. Open `https://paperclip.caboose-ai.io` and use the seeded Caboose AI
    Software Shop workspace.
 3. Create a task with the goal, service slugs, token budget, approval needs,
-   verification checklist, and desired output. Use `Mode: plan-only` until the
-   task classifier, context index, confirmation gates, and MCP tools are ready.
+   verification checklist, desired output, Forgejo/Gitea branch or PR target,
+   Woodpecker evidence needs, and any Portainer/Docker review notes. Keep
+   `Mode: plan-only` for v1.
 4. Assign the task to the seeded role that best matches the work, such as
    CEO/PM for triage, Architect for design, DevOps/SRE for service operations,
    Backend Engineer for Go/MCP changes, QA Engineer for verification, or
@@ -56,9 +68,11 @@ approval before execution.
 5. Have the assigned role produce a plan in Paperclip. If the plan needs writes
    or token-spending, approve it explicitly and hand execution to OpenClaw,
    Telegram Agent Bridge, Homelab MCP, or a deterministic `mise`/`homelab`
-   command.
-6. Attach the branch or PR link, command output, smoke evidence, rollback notes,
-   and follow-up tasks back to the Paperclip task.
+   command. Keep Portainer and Docker mutations blocked until this approval is
+   recorded.
+6. Attach the Forgejo/Gitea branch or PR link, Woodpecker status, command
+   output, smoke evidence, rollback notes, and follow-up tasks back to the
+   Paperclip task.
 
 If `PAPERCLIP_PUBLIC_URL` is overridden for a non-default domain, update the
 matching Authentik proxy provider and Caddy route.

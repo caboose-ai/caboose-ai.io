@@ -108,6 +108,9 @@ func TestServiceURLIncludesPaperclip(t *testing.T) {
 	if got := serviceURL(urls, "paperclip"); got != "https://paperclip.example.com" {
 		t.Fatalf("serviceURL(paperclip) = %q", got)
 	}
+	if got := serviceURL(urls, "open-webui"); got != "https://ai.example.com" {
+		t.Fatalf("serviceURL(open-webui) = %q", got)
+	}
 }
 
 type recordingRunner struct {
