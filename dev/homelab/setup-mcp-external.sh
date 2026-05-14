@@ -33,8 +33,12 @@ secret() {
 
 upsert_dns_record() {
   local token zone_id existing record_id payload response
-  token="$(secret CLOUDFLARE_API_TOKEN)"
-  zone_id="$(secret CLOUDFLARE_ZONE_ID)"
+  if ! token="$(secret CLOUDFLARE_API_TOKEN)"; then
+    return 1
+  fi
+  if ! zone_id="$(secret CLOUDFLARE_ZONE_ID)"; then
+    return 1
+  fi
 
   existing="$(
     curl -fsS \
