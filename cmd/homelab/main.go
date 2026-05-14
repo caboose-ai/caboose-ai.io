@@ -141,8 +141,12 @@ func runService(opts cliOpts, args []string) int {
 }
 
 func runMCP(opts cliOpts, args []string) int {
-	if len(args) == 0 || args[0] != "access" {
+	if len(args) == 0 {
 		fmt.Fprintln(os.Stderr, "Usage: homelab mcp access <setup|approve> [flags]")
+		return 1
+	}
+	if args[0] != "access" {
+		fmt.Fprintf(os.Stderr, "unknown command %q\n", args[0])
 		return 1
 	}
 	cfg := config.DefaultConfig()
