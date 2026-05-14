@@ -231,6 +231,39 @@ classifier, service context index, confirmation gates, and least-privilege MCP
 tools are in place. Until then, Paperclip-triggered work should produce plans,
 PRs, and explicit handoffs for humans or confirmed agents to execute.
 
+A practical first implementation can work without new Paperclip runtime
+privileges:
+
+1. Start and seed Paperclip with `mise run paperclip:up`,
+   `mise run paperclip:status`, `mise run paperclip:smoke`, and
+   `mise run paperclip:seed`.
+2. Open the seeded Caboose AI Software Shop workspace in Paperclip.
+3. Create a task using this format:
+
+   ```text
+   Goal: <what should change or be built>
+   Services: <service slugs involved>
+   Mode: plan-only | plan-and-pr | confirmed-execute
+   Token budget: local-only | external-optional | external-approved <limit>
+   Required approvals: writes, deploys, restarts, secrets, destructive actions
+   Verification: <tests, smoke flows, screenshots, or dashboards expected>
+   Output: plan | branch | PR | runbook | service docs | deployment checklist
+   ```
+
+4. Assign the task to the seeded CEO/PM, Architect, DevOps/SRE, Backend
+   Engineer, QA Engineer, or Security Engineer role depending on the task.
+5. Have the agent produce a plan in Paperclip first. For write-capable work, the
+   plan must include the exact commands or tools it intends to use, the files or
+   services it expects to touch, rollback notes, and the confirmation phrase it
+   needs from the human.
+6. After approval, execute through the safest available handoff:
+   - OpenClaw for supervised multi-step planning or coding sessions;
+   - Telegram `/agent confirm ...` for short remote approvals;
+   - Homelab MCP for typed status, logs, smoke, and agent invocation;
+   - Homelab CLI or `mise` tasks for deterministic service operations.
+7. Paste or attach the resulting PR link, command output, smoke evidence, and
+   follow-up tasks back into Paperclip so it remains the durable audit record.
+
 ## Phase 3: Minimize Outside Token Use
 
 ### 1. Create a Cost-Aware Model Router

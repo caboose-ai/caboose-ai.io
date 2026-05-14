@@ -33,6 +33,33 @@ the Homelab CLI for deterministic service operations. Write, deploy, restart,
 secret, destructive, and external-token-spending tasks require explicit human
 approval before execution.
 
+### Trigger Runbook
+
+1. Start and verify Paperclip:
+
+   ```bash
+   mise run paperclip:up
+   mise run paperclip:status
+   mise run paperclip:smoke
+   mise run paperclip:seed
+   ```
+
+2. Open `https://paperclip.caboose-ai.io` and use the seeded Caboose AI
+   Software Shop workspace.
+3. Create a task with the goal, service slugs, token budget, approval needs,
+   verification checklist, and desired output. Use `Mode: plan-only` until the
+   task classifier, context index, confirmation gates, and MCP tools are ready.
+4. Assign the task to the seeded role that best matches the work, such as
+   CEO/PM for triage, Architect for design, DevOps/SRE for service operations,
+   Backend Engineer for Go/MCP changes, QA Engineer for verification, or
+   Security Engineer for secrets and SSO risk review.
+5. Have the assigned role produce a plan in Paperclip. If the plan needs writes
+   or token-spending, approve it explicitly and hand execution to OpenClaw,
+   Telegram Agent Bridge, Homelab MCP, or a deterministic `mise`/`homelab`
+   command.
+6. Attach the branch or PR link, command output, smoke evidence, rollback notes,
+   and follow-up tasks back to the Paperclip task.
+
 If `PAPERCLIP_PUBLIC_URL` is overridden for a non-default domain, update the
 matching Authentik proxy provider and Caddy route.
 
