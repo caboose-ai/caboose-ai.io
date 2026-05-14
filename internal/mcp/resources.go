@@ -31,6 +31,13 @@ func (s *Server) registerResources() {
 		}, nil
 	})
 
+	s.mcpServer.AddResource(&sdkmcp.Resource{
+		URI:         "homelab://services/cards",
+		Name:        "Service Cards",
+		Description: "Read-only manifest-derived service cards for agent context",
+		MIMEType:    "application/json",
+	}, s.handleServiceCardsResource)
+
 	s.mcpServer.AddResourceTemplate(&sdkmcp.ResourceTemplate{
 		URITemplate: "homelab://services/{service}/status",
 		Name:        "Service Status",
@@ -42,6 +49,12 @@ func (s *Server) registerResources() {
 		Name:        "Service Manifest",
 		Description: "Service workspace manifest from services/<slug>/service.yaml",
 	}, s.handleServiceManifestResource)
+
+	s.mcpServer.AddResourceTemplate(&sdkmcp.ResourceTemplate{
+		URITemplate: "homelab://services/{service}/card",
+		Name:        "Service Card",
+		Description: "Read-only manifest-derived service card for agent context",
+	}, s.handleServiceCardResource)
 }
 
 func (s *Server) registerStaticResource(uri, name, description, filename string) {
@@ -162,6 +175,40 @@ func (s *Server) handleServiceManifestResource(_ context.Context, req *sdkmcp.Re
 	}, nil
 }
 
+type serviceCardsIndex struct {
+	Services []service.Card `json:"services"`
+}
+
+func (s *Server) handleServiceCardsResource(_ context.Context, req *sdkmcp.ReadResourceRequest) (*sdkmcp.ReadResourceResult, error) {
+	if s.registry == nil {
+		return nil, fmt.Errorf("service registry is not initialized")
+	}
+	cards := service.BuildCards(s.registry, s.cfg.URLs())
+	data, _ := json.MarshalIndent(serviceCardsIndex{Services: cards}, "", "  ")
+	return &sdkmcp.ReadResourceResult{
+		Contents: []*sdkmcp.ResourceContents{{URI: req.Params.URI, Text: string(data)}},
+	}, nil
+}
+
+func (s *Server) handleServiceCardResource(_ context.Context, req *sdkmcp.ReadResourceRequest) (*sdkmcp.ReadResourceResult, error) {
+	serviceName := extractServiceCardFromURI(req.Params.URI)
+	if serviceName == "" {
+		return nil, fmt.Errorf("could not extract service name from URI %q", req.Params.URI)
+	}
+	if s.registry == nil {
+		return nil, fmt.Errorf("service registry is not initialized")
+	}
+	manifest, ok := s.registry.Manifest(serviceName)
+	if !ok {
+		return nil, fmt.Errorf("unknown service %q", serviceName)
+	}
+	card := service.BuildCard(manifest, s.cfg.URLs())
+	data, _ := json.MarshalIndent(card, "", "  ")
+	return &sdkmcp.ReadResourceResult{
+		Contents: []*sdkmcp.ResourceContents{{URI: req.Params.URI, Text: string(data)}},
+	}, nil
+}
+
 func extractServiceFromURI(uri string) string {
 	const prefix = "homelab://services/"
 	const suffix = "/status"
@@ -174,6 +221,15 @@ func extractServiceFromURI(uri string) string {
 func extractServiceManifestFromURI(uri string) string {
 	const prefix = "homelab://services/"
 	const suffix = "/manifest"
+	if !strings.HasPrefix(uri, prefix) || !strings.HasSuffix(uri, suffix) {
+		return ""
+	}
+	return strings.TrimSuffix(strings.TrimPrefix(uri, prefix), suffix)
+}
+
+func extractServiceCardFromURI(uri string) string {
+	const prefix = "homelab://services/"
+	const suffix = "/card"
 	if !strings.HasPrefix(uri, prefix) || !strings.HasSuffix(uri, suffix) {
 		return ""
 	}

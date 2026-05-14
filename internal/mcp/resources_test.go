@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -39,6 +40,13 @@ func TestExtractServiceManifestFromURI(t *testing.T) {
 	}
 }
 
+func TestExtractServiceCardFromURI(t *testing.T) {
+	got := extractServiceCardFromURI("homelab://services/paperclip/card")
+	if got != "paperclip" {
+		t.Fatalf("extractServiceCardFromURI = %q, want paperclip", got)
+	}
+}
+
 func TestHandleServiceManifestResource(t *testing.T) {
 	s := &Server{
 		registry: service.NewRegistry(map[string]service.Manifest{
@@ -62,6 +70,100 @@ func TestHandleServiceManifestResource(t *testing.T) {
 	text := result.Contents[0].Text
 	if !strings.Contains(text, `"slug": "forgejo"`) {
 		t.Fatalf("manifest response missing slug: %q", text)
+	}
+}
+
+func TestHandleServiceCardsResource(t *testing.T) {
+	r := &mockRunner{err: context.Canceled}
+	show := true
+	s := &Server{
+		cfg:     &config.Config{Domain: "example.com"},
+		compose: docker.NewComposeClient(r, "/test"),
+		registry: service.NewRegistry(map[string]service.Manifest{
+			"paperclip": {
+				Slug:            "paperclip",
+				DisplayName:     "Paperclip",
+				URLKey:          "paperclip",
+				ComposeServices: []string{"paperclip", "paperclip-db"},
+				Secrets:         []string{"PAPERCLIP_DB_PASS"},
+				Configurator:    "paperclip",
+				SmokeFlow:       "paperclip",
+				Dashboard:       service.DashboardSpec{Show: &show},
+				SSO:             service.SSOSpec{Mode: "proxy"},
+				Health:          service.HealthSpec{URLKey: "paperclip", Path: "/api/health", Kind: "http"},
+				Docs:            []string{"README.md"},
+			},
+		}, nil),
+	}
+
+	req := &sdkmcp.ReadResourceRequest{
+		Params: &sdkmcp.ReadResourceParams{URI: "homelab://services/cards"},
+	}
+
+	result, err := s.handleServiceCardsResource(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(r.lastArgs) != 0 {
+		t.Fatalf("compose runner args = %v, want none", r.lastArgs)
+	}
+	var index struct {
+		Services []service.Card `json:"services"`
+	}
+	if err := json.Unmarshal([]byte(result.Contents[0].Text), &index); err != nil {
+		t.Fatalf("unmarshal cards: %v\n%s", err, result.Contents[0].Text)
+	}
+	if len(index.Services) != 1 {
+		t.Fatalf("services length = %d, want 1", len(index.Services))
+	}
+	card := index.Services[0]
+	if card.Slug != "paperclip" || card.ResolvedURL != "https://paperclip.example.com" {
+		t.Fatalf("card slug/url = %q/%q", card.Slug, card.ResolvedURL)
+	}
+	if card.SSOMode != "proxy" || card.Health.Path != "/api/health" {
+		t.Fatalf("card sso/health = %q/%+v", card.SSOMode, card.Health)
+	}
+}
+
+func TestHandleServiceCardResource(t *testing.T) {
+	r := &mockRunner{err: context.Canceled}
+	s := &Server{
+		cfg:     &config.Config{Domain: "example.com"},
+		compose: docker.NewComposeClient(r, "/test"),
+		registry: service.NewRegistry(map[string]service.Manifest{
+			"openclaw": {
+				Slug:        "openclaw",
+				DisplayName: "OpenClaw",
+				Runtime:     service.RuntimeExternal,
+				URLKey:      "openclaw",
+				SmokeFlow:   "openclaw",
+				SSO:         service.SSOSpec{Mode: "proxy"},
+				Health:      service.HealthSpec{URLKey: "openclaw", Path: "/", Kind: "http"},
+				Docs:        []string{"README.md"},
+			},
+		}, nil),
+	}
+
+	req := &sdkmcp.ReadResourceRequest{
+		Params: &sdkmcp.ReadResourceParams{URI: "homelab://services/openclaw/card"},
+	}
+
+	result, err := s.handleServiceCardResource(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(r.lastArgs) != 0 {
+		t.Fatalf("compose runner args = %v, want none", r.lastArgs)
+	}
+	var card service.Card
+	if err := json.Unmarshal([]byte(result.Contents[0].Text), &card); err != nil {
+		t.Fatalf("unmarshal card: %v\n%s", err, result.Contents[0].Text)
+	}
+	if card.Slug != "openclaw" || card.Runtime != service.RuntimeExternal {
+		t.Fatalf("card identity/runtime = %q/%q", card.Slug, card.Runtime)
+	}
+	if card.ResolvedURL != "https://openclaw.example.com" {
+		t.Fatalf("resolved URL = %q", card.ResolvedURL)
 	}
 }
 

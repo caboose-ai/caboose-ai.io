@@ -194,8 +194,9 @@ Start with conservative commands:
 - `/ask <prompt>`: answer using the service context index and local-first model
   routing.
 - `/agent <role> <task>`: draft a plan without writes by default.
-- `/agent confirm <role> <task>`: allow write-capable tasks after the command
-  repeats the intended changes and risks.
+- `/agent confirm <role> <task>`: send a short remote confirmation signal for a
+  narrow handoff; durable write, deploy, restart, destructive, or broad
+  Paperclip execution approval must still be recorded with the plan and risk.
 - `/model`: show current model and whether it is local, self-hosted, or
   external-token-backed.
 - `/pr <repo> <id>`: summarize readiness, checks, requested changes, and review

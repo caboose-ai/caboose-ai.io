@@ -50,6 +50,13 @@ Mattermost use managed admin credentials from the split 1Password store or
 bootstrap verification. Woodpecker persists server data at
 `/var/lib/woodpecker` so OAuth/session state survives container recreation.
 
+Paperclip-driven agent control starts as a planner/audit ledger. Implementation
+work should prefer the self-hosted delivery loop: Forgejo/Gitea branches and
+PRs, Woodpecker CI, and Portainer Docker visibility. Confirmed execution routes
+through approved OpenClaw, Telegram, MCP, Homelab CLI, PR, or Portainer
+handoffs; Docker mutations, deploys, restarts, and destructive operations
+require explicit human approval.
+
 ## Conventions
 
 ### Go Patterns

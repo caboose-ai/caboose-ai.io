@@ -1,6 +1,9 @@
 package config
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 type URLs struct {
 	Authentik  string
@@ -59,4 +62,43 @@ func (u URLs) ServiceLinks() []ServiceLink {
 		{Name: "Homarr", URL: u.Dashboard},
 		{Name: "Homarr Alias", URL: u.DashAlias},
 	}
+}
+
+func (u URLs) Lookup(key string) (string, bool) {
+	switch normalizeURLKey(key) {
+	case "authentik":
+		return u.Authentik, u.Authentik != ""
+	case "forgejo":
+		return u.Forgejo, u.Forgejo != ""
+	case "woodpecker":
+		return u.Woodpecker, u.Woodpecker != ""
+	case "portainer":
+		return u.Portainer, u.Portainer != ""
+	case "grafana":
+		return u.Grafana, u.Grafana != ""
+	case "open_webui":
+		return u.OpenWebUI, u.OpenWebUI != ""
+	case "mattermost":
+		return u.Mattermost, u.Mattermost != ""
+	case "dashboard":
+		return u.Dashboard, u.Dashboard != ""
+	case "dash_alias":
+		return u.DashAlias, u.DashAlias != ""
+	case "openclaw":
+		return u.OpenClaw, u.OpenClaw != ""
+	case "sonarqube":
+		return u.SonarQube, u.SonarQube != ""
+	case "ghost":
+		return u.Ghost, u.Ghost != ""
+	case "paperclip":
+		return u.Paperclip, u.Paperclip != ""
+	case "ci":
+		return u.CI, u.CI != ""
+	default:
+		return "", false
+	}
+}
+
+func normalizeURLKey(key string) string {
+	return strings.ReplaceAll(strings.ToLower(strings.TrimSpace(key)), "-", "_")
 }

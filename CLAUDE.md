@@ -167,6 +167,12 @@ container recreation.
 - Cloudflare tunnel for `chat` and `sonar` subdomains
 - Ollama on host for local LLM inference
 - Paperclip runs behind the compose `paperclip` profile with Authentik forward-auth provider `paperclip-proxy`; Paperclip itself uses `local_trusted` mode on host loopback so Authentik is the only browser login. Start it with `mise run paperclip:up`, verify it with `mise run paperclip:smoke`, and seed it with `homelab paperclip seed-company --profile software-shop --repo /home/caboose/dev/caboose-ai.io`.
+- Paperclip-driven agent control starts as a planner/audit ledger. Prefer the
+  self-hosted delivery loop for implementation work: Forgejo/Gitea branches and
+  PRs, Woodpecker CI, and Portainer Docker visibility. Confirmed execution must
+  route through approved OpenClaw, Telegram, MCP, Homelab CLI, PR, or Portainer
+  handoffs; Docker mutations, deploys, restarts, and destructive operations
+  require explicit human approval.
 - OpenClaw is an external runtime tracked by manifest, URL, Authentik proxy,
   dashboard, smoke, and health metadata; do not add a fake compose service for it.
 - Telegram Agent Bridge is an external runtime tracked by manifest and run on

@@ -119,14 +119,36 @@ func TestServerIntegration(t *testing.T) {
 
 	t.Run("ListResources", func(t *testing.T) {
 		count := 0
-		for _, err := range session.Resources(ctx, nil) {
+		foundCards := false
+		for resource, err := range session.Resources(ctx, nil) {
 			if err != nil {
 				t.Fatalf("listing resources: %v", err)
 			}
+			if resource.URI == "homelab://services/cards" {
+				foundCards = true
+			}
 			count++
 		}
-		if count != 4 {
-			t.Errorf("expected 4 resources, got %d", count)
+		if count != 5 {
+			t.Errorf("expected 5 resources, got %d", count)
+		}
+		if !foundCards {
+			t.Errorf("services cards resource missing")
+		}
+	})
+
+	t.Run("ListResourceTemplates", func(t *testing.T) {
+		foundCardTemplate := false
+		for tmpl, err := range session.ResourceTemplates(ctx, nil) {
+			if err != nil {
+				t.Fatalf("listing resource templates: %v", err)
+			}
+			if tmpl.URITemplate == "homelab://services/{service}/card" {
+				foundCardTemplate = true
+			}
+		}
+		if !foundCardTemplate {
+			t.Errorf("service card resource template missing")
 		}
 	})
 

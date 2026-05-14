@@ -149,29 +149,61 @@ func TestAskUsesSelectedModelAndExtractsResponseText(t *testing.T) {
 	}
 }
 
-func TestAgentRequiresConfirmationForRiskyActions(t *testing.T) {
-	runner := &fakeRunner{out: []byte(`{"text":"done"}`)}
+func TestAgentDraftsPlanByDefaultForRiskyActions(t *testing.T) {
+	runner := &fakeRunner{out: []byte(`{"text":"plan draft"}`)}
 	bot := newTestBot(t, runner)
 
-	for _, text := range []string{"/agent ops restart authentik", "/agent ops create a dashboard card"} {
-		replies := bot.HandleMessage(context.Background(), allowedMessage(text))
-		if len(replies) != 1 || !strings.Contains(replies[0], "/agent confirm ") {
-			t.Fatalf("unconfirmed replies for %q = %#v", text, replies)
-		}
-		if len(runner.calls) != 0 {
-			t.Fatalf("runner calls after unconfirmed action = %#v", runner.calls)
-		}
+	replies := bot.HandleMessage(context.Background(), allowedMessage("/agent ops restart authentik"))
+	if len(replies) != 1 || replies[0] != "plan draft" {
+		t.Fatalf("replies = %#v", replies)
+	}
+	if len(runner.calls) != 1 {
+		t.Fatalf("runner calls = %#v", runner.calls)
 	}
 
+	prompt := runner.calls[0].args[len(runner.calls[0].args)-1]
+	for _, want := range []string{
+		"Draft a plan only",
+		"Do not execute",
+		"Task: restart authentik",
+		"intended commands/tools",
+		"affected files/services",
+		"rollback notes",
+		"verification",
+		"required confirmation phrase",
+		"Forgejo/Gitea branch or PR",
+		"Woodpecker CI",
+		"Portainer, MCP, or CLI",
+		"human approval before restarts, deploys, or destructive operations",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("prompt missing %q:\n%s", want, prompt)
+		}
+	}
+}
+
+func TestAgentConfirmIsBoundedRemoteSignal(t *testing.T) {
+	runner := &fakeRunner{out: []byte(`{"text":"confirmed plan update"}`)}
+	bot := newTestBot(t, runner)
+
 	replies := bot.HandleMessage(context.Background(), allowedMessage("/agent confirm ops restart authentik"))
-	if len(replies) != 1 || replies[0] != "done" {
+	if len(replies) != 1 || replies[0] != "confirmed plan update" {
 		t.Fatalf("confirmed replies = %#v", replies)
 	}
 	if len(runner.calls) != 1 {
 		t.Fatalf("runner calls = %#v", runner.calls)
 	}
-	if gotPrompt := runner.calls[0].args[len(runner.calls[0].args)-1]; !strings.Contains(gotPrompt, "Task: restart authentik") {
-		t.Fatalf("prompt = %q", gotPrompt)
+	prompt := runner.calls[0].args[len(runner.calls[0].args)-1]
+	for _, want := range []string{
+		"Remote confirmation signal received",
+		"not durable approval",
+		"Do not treat this as approval for broad Paperclip execution",
+		"Task: restart authentik",
+		"required confirmation phrase",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("prompt missing %q:\n%s", want, prompt)
+		}
 	}
 }
 

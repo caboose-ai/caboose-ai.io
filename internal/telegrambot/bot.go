@@ -293,17 +293,46 @@ func (b *Bot) agent(ctx context.Context, userID int64, rest string) []string {
 	if rest == "" {
 		return []string{"Usage: /agent <role> <task>\nExample: /agent qa run the SSO smoke checks"}
 	}
-	if b.cfg.RequireConfirmation && !confirmed && risky(rest) {
-		return []string{"Confirmation required for write/deploy actions. Re-run as:\n/agent confirm " + rest}
-	}
 	fields := strings.Fields(rest)
 	role := fields[0]
 	task := strings.TrimSpace(strings.TrimPrefix(rest, role))
 	if task == "" {
 		return []string{"Usage: /agent <role> <task>"}
 	}
-	prompt := fmt.Sprintf("You are the %s agent for the caboose-ai homelab. Be concise, operational, and explicit about commands and risks.\n\nTask: %s", role, task)
+	prompt := agentPrompt(role, task, confirmed)
 	return b.runOpenClaw(ctx, b.modelForUser(userID), prompt)
+}
+
+func agentPrompt(role, task string, confirmed bool) string {
+	lines := []string{
+		fmt.Sprintf("You are the %s agent for the caboose-ai homelab.", role),
+		"Draft a plan only. Do not execute commands, mutate files, call deployment tools, restart services, or imply execution has happened.",
+		"Be concise, operational, and explicit about commands and risks.",
+		"",
+		"Plan requirements:",
+		"- intended commands/tools",
+		"- affected files/services",
+		"- rollback notes",
+		"- verification",
+		"- required confirmation phrase before execution",
+		"",
+		"Delivery preferences:",
+		"- Prefer self-hosted delivery first: Forgejo/Gitea branch or PR where applicable.",
+		"- Prefer Woodpecker CI for self-hosted validation where applicable.",
+		"- Prefer Docker inspection through Portainer, MCP, or CLI before changing runtime state.",
+		"- Require human approval before restarts, deploys, or destructive operations.",
+		"",
+		fmt.Sprintf("Task: %s", task),
+	}
+	if confirmed {
+		lines = append([]string{
+			"Remote confirmation signal received.",
+			"Treat this as a short remote confirmation signal, not durable approval.",
+			"Do not treat this as approval for broad Paperclip execution.",
+			"",
+		}, lines...)
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (b *Bot) runOpenClaw(ctx context.Context, model, prompt string) []string {
@@ -422,7 +451,8 @@ func helpText() string {
 		"Telegram Agent Bridge",
 		"",
 		"/ask <prompt> - ask the current model",
-		"/agent <role> <task> - run a role-scoped agent prompt",
+		"/agent <role> <task> - draft a role-scoped plan; does not execute",
+		"/agent confirm <role> <task> - send a short remote confirmation signal",
 		"/model - show current and allowed models",
 		"/model <provider/model> - switch model",
 		"/status - show OpenClaw model status",
@@ -470,16 +500,6 @@ func envBool(key string, fallback bool) (bool, error) {
 func contains(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {
-			return true
-		}
-	}
-	return false
-}
-
-func risky(text string) bool {
-	lower := strings.ToLower(text)
-	for _, word := range []string{"deploy", "restart", "delete", "remove", "write", "edit", "update", "create", "replace", "commit", "push", "merge", "apply", "shutdown", "reset", "rollback", "roll back", "rollout"} {
-		if strings.Contains(lower, word) {
 			return true
 		}
 	}
