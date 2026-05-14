@@ -24,7 +24,10 @@ setup() {
   [[ "$output" == *"go run ./cmd/mcp access import"* ]]
   [[ "$output" == *"--credential-file $BATS_TEST_TMPDIR/path\\ with\\ space/credential.json"* ]]
   [[ "$output" == *"go run ./cmd/mcp access token"* ]]
-  [[ "$output" == *"curl -i --max-time 10"* ]]
+  [[ "$output" == *"smoke_status=\$(curl -sS"* ]]
+  [[ "$output" == *"-o /tmp/homelab-mcp-access.DRYRUN/smoke.body"* ]]
+  [[ "$output" == *"test \"\$smoke_status\" = 200"* ]]
+  [[ "$output" == *"grep -q"* ]]
   [[ "$output" == *"https://mcp.caboose-ai.io/"* ]]
 }
 

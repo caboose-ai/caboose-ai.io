@@ -72,8 +72,22 @@ token_cmd=(go run ./cmd/mcp access token "${credential_args[@]}")
 
 print_cmd() {
   printf '+'
-  printf ' %s' "$@"
+  printf ' %q' "$@"
   printf '\n'
+}
+
+print_capture_cmd() {
+  local var_name="$1"
+  shift
+  printf '+ %s=$(' "$var_name"
+  printf '%q' "$1"
+  shift
+  printf ' %q' "$@"
+  printf ')\n'
+}
+
+print_shell_line() {
+  printf '+ %s\n' "$*"
 }
 
 fail_response() {
@@ -89,18 +103,31 @@ fail_response() {
 cd "$repo_root"
 
 if [[ "$dry_run" == "true" ]]; then
-  print_cmd curl -i --max-time "$timeout" "$endpoint_url"
+  print_capture_cmd unauth_status curl -sS \
+    -o '<tmpdir>/unauth.body' \
+    -D '<tmpdir>/unauth.headers' \
+    -w '%{http_code}' \
+    --max-time "$timeout" \
+    "$endpoint_url"
+  print_shell_line 'test "$unauth_status" = 401'
+  print_cmd grep -qi '^www-authenticate:.*Bearer' '<tmpdir>/unauth.headers'
   if [[ -n "${HOMELAB_MCP_TOKEN:-}" ]]; then
     echo '+ TOKEN=<HOMELAB_MCP_TOKEN>'
   else
     print_cmd "${token_cmd[@]}"
   fi
-  print_cmd curl -i --max-time "$timeout" \
+  print_capture_cmd auth_status curl -sS \
+    -o '<tmpdir>/auth.body' \
+    -D '<tmpdir>/auth.headers' \
+    -w '%{http_code}' \
+    --max-time "$timeout" \
     -H "Authorization: Bearer \$TOKEN" \
     -H "Content-Type: application/json" \
     -H "Accept: application/json, text/event-stream" \
     --data "$initialize_payload" \
     "$endpoint_url"
+  print_shell_line 'test "$auth_status" = 200'
+  print_cmd grep -q '"name":"homelab"' '<tmpdir>/auth.body'
   exit 0
 fi
 

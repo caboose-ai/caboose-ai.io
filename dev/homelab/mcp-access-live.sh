@@ -119,6 +119,20 @@ print_cmd() {
   printf '\n'
 }
 
+print_capture_cmd() {
+  local var_name="$1"
+  shift
+  printf '+ %s=$(' "$var_name"
+  printf '%q' "$1"
+  shift
+  printf ' %q' "$@"
+  printf ')\n'
+}
+
+print_shell_line() {
+  printf '+ %s\n' "$*"
+}
+
 run_cmd() {
   if [[ "$dry_run" == "true" ]]; then
     print_cmd "$@"
@@ -164,16 +178,29 @@ run_cmd go run ./cmd/mcp access import \
 token_cmd=(go run ./cmd/mcp access token "${credential_args[@]}")
 if [[ "$dry_run" == "true" ]]; then
   print_cmd "${token_cmd[@]}"
-  print_cmd curl -i --max-time 10 \
+  print_capture_cmd smoke_status curl -sS \
+    -o "$smoke_body" \
+    -D "$smoke_headers" \
+    -w '%{http_code}' \
+    --max-time 10 \
     -H "Authorization: Bearer \$TOKEN" \
     -H "Content-Type: application/json" \
     -H "Accept: application/json, text/event-stream" \
     --data "$initialize_payload" \
     "$endpoint_url"
+  print_shell_line 'test "$smoke_status" = 200'
+  print_cmd grep -q '"name":"homelab"' "$smoke_body"
   exit 0
 fi
 
-token="$("${token_cmd[@]}")"
+if ! token="$("${token_cmd[@]}")"; then
+  echo "Could not mint a token. Import MCP access first, pass --credential-file, or set HOMELAB_MCP_TOKEN." >&2
+  exit 1
+fi
+if [[ -z "$token" ]]; then
+  echo "token command returned an empty token" >&2
+  exit 1
+fi
 
 if [[ "$print_token" == "true" ]]; then
   printf 'export HOMELAB_MCP_TOKEN=%q\n' "$token"

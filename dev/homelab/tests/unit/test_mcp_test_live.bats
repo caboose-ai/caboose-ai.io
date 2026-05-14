@@ -12,9 +12,13 @@ setup() {
     --credential-file "$BATS_TEST_TMPDIR/credential.json"
 
   [ "$status" -eq 0 ]
-  [[ "$output" == *"curl -i --max-time 10 https://mcp.caboose-ai.io/"* ]]
+  [[ "$output" == *"unauth_status=\$(curl -sS"* ]]
+  [[ "$output" == *"test \"\$unauth_status\" = 401"* ]]
   [[ "$output" == *"go run ./cmd/mcp access token --credential-file $BATS_TEST_TMPDIR/credential.json"* ]]
-  [[ "$output" == *"method\":\"initialize"* ]]
+  [[ "$output" == *"auth_status=\$(curl -sS"* ]]
+  [[ "$output" == *"test \"\$auth_status\" = 200"* ]]
+  [[ "$output" == *"grep -q"* ]]
+  [[ "$output" == *"initialize"* ]]
   [[ "$output" != *"access request"* ]]
   [[ "$output" != *"access approve"* ]]
   [[ "$output" != *"access import"* ]]
