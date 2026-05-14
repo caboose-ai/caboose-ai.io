@@ -35,6 +35,7 @@ ID. If it is unset, `telegram-agent notify` sends to all allowed user IDs.
 mise run telegram-agent:run
 mise run telegram-agent:build
 mise run telegram-agent:notify -- "PR is ready for review."
+mise run pr:watch-ready -- --repo caboose-ai/caboose-ai.io --pr 48 --poll 1m --timeout 10m
 ```
 
 Supported Telegram commands:
@@ -50,6 +51,32 @@ Supported Telegram commands:
 
 Write, deploy, restart, commit, push, merge, reset, and delete-style agent
 tasks require `/agent confirm ...` when `TELEGRAM_REQUIRE_CONFIRMATION` is true.
+
+## PR Readiness Notifications
+
+`cmd/pr-ready-watch` polls GitHub through the local `gh` CLI and sends a
+Telegram notification when a PR has a completed Codex review, no failing or
+pending checks, no requested changes, and no merge conflict. Draft PRs are not
+blocked: the notification labels them as ready for final human review so the
+human remains last in the loop. If an open PR becomes blocked by failing
+checks, requested changes, or a merge conflict, the watcher sends the blocked
+findings instead of waiting silently.
+
+The watcher can read the Telegram bot token from 1Password if
+`TELEGRAM_BOT_TOKEN` is unset:
+
+```bash
+TELEGRAM_BOT_TOKEN_OP_ITEM="Telegram Homelab Bot Token" \
+TELEGRAM_BOT_TOKEN_OP_VAULT=Personal \
+TELEGRAM_ALLOWED_USER_IDS=123456789 \
+TELEGRAM_NOTIFY_CHAT_ID=123456789 \
+mise run pr:watch-ready -- --repo caboose-ai/caboose-ai.io --pr 48 --poll 1m --timeout 10m
+```
+
+Use `--once --dry-run` to print the current assessment without notifying. For a
+local timer or cron job, run the same command from the repository root. A hosted
+webhook is only needed if GitHub should call a public callback instead of this
+host polling with local credentials.
 
 ## Service Contract
 

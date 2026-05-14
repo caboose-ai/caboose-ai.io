@@ -137,6 +137,10 @@ run = "go run ./cmd/telegram-agent"
 description = "Send a one-shot Telegram notification to configured allowed users"
 run = "go run ./cmd/telegram-agent notify"
 
+[tasks."pr:watch-ready"]
+description = "Poll a GitHub PR and send Telegram when it is ready for final human review"
+run = "go run -buildvcs=false ./cmd/pr-ready-watch"
+
 [tasks.mcp]
 description = "Build and run the MCP server"
 run = "go build -o ./mcp-server ./cmd/mcp && ./mcp-server"

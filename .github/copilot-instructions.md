@@ -2,11 +2,12 @@
 
 ## Project Overview
 
-Go monorepo for a homelab SSO infrastructure stack. Three binaries:
+Go monorepo for a homelab SSO infrastructure stack. Four command entrypoints:
 - `cmd/homelab` — TUI installer that bootstraps Authentik SSO + all services
 - `cmd/mcp` — MCP server exposing homelab tools to AI assistants
   - `agent_invoke` provider fallback supports Ollama, Claude Code, Copilot CLI, and Emberfall
 - `cmd/telegram-agent` — private Telegram bot for allowlisted OpenClaw-backed agent control
+- `cmd/pr-ready-watch` — local GitHub PR watcher that notifies Telegram when Codex review and checks are ready for final human review
 
 Service implementation packages live under `services/<slug>/`; shared internal
 packages live under `internal/`. No public API surface.
@@ -29,6 +30,7 @@ internal/
   service/              Shared service manifest, registry, and configurator types
   servicebuilder/       Central service configurator construction
   paperclip/            Paperclip bootstrap client, local_trusted proxy mode, and software-shop seed profile
+  prwatch/              PR readiness classifier for Codex review, checks, requested changes, and merge state
   telegrambot/          Telegram allowlist bot and OpenClaw model command bridge
   mcp/                  MCP server, tools, resources
   cli/                  Non-interactive CLI runner
@@ -173,6 +175,7 @@ go run ./cmd/homelab install --domain caboose-ai.io --compose-dir dev/homelab
 go run ./cmd/homelab service --domain caboose-ai.io --compose-dir dev/homelab forgejo status
 go run ./cmd/homelab paperclip seed-company --profile software-shop --repo /home/caboose/dev/caboose-ai.io
 go run ./cmd/telegram-agent notify "task finished"
+go run ./cmd/pr-ready-watch --repo caboose-ai/caboose-ai.io --pr 48 --poll 1m --timeout 10m
 ```
 
 ### Building
