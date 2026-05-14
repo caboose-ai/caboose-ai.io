@@ -20,6 +20,7 @@ import (
 	"github.com/caboose-ai/caboose-ai.io/internal/secrets"
 	"github.com/caboose-ai/caboose-ai.io/services/authentik"
 	"github.com/go-rod/rod"
+	rodinput "github.com/go-rod/rod/lib/input"
 	"github.com/go-rod/rod/lib/launcher"
 	"github.com/go-rod/rod/lib/proto"
 )
@@ -151,7 +152,7 @@ func recoverAuthentikTokenFromContainer(ctx context.Context) (string, error) {
 const (
 	turnstileTestSiteKey      = "1x00000000000000000000AA"
 	turnstileTestSecret       = "1x0000000000000000000000000000000AA"
-	authentikUsernameSelector = `input[name='uidField'], input[name='username'], input[autocomplete='username'], input[type='email'], input[placeholder*='Email or Username']`
+	authentikUsernameSelector = `input[name='uid_field'], input[name='uidField'], input[name='username'], input[autocomplete='username'], input[type='email'], input[placeholder*='Email / Username'], input[placeholder*='Email or Username']`
 )
 
 func (s *Suite) InitBrowser(t *testing.T) {
@@ -319,31 +320,30 @@ func (s *Suite) LoginToAuthentik(t *testing.T, page *rod.Page) {
 
 	s.handleDialogs(page)
 
-	uid, err := page.Timeout(5 * time.Second).ElementByJS(deepQueryOne(authentikUsernameSelector))
-	if err != nil {
-		s.ScreenshotOnFailure(t, page)
-		t.Fatalf("waiting for authentik username field matching %q: %v", authentikUsernameSelector, err)
+	if err := s.SetInputValue(t, page, authentikUsernameSelector, "authentik username", "auth-admin", false); err != nil {
+		t.Logf("warning: username selector %q not settable, falling back to focused input: %v", authentikUsernameSelector, err)
+		s.InputFocused(t, page, "authentik username", "auth-admin", false)
+		s.PressEnter(t, page, "submit username")
+	} else {
+		submitBtn, err := findElement(page, `button[type='submit']`, 2*time.Second)
+		if err != nil {
+			t.Fatalf("waiting for submit after uid: %v", err)
+		}
+		s.Click(t, page, submitBtn, "submit username")
 	}
-	s.Input(t, page, uid, "authentik username", "auth-admin", false)
-
-	submitBtn, err := page.ElementByJS(deepQueryOne(`button[type='submit']`))
-	if err != nil {
-		t.Fatalf("waiting for submit after uid: %v", err)
-	}
-	s.Click(t, page, submitBtn, "submit username")
 	s.WaitStable(t, page, "authentik password stage")
 
-	pw, err := page.ElementByJS(deepQueryOne(`input[name='password']`))
-	if err != nil {
-		t.Fatalf("waiting for password field: %v", err)
+	if err := s.SetInputValue(t, page, `input[name='password']`, "authentik password", s.AdminPass, true); err != nil {
+		t.Logf("warning: password selector not settable, falling back to focused input: %v", err)
+		s.InputFocused(t, page, "authentik password", s.AdminPass, true)
+		s.PressEnter(t, page, "submit password")
+	} else {
+		submitBtn2, err := findElement(page, `button[type='submit']`, 2*time.Second)
+		if err != nil {
+			t.Fatalf("waiting for submit after password: %v", err)
+		}
+		s.Click(t, page, submitBtn2, "submit password")
 	}
-	s.Input(t, page, pw, "authentik password", s.AdminPass, true)
-
-	submitBtn2, err := page.ElementByJS(deepQueryOne(`button[type='submit']`))
-	if err != nil {
-		t.Fatalf("waiting for submit after password: %v", err)
-	}
-	s.Click(t, page, submitBtn2, "submit password")
 	s.WaitStable(t, page, "authentik login completion")
 	s.Record(t, page, "wait", "authentik login complete", nil)
 }
@@ -400,6 +400,117 @@ func (s *Suite) Input(t *testing.T, page *rod.Page, el *rod.Element, label, valu
 		t.Fatalf("entering %s: %v", label, err)
 	}
 	s.Record(t, page, "after_input", label, details)
+}
+
+func (s *Suite) InputFocused(t *testing.T, page *rod.Page, label, value string, secret bool) {
+	t.Helper()
+	details := map[string]string{"value": value}
+	if secret {
+		details["value"] = "[REDACTED]"
+	}
+	s.Record(t, page, "before_input", label, details)
+	if err := page.Timeout(5 * time.Second).InsertText(value); err != nil {
+		s.ScreenshotOnFailure(t, page)
+		t.Fatalf("entering %s into focused field: %v", label, err)
+	}
+	s.Record(t, page, "after_input", label, details)
+}
+
+func (s *Suite) SetInputValue(t *testing.T, page *rod.Page, selector, label, value string, secret bool) error {
+	t.Helper()
+	details := map[string]string{"value": value}
+	if secret {
+		details["value"] = "[REDACTED]"
+	}
+	s.Record(t, page, "before_input", label, details)
+	result, err := page.Timeout(5*time.Second).Eval(`(selector, value) => {
+		const inputs = [];
+		function collect(root) {
+			inputs.push(...root.querySelectorAll(selector));
+			for (const child of root.querySelectorAll('*')) {
+				if (child.shadowRoot) collect(child.shadowRoot);
+			}
+			for (const frame of root.querySelectorAll('iframe')) {
+				try {
+					if (frame.contentDocument) collect(frame.contentDocument);
+				} catch (_) {}
+			}
+		}
+		function setNativeValue(el, nextValue) {
+			const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+			const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+			if (setter) {
+				setter.call(el, nextValue);
+			} else {
+				el.value = nextValue;
+			}
+			el.dispatchEvent(new Event('input', { bubbles: true }));
+			el.dispatchEvent(new Event('change', { bubbles: true }));
+		}
+		collect(document);
+		for (const input of inputs) {
+			setNativeValue(input, value);
+		}
+		return inputs.length;
+	}`, selector, value)
+	if err != nil {
+		return err
+	}
+	if result.Value.Int() == 0 {
+		return fmt.Errorf("no inputs matched %q", selector)
+	}
+	s.Record(t, page, "after_input", label, details)
+	return nil
+}
+
+func (s *Suite) PressEnter(t *testing.T, page *rod.Page, label string) {
+	t.Helper()
+	s.Record(t, page, "before_key", label, nil)
+	if err := page.Timeout(5 * time.Second).Keyboard.Press(rodinput.Enter); err != nil {
+		s.ScreenshotOnFailure(t, page)
+		t.Fatalf("pressing Enter for %s: %v", label, err)
+	}
+	s.Record(t, page, "after_key", label, nil)
+}
+
+func findElement(page *rod.Page, selector string, timeout time.Duration) (*rod.Element, error) {
+	return findElementInPage(page, selector, timeout, 0)
+}
+
+func findElementInPage(page *rod.Page, selector string, timeout time.Duration, depth int) (*rod.Element, error) {
+	if els, err := page.Timeout(timeout).Elements(selector); err == nil {
+		for _, el := range els {
+			visible, err := el.Visible()
+			if err == nil && visible {
+				return el, nil
+			}
+		}
+	}
+	if el, err := page.Timeout(timeout).ElementByJS(deepQueryOne(selector)); err == nil {
+		visible, err := el.Visible()
+		if err == nil && visible {
+			return el, nil
+		}
+	}
+	if depth >= 3 {
+		return nil, fmt.Errorf("element %q not found", selector)
+	}
+
+	frames, err := page.Timeout(timeout).Elements("iframe")
+	if err != nil {
+		return nil, fmt.Errorf("element %q not found: %w", selector, err)
+	}
+	for _, frameEl := range frames {
+		frame, err := frameEl.Frame()
+		if err != nil {
+			continue
+		}
+		el, err := findElementInPage(frame, selector, timeout, depth+1)
+		if err == nil {
+			return el, nil
+		}
+	}
+	return nil, fmt.Errorf("element %q not found", selector)
 }
 
 func (s *Suite) Secret(t *testing.T, key string) string {
@@ -507,6 +618,14 @@ func deepQueryOne(selector string) *rod.EvalOptions {
 					el = deepQuery(child.shadowRoot, sel);
 					if (el) return el;
 				}
+			}
+			for (const frame of root.querySelectorAll('iframe')) {
+				try {
+					if (frame.contentDocument) {
+						el = deepQuery(frame.contentDocument, sel);
+						if (el) return el;
+					}
+				} catch (_) {}
 			}
 			return null;
 		}

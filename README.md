@@ -23,7 +23,7 @@ Go monorepo for a self-hosted homelab infrastructure stack with SSO via Authenti
 | Prometheus | — | Metrics collection |
 | Loki + Promtail | — | Log aggregation |
 
-Browser-facing services authenticate through Authentik via OAuth2/OIDC or forward-auth proxy. The installer keeps Authentik applications open (`policy_engine_mode=all`) so provider-level SSO decisions control access consistently. The social login configurator promotes managed GitHub and Google sources, while generic source upserts preserve the existing promotion state unless explicitly changed. Telegram Agent Bridge is not public web surface; it is a host-run bot protected by a Telegram user-ID allowlist.
+Browser-facing services authenticate through Authentik via OAuth2/OIDC or forward-auth proxy. The installer keeps Authentik applications open (`policy_engine_mode=all`) so provider-level SSO decisions control access consistently. The social login configurator keeps Google as the enabled source with email-link matching and hides local email/password fields on the default authentication flow; GitHub credentials can remain stored, but the managed GitHub source is disabled and unpromoted by default. Generic source upserts preserve the existing promotion state unless explicitly changed. Telegram Agent Bridge is not public web surface; it is a host-run bot protected by a Telegram user-ID allowlist.
 
 Paperclip-driven agent control uses the self-hosted delivery loop first:
 Forgejo hosts branches and PRs, Woodpecker reports CI verification, and

@@ -138,6 +138,7 @@ container recreation.
 - OAuth2 and proxy providers must have matching Authentik applications.
 - Authentik application lookups must exact-match slugs; API search responses can include broader matches.
 - Installer-created or repaired applications should use `policy_engine_mode=all` so provider-level SSO policy gates access.
+- Managed social login is Google-only in the browser: Google is enabled with `email_link` matching, local email/password fields are hidden on the default authentication flow, and the GitHub OAuth source is kept disabled/unpromoted even when credentials exist.
 - Shared OAuth source upserts should leave `promoted` unset unless the caller intentionally owns promotion/demotion.
 - Use `homelab oauth-setup --domain <domain>` to print GitHub/Google OAuth callback URLs, Turnstile hostname, and expected secret keys. Add `--create-turnstile` with `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` to create the Turnstile widget through Cloudflare's API.
 

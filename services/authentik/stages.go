@@ -87,9 +87,11 @@ func (c *Client) PatchUserWriteStage(ctx context.Context, pk string, inactive bo
 }
 
 type IdentificationStage struct {
-	PK      string   `json:"pk"`
-	Name    string   `json:"name"`
-	Sources []string `json:"sources"`
+	PK               string   `json:"pk"`
+	Name             string   `json:"name"`
+	Sources          []string `json:"sources"`
+	UserFields       []string `json:"user_fields"`
+	ShowSourceLabels bool     `json:"show_source_labels"`
 }
 
 type identificationStageList struct {
@@ -115,7 +117,8 @@ func (c *Client) GetIdentificationStage(ctx context.Context, flowSlug string) (*
 func (c *Client) SetIdentificationStageSources(ctx context.Context, stagePK string, sourcePKs []string) error {
 	body := map[string]any{
 		"sources":            sourcePKs,
-		"show_source_labels": false,
+		"show_source_labels": true,
+		"user_fields":        []string{},
 	}
 	_, err := c.Patch(ctx, fmt.Sprintf("/api/v3/stages/identification/%s/", stagePK), body)
 	return err
