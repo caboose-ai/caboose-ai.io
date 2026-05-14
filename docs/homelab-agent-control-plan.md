@@ -70,7 +70,7 @@ Extend every `services/<slug>/README.md` with these sections:
 | Telegram Agent Bridge | Private bot control plane | Remote `/ask`, `/agent`, status, approval, notification workflows | External runtime; Telegram allowlist | Highest because it is the remote approval and dispatch path |
 | Homelab MCP | Automation API for agents | Service status, smoke checks, local tool execution, agent invocation | Bearer-token MCP endpoint | Highest because it is the safest machine interface |
 | Open WebUI | Local/self-hosted chat UI | Model validation, local LLM testing, user-facing AI experiments | Dashboard; OIDC | High for minimizing outside token use |
-| Paperclip | AI-labor control plane | Manage software-shop tasks, app/service planning, agent coordination experiments | Dashboard; proxy SSO | High for subagentic development workflows |
+| Paperclip | AI-labor control plane | Trigger plans, track execution, manage software-shop tasks, coordinate agent experiments | Dashboard; proxy SSO | High for subagentic development workflows |
 | Forgejo | Git hosting | Repo creation, code review context, issues, PRs, release source | Dashboard; OIDC | High for development workflows |
 | Woodpecker | CI/CD | Build/test/deploy pipelines, status feedback, release automation | Dashboard; proxy SSO | High for development workflows |
 | SonarQube | Code quality and security | Static analysis findings, quality gates, remediation tasks | Local auth | Medium-high for code quality agents |
@@ -137,6 +137,10 @@ Create a documentation check that ensures each service has:
   role-based agent dispatch, confirmations, and readiness notifications.
 - Homelab MCP: typed tool layer for safe service status, smoke checks, logs,
   repo workflows, and agent invocation.
+- Paperclip: planning and execution workspace for longer-running software-shop
+  work; it can create task records, hold audit trails, assign subagent roles,
+  and hand approved execution steps to OpenClaw, Telegram, Homelab MCP, or the
+  Homelab CLI.
 - Homelab CLI: deterministic local executor for service operations, install,
   configure, smoke, logs, and open commands.
 - Forgejo and Woodpecker: source control and CI feedback loop for development
@@ -199,6 +203,33 @@ Start with conservative commands:
 
 The bot should return links to OpenClaw sessions or PRs for long-running work
 instead of trying to fit the full working context in Telegram.
+
+### 5. Trigger Planning and Execution from Paperclip
+
+Yes: Paperclip can be the project-management trigger for this system, while
+OpenClaw remains the primary interactive control surface and Homelab MCP remains
+the typed automation boundary. The recommended Paperclip flow is:
+
+1. Intake: a human creates or updates a Paperclip task with the goal, services
+   involved, constraints, token budget, and desired output.
+2. Plan: Paperclip invokes the architect or service-documenter role to create a
+   plan, risk label, required tools, and verification checklist.
+3. Approve: Paperclip records human approval for any write, deploy, restart,
+   secret, destructive, or external-token-spending action.
+4. Execute: approved steps are dispatched through OpenClaw, Telegram Agent
+   Bridge, Homelab MCP, or the Homelab CLI rather than through ad-hoc service
+   access.
+5. Verify: tester or operator agents attach command output, smoke results, CI
+   status, screenshots when useful, and rollback notes to the Paperclip task.
+6. Close the loop: Paperclip links the branch, PR, OpenClaw session, Telegram
+   notification, service docs, and follow-up work so future agents can reuse the
+   evidence.
+
+Paperclip should start as a planner and audit log for execution rather than a
+privileged executor. Direct execution from Paperclip is safe only after the task
+classifier, service context index, confirmation gates, and least-privilege MCP
+tools are in place. Until then, Paperclip-triggered work should produce plans,
+PRs, and explicit handoffs for humans or confirmed agents to execute.
 
 ## Phase 3: Minimize Outside Token Use
 

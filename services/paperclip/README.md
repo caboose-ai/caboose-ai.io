@@ -19,6 +19,20 @@ mise run paperclip:seed
 and reads `PAPERCLIP_API_KEY` from the environment or configured secret store
 when the API requires bearer auth.
 
+## Agent Planning and Execution
+
+Paperclip can trigger the homelab agent-control workflow as the task intake,
+planning, and audit surface. Use it to capture the goal, affected services,
+token budget, approval requirements, execution checklist, evidence, PR links,
+and follow-up work.
+
+The safe default is for Paperclip to plan first and execute only through
+approved control paths: OpenClaw for interactive supervision, Telegram Agent
+Bridge for remote confirmations, Homelab MCP for typed automation tools, and
+the Homelab CLI for deterministic service operations. Write, deploy, restart,
+secret, destructive, and external-token-spending tasks require explicit human
+approval before execution.
+
 If `PAPERCLIP_PUBLIC_URL` is overridden for a non-default domain, update the
 matching Authentik proxy provider and Caddy route.
 
