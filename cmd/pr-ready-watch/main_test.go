@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"errors"
+	"io"
 	"reflect"
 	"testing"
 	"time"
@@ -17,7 +19,7 @@ func TestPRViewArgsUsesExplicitRepoAndPR(t *testing.T) {
 		"view",
 		"6",
 		"--json",
-		"number,title,url,state,isDraft,mergeStateStatus,reviewDecision,statusCheckRollup,comments,reviews,latestReviews,reviewRequests,headRefName,headRefOid,baseRefName,headRepository,headRepositoryOwner",
+		"number,title,url,state,isDraft,mergeStateStatus,reviewDecision,statusCheckRollup,comments,reviews,latestReviews,reviewRequests,headRefName,headRefOid,baseRefName,headRepository,headRepositoryOwner,commits",
 		"--repo",
 		"caboose-ai/ai-skills",
 	}
@@ -62,15 +64,43 @@ func TestTelegramConfigReadsBotTokenFromOnePassword(t *testing.T) {
 func TestFetchPRLoadsReviewComments(t *testing.T) {
 	mock := runner.NewMockRunner()
 	mock.On("gh pr view 6 --json", []byte(`{"number":6,"headRefOid":"abc123"}`), nil)
-	mock.On("gh api repos/caboose-ai/ai-skills/pulls/6/comments", []byte(`[{"user":{"login":"chatgpt-codex-connector"},"body":"Fix it","commit_id":"abc123"}]`), nil)
+	mock.On("gh api --paginate repos/caboose-ai/ai-skills/pulls/6/comments --jq .[]", []byte(`{"user":{"login":"chatgpt-codex-connector"},"body":"Fix it","commit_id":"abc123"}
+{"user":{"login":"reviewer"},"body":"Other","commit_id":"abc123"}`), nil)
 
 	pr, err := fetchPR(context.Background(), mock, options{Repo: "caboose-ai/ai-skills", PRNumber: 6})
 
 	if err != nil {
 		t.Fatalf("fetchPR() error = %v", err)
 	}
-	if len(pr.ReviewComments) != 1 {
-		t.Fatalf("ReviewComments = %v, want one Codex review comment", pr.ReviewComments)
+	if len(pr.ReviewComments) != 2 {
+		t.Fatalf("ReviewComments = %v, want two review comments", pr.ReviewComments)
+	}
+}
+
+func TestFetchReviewCommentsAcceptsEmptyPaginatedOutput(t *testing.T) {
+	mock := runner.NewMockRunner()
+	mock.On("gh api --paginate repos/caboose-ai/ai-skills/pulls/6/comments --jq .[]", []byte("\n"), nil)
+
+	comments, err := fetchReviewComments(context.Background(), mock, "caboose-ai/ai-skills", 6)
+
+	if err != nil {
+		t.Fatalf("fetchReviewComments() error = %v", err)
+	}
+	if len(comments) != 0 {
+		t.Fatalf("comments = %#v, want empty", comments)
+	}
+}
+
+func TestWatchReportsTimeoutWhenCheckCommandExceedsDeadline(t *testing.T) {
+	err := watch(context.Background(), contextDeadlineRunner{}, options{
+		Repo:     "caboose-ai/ai-skills",
+		PRNumber: 6,
+		Poll:     time.Minute,
+		Timeout:  time.Millisecond,
+	}, io.Discard, io.Discard)
+
+	if !errors.Is(err, errTimedOut) {
+		t.Fatalf("watch() error = %v, want errTimedOut", err)
 	}
 }
 
@@ -85,4 +115,15 @@ func TestParseOptionsDefaultsToTenMinuteWatcher(t *testing.T) {
 	if opts.Timeout != 10*time.Minute {
 		t.Fatalf("Timeout = %s, want 10m", opts.Timeout)
 	}
+}
+
+type contextDeadlineRunner struct{}
+
+func (contextDeadlineRunner) Run(ctx context.Context, _ string, _ ...string) ([]byte, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func (r contextDeadlineRunner) RunWithStdin(ctx context.Context, _ io.Reader, name string, args ...string) ([]byte, error) {
+	return r.Run(ctx, name, args...)
 }

@@ -27,6 +27,7 @@ type PullRequest struct {
 	Reviews             []Review         `json:"reviews"`
 	LatestReviews       []Review         `json:"latestReviews"`
 	ReviewComments      []ReviewComment  `json:"reviewComments"`
+	Commits             []Commit         `json:"commits"`
 	StatusCheckRollup   []map[string]any `json:"statusCheckRollup"`
 	ReviewRequests      []ReviewRequest  `json:"reviewRequests"`
 	HeadRefName         string           `json:"headRefName"`
@@ -57,7 +58,9 @@ type Review struct {
 }
 
 type Commit struct {
-	OID string `json:"oid"`
+	OID           string `json:"oid"`
+	CommittedDate string `json:"committedDate"`
+	AuthoredDate  string `json:"authoredDate"`
 }
 
 type ReviewComment struct {
@@ -67,6 +70,7 @@ type ReviewComment struct {
 	Path             string `json:"path"`
 	CommitID         string `json:"commit_id"`
 	OriginalCommitID string `json:"original_commit_id"`
+	CreatedAt        string `json:"created_at"`
 }
 
 type ReviewRequest struct {
@@ -108,7 +112,9 @@ func Assess(pr PullRequest) Assessment {
 			blockers = append(blockers, fmt.Sprintf("%s has changes requested", reviewer))
 		}
 	}
-	if count := currentHeadCodexReviewCommentCount(pr); count > 0 {
+	latestRequest := latestCodexRequest(pr.Comments)
+	headCommitTime := currentHeadCommitTime(pr.Commits, pr.HeadRefOID)
+	if count := currentHeadCodexReviewCommentCount(pr, latestRequest, headCommitTime); count > 0 {
 		blockers = append(blockers, pluralize(count, "Codex review has %d current-head comment", "Codex review has %d current-head comments"))
 	}
 
@@ -147,7 +153,7 @@ func Assess(pr PullRequest) Assessment {
 		notes = append(notes, "draft PR: human should mark ready after final review")
 	}
 
-	if !hasCodexReview(pr) {
+	if !hasCodexReview(pr, latestRequest, headCommitTime) {
 		waiting = append(waiting, "Codex review has not completed")
 	} else {
 		notes = append(notes, "Codex review completed")
@@ -243,10 +249,12 @@ func summarizeChecks(items []map[string]any) checkSummary {
 	return summary
 }
 
-func hasCodexReview(pr PullRequest) bool {
-	latestRequest := latestCodexRequest(pr.Comments)
+func hasCodexReview(pr PullRequest, latestRequest, headCommitTime time.Time) bool {
 	for _, comment := range pr.Comments {
-		if isCodexActor(comment.Author.Login) && looksLikeCompletedCodexReview(comment.Body) && completedAfterRequest(comment.CreatedAt, latestRequest) {
+		if isCodexActor(comment.Author.Login) &&
+			looksLikeCompletedCodexReview(comment.Body) &&
+			completedAfter(comment.CreatedAt, latestRequest) &&
+			completedAfter(comment.CreatedAt, headCommitTime) {
 			return true
 		}
 	}
@@ -255,7 +263,8 @@ func hasCodexReview(pr PullRequest) bool {
 			if isCodexActor(review.Author.Login) &&
 				!strings.EqualFold(strings.TrimSpace(review.State), "PENDING") &&
 				reviewMatchesHead(review, pr.HeadRefOID) &&
-				completedAfterRequest(review.SubmittedAt, latestRequest) {
+				completedAfter(review.SubmittedAt, latestRequest) &&
+				completedAfter(review.SubmittedAt, headCommitTime) {
 				return true
 			}
 		}
@@ -281,12 +290,48 @@ func looksLikeCodexRequest(body string) bool {
 	return strings.EqualFold(strings.TrimSpace(body), "@codex review")
 }
 
-func completedAfterRequest(completedAt string, latestRequest time.Time) bool {
-	if latestRequest.IsZero() {
+func currentHeadCommitTime(commits []Commit, headRefOID string) time.Time {
+	headRefOID = strings.TrimSpace(headRefOID)
+	if headRefOID != "" {
+		for _, commit := range commits {
+			if strings.EqualFold(strings.TrimSpace(commit.OID), headRefOID) {
+				return firstCommitTime(commit)
+			}
+		}
+	}
+
+	var latestCommitted time.Time
+	var latestAuthored time.Time
+	for _, commit := range commits {
+		if committedAt, ok := parseGitHubTime(commit.CommittedDate); ok && committedAt.After(latestCommitted) {
+			latestCommitted = committedAt
+		}
+		if authoredAt, ok := parseGitHubTime(commit.AuthoredDate); ok && authoredAt.After(latestAuthored) {
+			latestAuthored = authoredAt
+		}
+	}
+	if !latestCommitted.IsZero() {
+		return latestCommitted
+	}
+	return latestAuthored
+}
+
+func firstCommitTime(commit Commit) time.Time {
+	if committedAt, ok := parseGitHubTime(commit.CommittedDate); ok {
+		return committedAt
+	}
+	if authoredAt, ok := parseGitHubTime(commit.AuthoredDate); ok {
+		return authoredAt
+	}
+	return time.Time{}
+}
+
+func completedAfter(completedAt string, cutoff time.Time) bool {
+	if cutoff.IsZero() {
 		return true
 	}
 	completed, ok := parseGitHubTime(completedAt)
-	return ok && !completed.Before(latestRequest)
+	return ok && !completed.Before(cutoff)
 }
 
 func reviewMatchesHead(review Review, headRefOID string) bool {
@@ -300,14 +345,13 @@ func parseGitHubTime(raw string) (time.Time, bool) {
 	return parsed, err == nil
 }
 
-func currentHeadCodexReviewCommentCount(pr PullRequest) int {
+func currentHeadCodexReviewCommentCount(pr PullRequest, latestRequest, headCommitTime time.Time) int {
 	var count int
 	for _, comment := range pr.ReviewComments {
 		if !isCodexActor(comment.Author.Login) {
 			continue
 		}
-		commentCommitID := reviewCommentCommitID(comment)
-		if pr.HeadRefOID != "" && commentCommitID != "" && !strings.EqualFold(commentCommitID, strings.TrimSpace(pr.HeadRefOID)) {
+		if !reviewCommentMatchesHead(comment, pr.HeadRefOID, latestRequest, headCommitTime) {
 			continue
 		}
 		count++
@@ -315,11 +359,21 @@ func currentHeadCodexReviewCommentCount(pr PullRequest) int {
 	return count
 }
 
-func reviewCommentCommitID(comment ReviewComment) string {
-	if strings.TrimSpace(comment.OriginalCommitID) != "" {
-		return strings.TrimSpace(comment.OriginalCommitID)
+func reviewCommentMatchesHead(comment ReviewComment, headRefOID string, latestRequest, headCommitTime time.Time) bool {
+	headRefOID = strings.TrimSpace(headRefOID)
+	if headRefOID == "" {
+		return true
 	}
-	return strings.TrimSpace(comment.CommitID)
+	originalCommitID := strings.TrimSpace(comment.OriginalCommitID)
+	if originalCommitID != "" {
+		if strings.EqualFold(originalCommitID, headRefOID) {
+			return true
+		}
+		return strings.EqualFold(strings.TrimSpace(comment.CommitID), headRefOID) &&
+			completedAfter(comment.CreatedAt, latestRequest) &&
+			completedAfter(comment.CreatedAt, headCommitTime)
+	}
+	return strings.EqualFold(strings.TrimSpace(comment.CommitID), headRefOID)
 }
 
 func pluralize(count int, singular, plural string) string {

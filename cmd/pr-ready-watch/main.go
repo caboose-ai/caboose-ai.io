@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -20,7 +21,7 @@ import (
 	"github.com/caboose-ai/caboose-ai.io/internal/telegrambot"
 )
 
-const githubFields = "number,title,url,state,isDraft,mergeStateStatus,reviewDecision,statusCheckRollup,comments,reviews,latestReviews,reviewRequests,headRefName,headRefOid,baseRefName,headRepository,headRepositoryOwner"
+const githubFields = "number,title,url,state,isDraft,mergeStateStatus,reviewDecision,statusCheckRollup,comments,reviews,latestReviews,reviewRequests,headRefName,headRefOid,baseRefName,headRepository,headRepositoryOwner,commits"
 
 var (
 	errWaiting  = errors.New("PR is still waiting")
@@ -102,8 +103,22 @@ func watch(ctx context.Context, commandRunner runner.CommandRunner, opts options
 	}
 
 	for {
-		pr, assessment, err := checkOnce(ctx, commandRunner, opts)
+		checkCtx := ctx
+		cancel := func() {}
+		if !deadline.IsZero() {
+			remaining := time.Until(deadline)
+			if remaining <= 0 {
+				return fmt.Errorf("%w after %s", errTimedOut, opts.Timeout)
+			}
+			checkCtx, cancel = context.WithTimeout(ctx, remaining)
+		}
+		pr, assessment, err := checkOnce(checkCtx, commandRunner, opts)
+		checkErr := checkCtx.Err()
+		cancel()
 		if err != nil {
+			if errors.Is(checkErr, context.DeadlineExceeded) || (!deadline.IsZero() && !time.Now().Before(deadline)) {
+				return fmt.Errorf("%w after %s", errTimedOut, opts.Timeout)
+			}
 			return err
 		}
 		fmt.Fprintf(stderr, "pr-ready-watch: PR #%d %s (%s)\n", pr.Number, assessment.State, assessment.Summary)
@@ -193,13 +208,24 @@ func fetchReviewComments(ctx context.Context, commandRunner runner.CommandRunner
 	if strings.TrimSpace(repo) == "" || prNumber <= 0 {
 		return nil, nil
 	}
-	out, err := commandRunner.Run(ctx, "gh", "api", fmt.Sprintf("repos/%s/pulls/%d/comments", repo, prNumber))
+	out, err := commandRunner.Run(ctx, "gh", "api", "--paginate", fmt.Sprintf("repos/%s/pulls/%d/comments", repo, prNumber), "--jq", ".[]")
 	if err != nil {
 		return nil, err
 	}
+	if strings.TrimSpace(string(out)) == "" {
+		return nil, nil
+	}
 	var comments []prwatch.ReviewComment
-	if err := json.Unmarshal(out, &comments); err != nil {
-		return nil, fmt.Errorf("parse pull review comments JSON: %w", err)
+	decoder := json.NewDecoder(bytes.NewReader(out))
+	for {
+		var comment prwatch.ReviewComment
+		if err := decoder.Decode(&comment); err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return nil, fmt.Errorf("parse pull review comments JSON: %w", err)
+		}
+		comments = append(comments, comment)
 	}
 	return comments, nil
 }
