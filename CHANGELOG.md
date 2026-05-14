@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/caboose-ai/caboose-ai.io/compare/v0.3.0...v0.3.1) (2026-05-14)
+
+
+### Bug Fixes
+
+* **mcp:** add live access helpers and repair mise config ([#51](https://github.com/caboose-ai/caboose-ai.io/issues/51)) ([0b4e680](https://github.com/caboose-ai/caboose-ai.io/commit/0b4e6803b4dc1380bd9407707e47c7ab34b89fdd))
+
 ## [0.3.0](https://github.com/caboose-ai/caboose-ai.io/compare/v0.2.0...v0.3.0) (2026-05-14)
 
 
