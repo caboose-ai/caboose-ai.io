@@ -146,6 +146,8 @@ homelab mcp access setup
 homelab mcp access approve mcp-request.json --out mcp-release.json
 homelab-mcp access import mcp-release.json
 homelab-mcp access token
+dev/homelab/mcp-access-live.sh --name "codex on laptop"
+dev/homelab/mcp-test-live.sh
 
 # PR readiness watcher
 mise run pr:watch-ready -- --repo caboose-ai/caboose-ai.io --pr 48 --poll 1m --timeout 10m
@@ -162,6 +164,10 @@ install and reload the Caddy route.
 configured secret store. Access requests are client-generated JSON blobs;
 approved releases are encrypted to the requester's key and imported into a
 0600 credential file under the user's config directory.
+`dev/homelab/mcp-access-live.sh` wraps setup, request, approval, import, token
+minting, and an authenticated initialize probe for live operator testing.
+`dev/homelab/mcp-test-live.sh` probes the live endpoint with an existing
+credential or `HOMELAB_MCP_TOKEN` without creating new access.
 Override variables inline when needed, for example:
 
 ```bash

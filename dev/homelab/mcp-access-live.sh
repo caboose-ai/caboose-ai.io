@@ -93,6 +93,8 @@ fi
 pending_dir="$workdir/pending"
 request_file="$workdir/request.json"
 release_file="$workdir/release.json"
+smoke_headers="$workdir/smoke.headers"
+smoke_body="$workdir/smoke.body"
 endpoint_url="${endpoint%/}/"
 initialize_payload='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"mcp-access-live","version":"dev"}}}'
 
@@ -102,13 +104,18 @@ cleanup() {
   fi
   if [[ "$workdir" == /tmp/homelab-mcp-access.* ]]; then
     rm -rf "$workdir"
+    return
+  fi
+  rm -f "$request_file" "$release_file" "$smoke_headers" "$smoke_body"
+  if [[ "$pending_dir" == "$workdir/pending" ]]; then
+    rm -rf "$pending_dir"
   fi
 }
 trap cleanup EXIT
 
 print_cmd() {
   printf '+'
-  printf ' %s' "$@"
+  printf ' %q' "$@"
   printf '\n'
 }
 
@@ -117,7 +124,11 @@ run_cmd() {
     print_cmd "$@"
     return 0
   fi
-  "$@"
+  if [[ "$print_token" == "true" ]]; then
+    "$@" >&2
+  else
+    "$@"
+  fi
 }
 
 credential_args=()
@@ -168,8 +179,6 @@ if [[ "$print_token" == "true" ]]; then
   printf 'export HOMELAB_MCP_TOKEN=%q\n' "$token"
 fi
 
-smoke_headers="$workdir/smoke.headers"
-smoke_body="$workdir/smoke.body"
 smoke_status="$(
   curl -sS \
     -o "$smoke_body" \
@@ -194,4 +203,8 @@ if ! grep -q '"name":"homelab"' "$smoke_body"; then
   exit 1
 fi
 
-echo "initialize=200 server=homelab"
+if [[ "$print_token" == "true" ]]; then
+  echo "initialize=200 server=homelab" >&2
+else
+  echo "initialize=200 server=homelab"
+fi

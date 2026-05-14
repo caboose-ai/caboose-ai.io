@@ -181,6 +181,8 @@ go run ./cmd/mcp access request --name "codex on laptop" --out mcp-request.json
 go run ./cmd/homelab mcp access setup
 go run ./cmd/homelab mcp access approve mcp-request.json --out mcp-release.json
 mise run mcp:setup-external
+dev/homelab/mcp-access-live.sh --name "codex on laptop"
+dev/homelab/mcp-test-live.sh
 go run ./cmd/pr-ready-watch --repo caboose-ai/caboose-ai.io --pr 48 --poll 1m --timeout 10m
 ```
 
