@@ -9,6 +9,8 @@ Read first:
 - `CLAUDE.md`
 - `.github/copilot-instructions.md`
 - `services/paperclip/service.yaml`
+- `services/paperclip/README.md`
+- `docs/homelab-agent-control-plan.md`
 - `dev/homelab/docker-compose.yml`
 - `mise.toml`
 

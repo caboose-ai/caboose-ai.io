@@ -83,6 +83,10 @@ opens or reuses a pull request in
 `caboose-ai/homebrew-tap`. The tap update workflow can also be rerun manually
 with a release tag.
 
+## Planning docs
+
+- [Homelab Service Documentation and Agent Control Plan](docs/homelab-agent-control-plan.md) — roadmap for documenting service capabilities, routing OpenClaw and Telegram agent workflows, minimizing outside token use, and supporting subagentic development.
+
 ## Service workspaces
 
 Each service has a root-level workspace under `services/<slug>/`. Configured
