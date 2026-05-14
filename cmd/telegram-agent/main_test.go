@@ -9,7 +9,9 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/caboose-ai/caboose-ai.io/internal/config"
 	"github.com/caboose-ai/caboose-ai.io/internal/telegrambot"
 )
 
@@ -100,6 +102,37 @@ func TestNotifyContinuesAfterSingleChatFailure(t *testing.T) {
 	}
 	if len(client.seen) != 2 {
 		t.Fatalf("send attempts = %v, want both chats attempted", client.seen)
+	}
+}
+
+func TestResolveMCPConfigPathUsesRunnableDefaults(t *testing.T) {
+	t.Setenv("HOMELAB_DOMAIN", "")
+
+	path, cleanup, err := resolveMCPConfigPath("")
+	if err != nil {
+		t.Fatalf("resolveMCPConfigPath() error = %v", err)
+	}
+	defer cleanup()
+
+	cfg, err := config.LoadFromFile(path)
+	if err != nil {
+		t.Fatalf("LoadFromFile(%q): %v", path, err)
+	}
+	if cfg.Domain != "caboose-ai.io" {
+		t.Fatalf("Domain = %q, want caboose-ai.io", cfg.Domain)
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("generated MCP config does not validate: %v", err)
+	}
+}
+
+func TestEnvDurationRejectsInvalidValue(t *testing.T) {
+	t.Setenv("HOMELAB_MCP_TIMEOUT", "soon")
+
+	_, err := envDuration("HOMELAB_MCP_TIMEOUT", 2*time.Minute)
+
+	if err == nil || !strings.Contains(err.Error(), "HOMELAB_MCP_TIMEOUT") {
+		t.Fatalf("envDuration() error = %v, want HOMELAB_MCP_TIMEOUT error", err)
 	}
 }
 

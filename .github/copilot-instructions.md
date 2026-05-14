@@ -6,7 +6,7 @@ Go monorepo for a homelab SSO infrastructure stack. Four command entrypoints:
 - `cmd/homelab` — TUI installer that bootstraps Authentik SSO + all services
 - `cmd/mcp` — MCP server exposing homelab tools to AI assistants
   - `agent_invoke` provider fallback supports Ollama, Claude Code, Copilot CLI, and Emberfall
-- `cmd/telegram-agent` — private Telegram bot for allowlisted OpenClaw-backed agent control
+- `cmd/telegram-agent` — private Telegram bot for allowlisted OpenClaw-backed agent control and narrow `/lab` Homelab MCP queries
 - `cmd/pr-ready-watch` — local GitHub PR watcher that notifies Telegram when Codex review and checks are ready for final human review
 
 Service implementation packages live under `services/<slug>/`; shared internal

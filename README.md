@@ -47,7 +47,7 @@ container recreation.
 - **`cmd/mcp`** — MCP server exposing homelab tools to AI assistants.
   - Includes `agent_invoke` provider fallback across Ollama, Claude Code, Copilot CLI, and Emberfall.
   - Includes `homelab-mcp access <request|import|token|status>` for admin-approved external client access.
-- **`cmd/telegram-agent`** — Private Telegram bot that runs local OpenClaw gateway prompts and role-scoped agent prompts for allowlisted Telegram users.
+- **`cmd/telegram-agent`** — Private Telegram bot that runs local OpenClaw gateway prompts, role-scoped agent prompts, and narrow `/lab` Homelab MCP queries for allowlisted Telegram users.
 - **`cmd/pr-ready-watch`** — Local GitHub PR watcher that polls Codex review, checks, and review state, then notifies Telegram when the PR is ready for final human review.
 
 ## Homebrew

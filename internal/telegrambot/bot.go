@@ -45,6 +45,7 @@ type Config struct {
 	AllowedModels       []string
 	TelegramAPIBase     string
 	RequireConfirmation bool
+	Lab                 LabService
 }
 
 func ConfigFromEnv() (Config, error) {
@@ -92,8 +93,16 @@ type Bot struct {
 	cfg       Config
 	runner    runner.CommandRunner
 	http      HTTPClient
+	lab       LabService
 	userModel map[int64]string
 	mu        sync.Mutex
+}
+
+type LabService interface {
+	Status(ctx context.Context) (string, error)
+	Docker(ctx context.Context) (string, error)
+	ServiceStatus(ctx context.Context, slug string) (string, error)
+	Ask(ctx context.Context, prompt string) (string, error)
 }
 
 func New(cfg Config, commandRunner runner.CommandRunner, httpClient HTTPClient) (*Bot, error) {
@@ -128,6 +137,7 @@ func New(cfg Config, commandRunner runner.CommandRunner, httpClient HTTPClient) 
 		cfg:       cfg,
 		runner:    commandRunner,
 		http:      httpClient,
+		lab:       cfg.Lab,
 		userModel: map[int64]string{},
 	}, nil
 }
@@ -241,6 +251,8 @@ func (b *Bot) HandleMessage(ctx context.Context, msg Message) []string {
 		return b.invoke(ctx, msg.From.ID, rest)
 	case "/agent":
 		return b.agent(ctx, msg.From.ID, rest)
+	case "/lab":
+		return b.labCommand(ctx, rest)
 	default:
 		return []string{"Unknown command.\n\n" + helpText()}
 	}
@@ -301,6 +313,44 @@ func (b *Bot) agent(ctx context.Context, userID int64, rest string) []string {
 	}
 	prompt := agentPrompt(role, task, confirmed)
 	return b.runOpenClaw(ctx, b.modelForUser(userID), prompt)
+}
+
+func (b *Bot) labCommand(ctx context.Context, rest string) []string {
+	if b.lab == nil {
+		return []string{"Lab MCP is not configured."}
+	}
+	fields := strings.Fields(strings.TrimSpace(rest))
+	if len(fields) == 0 {
+		return []string{"Usage: /lab <status|docker|service|ask>"}
+	}
+
+	var (
+		out string
+		err error
+	)
+	switch strings.ToLower(fields[0]) {
+	case "status":
+		out, err = b.lab.Status(ctx)
+	case "docker":
+		out, err = b.lab.Docker(ctx)
+	case "service":
+		if len(fields) < 2 {
+			return []string{"Usage: /lab service <slug>"}
+		}
+		out, err = b.lab.ServiceStatus(ctx, fields[1])
+	case "ask":
+		prompt := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(rest), fields[0]))
+		if prompt == "" {
+			return []string{"Usage: /lab ask <prompt>"}
+		}
+		out, err = b.lab.Ask(ctx, prompt)
+	default:
+		return []string{"Usage: /lab <status|docker|service|ask>"}
+	}
+	if err != nil {
+		return []string{"Lab MCP failed:\n" + err.Error()}
+	}
+	return splitTelegram(out)
 }
 
 func agentPrompt(role, task string, confirmed bool) string {
@@ -453,6 +503,7 @@ func helpText() string {
 		"/ask <prompt> - ask the current model",
 		"/agent <role> <task> - draft a role-scoped plan; does not execute",
 		"/agent confirm <role> <task> - send a short remote confirmation signal",
+		"/lab status|docker|service <slug>|ask <prompt> - query homelab MCP",
 		"/model - show current and allowed models",
 		"/model <provider/model> - switch model",
 		"/status - show OpenClaw model status",
