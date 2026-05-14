@@ -291,6 +291,80 @@ func TestHandleDiagnoseServicePrompt(t *testing.T) {
 	}
 }
 
+func TestHandleDiagnoseServicePromptSkipsComposeForExternalRuntime(t *testing.T) {
+	r := &mockRunner{err: context.Canceled}
+	s := &Server{
+		compose: docker.NewComposeClient(r, "/test"),
+		registry: service.NewRegistry(map[string]service.Manifest{
+			"openclaw": {
+				Slug:    "openclaw",
+				Runtime: service.RuntimeExternal,
+			},
+		}, nil),
+	}
+
+	req := &sdkmcp.GetPromptRequest{
+		Params: &sdkmcp.GetPromptParams{
+			Name:      "diagnose-service",
+			Arguments: map[string]string{"service": "openclaw"},
+		},
+	}
+
+	result, err := s.handleDiagnoseServicePrompt(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(r.lastArgs) != 0 {
+		t.Fatalf("compose runner args = %v, want none", r.lastArgs)
+	}
+	text := result.Messages[0].Content.(*sdkmcp.TextContent).Text
+	if !strings.Contains(text, "Runtime: external") {
+		t.Fatalf("expected external runtime message: %q", text)
+	}
+	if !strings.Contains(text, "Skipped: external service has no local compose logs") {
+		t.Fatalf("expected external logs skip message: %q", text)
+	}
+}
+
+func TestHandleDiagnoseServicePromptUsesManifestComposeServices(t *testing.T) {
+	r := &mockRunner{output: []byte(`[{"Name":"paperclip","State":"running"},{"Name":"paperclip-db","State":"running"}]`)}
+	s := &Server{
+		compose: docker.NewComposeClient(r, "/test"),
+		registry: service.NewRegistry(map[string]service.Manifest{
+			"paperclip": {
+				Slug:            "paperclip",
+				ComposeServices: []string{"paperclip", "paperclip-db"},
+			},
+		}, nil),
+	}
+
+	req := &sdkmcp.GetPromptRequest{
+		Params: &sdkmcp.GetPromptParams{
+			Name:      "diagnose-service",
+			Arguments: map[string]string{"service": "paperclip"},
+		},
+	}
+
+	result, err := s.handleDiagnoseServicePrompt(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	text := result.Messages[0].Content.(*sdkmcp.TextContent).Text
+	for _, want := range []string{
+		"- paperclip: running=true",
+		"- paperclip-db: running=true",
+		"### paperclip",
+		"### paperclip-db",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("diagnose response missing %q: %q", want, text)
+		}
+	}
+	if !strings.Contains(strings.Join(r.lastArgs, " "), "paperclip-db") {
+		t.Fatalf("last compose args = %v, want manifest compose service in logs call", r.lastArgs)
+	}
+}
+
 func TestHandleFullStackReportPrompt(t *testing.T) {
 	r := &mockRunner{output: []byte(`[{"Name":"forgejo"}]`)}
 	s := &Server{
