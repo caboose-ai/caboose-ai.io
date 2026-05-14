@@ -6,6 +6,11 @@ pnpm = "latest"
 HOMELAB_DOMAIN = "caboose-ai.io"
 HOMELAB_COMPOSE_DIR = "/opt/homelab"
 HOMELAB_SERVE_MODE = "public"
+HOMELAB_MCP_CONFIG = "{{ env.XDG_CONFIG_HOME | default(env.HOME ~ '/.config') }}/homelab/homelab-mcp.yml"
+HOMELAB_MCP_HTTP_ADDR = "127.0.0.1:8090"
+HOMELAB_MCP_EXTERNAL_HOST = "mcp.caboose-ai.io"
+HOMELAB_MCP_EXTERNAL_URL = "https://mcp.caboose-ai.io"
+HOMELAB_MCP_SERVICE = "homelab-mcp.service"
 
 [tasks.build]
 description = "Build all binaries"
@@ -142,8 +147,48 @@ description = "Poll a GitHub PR and send Telegram when it is ready for final hum
 run = "go run -buildvcs=false ./cmd/pr-ready-watch"
 
 [tasks.mcp]
-description = "Build and run the MCP server"
-run = "go build -o ./mcp-server ./cmd/mcp && ./mcp-server"
+description = "Run the MCP server over stdio with the live homelab config"
+run = "go run ./cmd/mcp --config \"$HOMELAB_MCP_CONFIG\""
+
+[tasks."mcp:http"]
+description = "Run the MCP server over HTTP with the live homelab config"
+run = "go run ./cmd/mcp --config \"$HOMELAB_MCP_CONFIG\" --http \"$HOMELAB_MCP_HTTP_ADDR\""
+
+[tasks."mcp:status"]
+description = "Show the live homelab MCP user service status"
+run = "systemctl --user status \"$HOMELAB_MCP_SERVICE\" --no-pager"
+
+[tasks."mcp:start"]
+description = "Start the live homelab MCP user service"
+run = "systemctl --user start \"$HOMELAB_MCP_SERVICE\""
+
+[tasks."mcp:stop"]
+description = "Stop the live homelab MCP user service"
+run = "systemctl --user stop \"$HOMELAB_MCP_SERVICE\""
+
+[tasks."mcp:restart"]
+description = "Restart the live homelab MCP user service"
+run = "systemctl --user restart \"$HOMELAB_MCP_SERVICE\""
+
+[tasks."mcp:logs"]
+description = "Tail logs for the live homelab MCP user service"
+run = "journalctl --user -u \"$HOMELAB_MCP_SERVICE\" -f"
+
+[tasks."mcp:probe"]
+description = "Probe the live homelab MCP HTTP endpoint"
+run = "curl -i --max-time 5 \"http://$HOMELAB_MCP_HTTP_ADDR/\""
+
+[tasks."mcp:resolve"]
+description = "Resolve the external homelab MCP hostname"
+run = "records=$(dig +short \"$HOMELAB_MCP_EXTERNAL_HOST\" | sort -u); test -n \"$records\" && printf '%s\n' \"$records\""
+
+[tasks."mcp:probe-external"]
+description = "Probe the external homelab MCP HTTPS endpoint"
+run = "curl -i --max-time 10 \"$HOMELAB_MCP_EXTERNAL_URL/\""
+
+[tasks."mcp:setup-external"]
+description = "Set up and verify the external homelab MCP DNS and Caddy route"
+run = "dev/homelab/setup-mcp-external.sh"
 
 [tasks.test]
 description = "Run all tests"

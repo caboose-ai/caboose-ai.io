@@ -17,6 +17,7 @@ Go monorepo for a self-hosted homelab infrastructure stack with SSO via Authenti
 | OpenClaw | `openclaw.caboose-ai.io` | OpenClaw app behind Authentik forward auth |
 | Ghost | `blog.caboose-ai.io` | Blog |
 | Paperclip | `paperclip.caboose-ai.io` | AI-labor control plane for the homelab software shop |
+| Homelab MCP | `mcp.caboose-ai.io` | Bearer-token MCP HTTP endpoint for homelab automation |
 | Telegram Agent Bridge | — | Private Telegram bot for OpenClaw-backed agent control |
 | Homarr | `caboose-ai.io` | Native Authentik/OIDC dashboard homepage |
 | Prometheus | — | Metrics collection |
@@ -38,6 +39,7 @@ container recreation.
   - Includes `homelab service <slug> <status|configure|logs|smoke|open>` for per-service operations backed by `services/<slug>/service.yaml`.
 - **`cmd/mcp`** — MCP server exposing homelab tools to AI assistants.
   - Includes `agent_invoke` provider fallback across Ollama, Claude Code, Copilot CLI, and Emberfall.
+  - Includes `homelab-mcp access <request|import|token|status>` for admin-approved external client access.
 - **`cmd/telegram-agent`** — Private Telegram bot that runs local OpenClaw gateway prompts and role-scoped agent prompts for allowlisted Telegram users.
 - **`cmd/pr-ready-watch`** — Local GitHub PR watcher that polls Codex review, checks, and review state, then notifies Telegram when the PR is ready for final human review.
 
@@ -131,6 +133,20 @@ mise run paperclip:seed
 mise run telegram-agent:run
 mise run telegram-agent:notify -- "Homelab task finished."
 
+# Homelab MCP server
+mise run mcp:status
+mise run mcp:probe
+mise run mcp:resolve
+mise run mcp:probe-external
+mise run mcp:setup-external
+
+# Homelab MCP access workflow
+homelab-mcp access request --name "codex on laptop" --out mcp-request.json
+homelab mcp access setup
+homelab mcp access approve mcp-request.json --out mcp-release.json
+homelab-mcp access import mcp-release.json
+homelab-mcp access token
+
 # PR readiness watcher
 mise run pr:watch-ready -- --repo caboose-ai/caboose-ai.io --pr 48 --poll 1m --timeout 10m
 
@@ -139,6 +155,13 @@ go run ./cmd/homelab migrate
 ```
 
 The homelab tasks default to `HOMELAB_DOMAIN=caboose-ai.io`, `HOMELAB_COMPOSE_DIR=/opt/homelab`, and `HOMELAB_SERVE_MODE=public`.
+`mise run mcp:setup-external` additionally requires `CLOUDFLARE_API_TOKEN` and
+`CLOUDFLARE_ZONE_ID` from the environment or `fnox`, plus sudo access to
+install and reload the Caddy route.
+`homelab mcp access setup` requires Authentik admin credentials through the
+configured secret store. Access requests are client-generated JSON blobs;
+approved releases are encrypted to the requester's key and imported into a
+0600 credential file under the user's config directory.
 Override variables inline when needed, for example:
 
 ```bash

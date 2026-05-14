@@ -34,6 +34,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "  service    Inspect or configure one registered service")
 		fmt.Fprintln(os.Stderr, "  recovery   Generate an Authentik admin recovery URL")
 		fmt.Fprintln(os.Stderr, "  paperclip  Manage Paperclip homelab seed data")
+		fmt.Fprintln(os.Stderr, "  mcp        Manage Homelab MCP access")
 		os.Exit(1)
 	}
 
@@ -82,6 +83,8 @@ func main() {
 		os.Exit(runRecovery(opts, fs.Args()))
 	case "paperclip":
 		os.Exit(runPaperclip(opts, fs.Args()))
+	case "mcp":
+		os.Exit(runMCP(opts, fs.Args()))
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", subcmd)
 		os.Exit(1)
@@ -89,7 +92,7 @@ func main() {
 }
 
 func extractSubcommand(args []string) (string, []string) {
-	known := map[string]bool{"install": true, "reset": true, "migrate": true, "oauth-setup": true, "service": true, "recovery": true, "paperclip": true}
+	known := map[string]bool{"install": true, "reset": true, "migrate": true, "oauth-setup": true, "service": true, "recovery": true, "paperclip": true, "mcp": true}
 	if len(args) == 0 {
 		return "", nil
 	}
@@ -135,6 +138,50 @@ func runService(opts cliOpts, args []string) int {
 	cmdRunner := runner.NewLocalRunner()
 	secretStore := secretStoreForConfig(cfg, cmdRunner)
 	return cli.RunServiceCommand(context.Background(), cfg, cmdRunner, secretStore, args, cli.ServiceCommandOptions{DryRun: opts.dryRun, Force: opts.force})
+}
+
+func runMCP(opts cliOpts, args []string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "Usage: homelab mcp access <setup|approve> [flags]")
+		return 1
+	}
+	if args[0] != "access" {
+		fmt.Fprintf(os.Stderr, "unknown command %q\n", args[0])
+		return 1
+	}
+	cfg := config.DefaultConfig()
+	if opts.configPath != "" {
+		loaded, err := config.LoadFromFile(opts.configPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
+			return 1
+		}
+		cfg = loaded
+	}
+	if opts.domain != "" {
+		cfg.Domain = opts.domain
+	}
+	if cfg.Domain == "" {
+		cfg.Domain = "caboose-ai.io"
+	}
+	if opts.composeDir != "" {
+		cfg.ComposeDir = opts.composeDir
+	}
+	if opts.opVault != "" {
+		cfg.OPVault = opts.opVault
+	}
+	if opts.opStaticVault != "" {
+		cfg.OPStaticVault = opts.opStaticVault
+	}
+	cfg.SecretsEnvOnly = opts.secretsEnvOnly
+
+	cmdRunner := runner.NewLocalRunner()
+	secretStore := secretStoreForConfig(cfg, cmdRunner)
+	return cli.RunMCPAccessAdmin(context.Background(), cli.MCPAccessAdminOptions{
+		Config:  cfg,
+		Secrets: secretStore,
+		HTTP:    runner.NewHTTPClient(),
+	}, args[1:])
 }
 
 type cliOpts struct {

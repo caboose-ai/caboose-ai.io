@@ -21,6 +21,11 @@ go test ./internal/install/ -v    # test a specific package
 go run ./cmd/homelab oauth-setup --domain caboose-ai.io  # print external OAuth/Turnstile setup
 go run ./cmd/homelab service --domain caboose-ai.io forgejo status  # inspect one service
 go run ./cmd/telegram-agent notify "task finished"  # send a Telegram completion notice
+go run ./cmd/mcp access request --name "codex on laptop" --out mcp-request.json  # create MCP access request
+go run ./cmd/homelab mcp access setup  # create MCP OAuth provider/scope
+go run ./cmd/homelab mcp access approve mcp-request.json --out mcp-release.json  # approve MCP client access
+mise run mcp:probe-external       # verify the public Homelab MCP endpoint
+mise run mcp:setup-external       # upsert MCP DNS, install Caddy route, then verify
 go run ./cmd/pr-ready-watch --repo caboose-ai/caboose-ai.io --pr 48 --poll 1m --timeout 10m  # watch a PR for human-review readiness
 CLOUDFLARE_ACCOUNT_ID=... CLOUDFLARE_API_TOKEN=... go run ./cmd/homelab oauth-setup --domain caboose-ai.io --create-turnstile  # create Turnstile via API
 mise run sso:check                # full SSO smoke tests (requires live stack)

@@ -59,13 +59,14 @@ type RedirectURI struct {
 }
 
 type CreateProviderParams struct {
-	Name              string        `json:"name"`
-	AuthorizationFlow string        `json:"authorization_flow"`
-	InvalidationFlow  string        `json:"invalidation_flow"`
-	ClientType        string        `json:"client_type"`
-	RedirectURIs      []RedirectURI `json:"redirect_uris"`
-	SigningKey        string        `json:"signing_key,omitempty"`
-	PropertyMappings  []string      `json:"property_mappings,omitempty"`
+	Name                string        `json:"name"`
+	AuthorizationFlow   string        `json:"authorization_flow"`
+	InvalidationFlow    string        `json:"invalidation_flow"`
+	ClientType          string        `json:"client_type"`
+	RedirectURIs        []RedirectURI `json:"redirect_uris"`
+	SigningKey          string        `json:"signing_key,omitempty"`
+	PropertyMappings    []string      `json:"property_mappings,omitempty"`
+	AccessTokenValidity string        `json:"access_token_validity,omitempty"`
 }
 
 func (c *Client) CreateProvider(ctx context.Context, params CreateProviderParams) (*Provider, error) {
@@ -157,9 +158,10 @@ func (c *Client) CreateFlow(ctx context.Context, params CreateFlowParams) (*Flow
 }
 
 type PropertyMapping struct {
-	PK      string `json:"pk"`
-	Name    string `json:"name"`
-	Managed string `json:"managed"`
+	PK        string `json:"pk"`
+	Name      string `json:"name"`
+	Managed   string `json:"managed"`
+	ScopeName string `json:"scope_name"`
 }
 
 type propertyMappingList struct {
