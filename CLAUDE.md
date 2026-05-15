@@ -186,3 +186,10 @@ container recreation.
   `mise run pr:watch-ready`; the watcher uses local `gh`, optional 1Password
   token lookup through `TELEGRAM_BOT_TOKEN_OP_ITEM`, and Telegram allowlist env
   vars to keep the human as the final PR review handoff.
+
+## Security
+
+- Do not commit `.env` or live secrets. Prefer 1Password or local untracked files.
+- Example variables live in `dev/homelab/.env.example`.
+- CI scans new push and PR commit ranges with Gitleaks.
+- If any secret lands in git history, rotate it immediately.

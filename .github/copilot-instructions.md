@@ -204,3 +204,10 @@ go run ./cmd/pr-ready-watch --repo caboose-ai/caboose-ai.io --pr 48 --poll 1m --
 go build ./...          # build all
 go test ./...           # test all
 ```
+
+## Security
+
+- Do not commit `.env` or live secrets. Prefer 1Password or local untracked files.
+- Example variables live in `dev/homelab/.env.example`.
+- CI scans new push and PR commit ranges with Gitleaks.
+- If any secret lands in git history, rotate it immediately.
