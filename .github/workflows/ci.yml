@@ -89,8 +89,4 @@ jobs:
           grep -q "Usage: homelab-mcp access" /tmp/homelab-mcp-access.out
 
       - name: Run govulncheck
-        uses: golang/govulncheck-action@v1
-        with:
-          go-version: 1.26.x
-          check-latest: true
-          vulncheck-version: latest
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
