@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.4.0](https://github.com/caboose-ai/caboose-ai.io/compare/v0.3.1...v0.4.0) (2026-05-15)
+
+
+### Features
+
+* **telegram:** add lab MCP commands ([#57](https://github.com/caboose-ai/caboose-ai.io/issues/57)) ([5cae7ac](https://github.com/caboose-ai/caboose-ai.io/commit/5cae7acbd5be445d2da6863fbba421c2f1373ab3))
+
+
+### Bug Fixes
+
+* **authentik:** make managed social login google-only ([#58](https://github.com/caboose-ai/caboose-ai.io/issues/58)) ([5c04a8d](https://github.com/caboose-ai/caboose-ai.io/commit/5c04a8dfa20fcd50042ec7689008f937a164867a))
+* **mcp:** diagnose services from manifests ([#55](https://github.com/caboose-ai/caboose-ai.io/issues/55)) ([ced7c92](https://github.com/caboose-ai/caboose-ai.io/commit/ced7c9240c123822157e3d876db084b75171c6b2))
+* **prwatch:** require Codex review after current head ([#56](https://github.com/caboose-ai/caboose-ai.io/issues/56)) ([a420cf5](https://github.com/caboose-ai/caboose-ai.io/commit/a420cf5a660a303f0f39c6fe1b6a8696ee69ed19))
+
 ## [0.3.1](https://github.com/caboose-ai/caboose-ai.io/compare/v0.3.0...v0.3.1) (2026-05-14)
 
 
