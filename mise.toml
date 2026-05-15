@@ -12,6 +12,10 @@ HOMELAB_MCP_EXTERNAL_HOST = "mcp.caboose-ai.io"
 HOMELAB_MCP_EXTERNAL_URL = "https://mcp.caboose-ai.io"
 HOMELAB_MCP_SERVICE = "homelab-mcp.service"
 PAPERCLIP_FORGEJO_REPO_URL = "https://git.caboose-ai.io/caboose-ai/caboose-ai.io.git"
+PAPERCLIP_FORGEJO_REMOTE = "forgejo"
+PAPERCLIP_BRANCH_PREFIX = "paperclip/"
+PAPERCLIP_WOODPECKER_URL = "https://ci.caboose-ai.io"
+PAPERCLIP_PORTAINER_URL = "https://docker.caboose-ai.io"
 
 [tasks.build]
 description = "Build all binaries"
@@ -85,11 +89,11 @@ run = "go run ./cmd/homelab oauth-setup --domain \"$HOMELAB_DOMAIN\""
 
 [tasks."paperclip:seed"]
 description = "Seed the Paperclip software-shop company profile"
-run = 'set -a; [ ! -f "$HOMELAB_COMPOSE_DIR/.env" ] || . "$HOMELAB_COMPOSE_DIR/.env"; set +a; go run ./cmd/homelab paperclip seed-company --profile software-shop --repo "${PAPERCLIP_WORKSPACE_ROOT:-/home/caboose/dev/caboose-ai.io}" --forgejo-repo-url "${PAPERCLIP_FORGEJO_REPO_URL:-https://git.caboose-ai.io/caboose-ai/caboose-ai.io.git}"'
+run = 'set -a; [ ! -f "$HOMELAB_COMPOSE_DIR/.env" ] || . "$HOMELAB_COMPOSE_DIR/.env"; set +a; go run ./cmd/homelab paperclip seed-company --domain "$HOMELAB_DOMAIN" --compose-dir "$HOMELAB_COMPOSE_DIR" --profile software-shop --repo "${PAPERCLIP_WORKSPACE_ROOT:-/home/caboose/dev/caboose-ai.io}" --forgejo-repo-url "${PAPERCLIP_FORGEJO_REPO_URL:-https://git.caboose-ai.io/caboose-ai/caboose-ai.io.git}" --forgejo-remote "${PAPERCLIP_FORGEJO_REMOTE:-forgejo}" --branch-prefix "${PAPERCLIP_BRANCH_PREFIX:-paperclip/}" --woodpecker-url "${PAPERCLIP_WOODPECKER_URL:-https://ci.caboose-ai.io}" --portainer-url "${PAPERCLIP_PORTAINER_URL:-https://docker.caboose-ai.io}"'
 
 [tasks."paperclip:forgejo-remote"]
 description = "Ensure the local checkout has the Forgejo remote Paperclip should push to"
-run = 'repo="${PAPERCLIP_FORGEJO_REPO_URL:-https://git.caboose-ai.io/caboose-ai/caboose-ai.io.git}"; if git remote get-url forgejo >/dev/null 2>&1; then git remote set-url forgejo "$repo"; else git remote add forgejo "$repo"; fi; git remote get-url forgejo'
+run = 'repo="${PAPERCLIP_FORGEJO_REPO_URL:-https://git.caboose-ai.io/caboose-ai/caboose-ai.io.git}"; remote="${PAPERCLIP_FORGEJO_REMOTE:-forgejo}"; if git remote get-url "$remote" >/dev/null 2>&1; then git remote set-url "$remote" "$repo"; else git remote add "$remote" "$repo"; fi; git remote get-url "$remote"'
 
 [tasks."paperclip:up"]
 description = "Start the optional Paperclip profile"

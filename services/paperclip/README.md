@@ -35,10 +35,9 @@ internal API calls. Keep this separate from `PAPERCLIP_PUBLIC_URL`; the
 public URL is Authentik-gated and returns browser redirects to local agents.
 
 The seed path creates missing company, goal, project, agent, and routine
-records. It does not update existing Paperclip records in place; when seed
-guidance changes, reseeding adds any new Agent Control Plan project or routine
-records, and existing agent instructions should be reviewed from the Paperclip
-workspace until Paperclip exposes a stable update endpoint for this client.
+records. It also refreshes existing project metadata, primary workspace
+delivery metadata, and agent adapter delivery config so guidance changes reach
+already-seeded Paperclip workspaces.
 
 ## Agent Control Plan v1
 
@@ -86,8 +85,9 @@ mise run paperclip:forgejo-remote
 ```
 
 Override `PAPERCLIP_FORGEJO_REPO_URL` when the internal repository lives at a
-different owner/path. Agents should link Forgejo PRs and Woodpecker runs back to
-the Paperclip task before asking for final human review.
+different owner/path; use `PAPERCLIP_FORGEJO_REMOTE` too if the remote name is
+not `forgejo`. Agents should link Forgejo PRs and Woodpecker runs back to the
+Paperclip task before asking for final human review.
 
 ### Trigger Runbook
 

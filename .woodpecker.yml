@@ -1,4 +1,73 @@
 steps:
+  - name: docs-check
+    image: golang:1.26
+    commands:
+      - git config --global --add safe.directory "$PWD"
+      - git fetch origin main || true
+      - |
+        set -eu
+        resolve_range_base() {
+          event="$(printenv CI_PIPELINE_EVENT 2>/dev/null || true)"
+          prev="$(printenv CI_PREV_COMMIT_SHA 2>/dev/null || true)"
+          case "$prev" in
+            ""|0000000000000000000000000000000000000000) prev="" ;;
+          esac
+          if [ "$event" = "push" ] && [ -n "$prev" ] && git cat-file -e "$prev^{commit}" 2>/dev/null; then
+            printf '%s\n' "$prev"
+            return
+          fi
+          git merge-base HEAD origin/main 2>/dev/null || git rev-parse HEAD~1
+        }
+        base="$(resolve_range_base)"
+        changed_files="$(git diff --name-only "$base" HEAD)"
+
+        has_code_changes=false
+        has_compose_changes=false
+        has_doc_updates=false
+
+        printf '%s\n' "$changed_files" > /tmp/changed_files
+        while IFS= read -r file; do
+          case "$file" in
+            AGENTS.md|*/AGENTS.md) continue ;;
+            internal/*|cmd/*) has_code_changes=true ;;
+            dev/homelab/docker-compose.yml) has_compose_changes=true ;;
+            CLAUDE.md|.github/copilot-instructions.md|README.md) has_doc_updates=true ;;
+          esac
+        done < /tmp/changed_files
+
+        if [ "$has_code_changes" = "true" ] || [ "$has_compose_changes" = "true" ]; then
+          if [ "$has_doc_updates" != "true" ]; then
+            echo "Code or infrastructure changed but no documentation was updated."
+            exit 1
+          fi
+        fi
+
+  - name: secret-scan
+    image: ghcr.io/gitleaks/gitleaks:v8.30.1
+    commands:
+      - git config --global --add safe.directory "$PWD"
+      - git fetch origin main || true
+      - |
+        set -eu
+        resolve_range_base() {
+          event="$(printenv CI_PIPELINE_EVENT 2>/dev/null || true)"
+          prev="$(printenv CI_PREV_COMMIT_SHA 2>/dev/null || true)"
+          case "$prev" in
+            ""|0000000000000000000000000000000000000000) prev="" ;;
+          esac
+          if [ "$event" = "push" ] && [ -n "$prev" ] && git cat-file -e "$prev^{commit}" 2>/dev/null; then
+            printf '%s\n' "$prev"
+            return
+          fi
+          git merge-base HEAD origin/main 2>/dev/null || git rev-parse HEAD~1
+        }
+        base="$(resolve_range_base)"
+        head="$(printenv CI_COMMIT_SHA 2>/dev/null || git rev-parse HEAD)"
+        if ! git cat-file -e "$head^{commit}" 2>/dev/null; then
+          head=HEAD
+        fi
+        gitleaks git . --config .gitleaks.toml --redact --verbose --log-opts "$base..$head"
+
   - name: release-helper-tests
     image: ghcr.io/astral-sh/uv:python3.13-bookworm-slim
     commands:
@@ -9,7 +78,22 @@ steps:
     commands:
       - go mod download
       - go test ./...
-      - go build -buildvcs=false ./...
+      - go build -trimpath -buildvcs=false -ldflags "-s -w" -o /tmp/homelab ./cmd/homelab
+      - |
+        set +e
+        /tmp/homelab > /tmp/homelab.out 2>&1
+        status=$?
+        set -e
+        test "$status" -eq 1
+        grep -q "Usage: homelab <command> \\[flags\\]" /tmp/homelab.out
+        /tmp/homelab mcp access --help > /tmp/homelab-mcp-admin.out 2>&1
+        grep -q "Usage: homelab mcp access" /tmp/homelab-mcp-admin.out
+      - go build -trimpath -buildvcs=false -ldflags "-s -w" -o /tmp/homelab-mcp ./cmd/mcp
+      - |
+        /tmp/homelab-mcp -help > /tmp/homelab-mcp.out 2>&1
+        grep -q "Path to homelab.yml config file" /tmp/homelab-mcp.out
+        /tmp/homelab-mcp access --help > /tmp/homelab-mcp-access.out 2>&1
+        grep -q "Usage: homelab-mcp access" /tmp/homelab-mcp-access.out
 
 when:
   - event: [push, pull_request]

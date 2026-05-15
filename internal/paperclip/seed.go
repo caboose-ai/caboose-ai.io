@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -53,6 +54,11 @@ type ProjectSeed struct {
 	Workspace   map[string]any `json:"workspace,omitempty"`
 }
 
+type projectUpdateSeed struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
 type AgentSeed struct {
 	Name               string         `json:"name"`
 	Role               string         `json:"role"`
@@ -93,9 +99,12 @@ type SeedReport struct {
 }
 
 type apiEntity struct {
-	ID    string `json:"id"`
-	Name  string `json:"name"`
-	Title string `json:"title"`
+	ID               string      `json:"id"`
+	Name             string      `json:"name"`
+	Title            string      `json:"title"`
+	IsPrimary        bool        `json:"isPrimary"`
+	PrimaryWorkspace *apiEntity  `json:"primaryWorkspace"`
+	Workspaces       []apiEntity `json:"workspaces"`
 }
 
 func DefaultInternalDeliveryConfig(domain string) InternalDeliveryConfig {
@@ -210,7 +219,7 @@ func agentWithDelivery(name, role, title, reportsTo, capabilities, repo string, 
 			"cwd":          repo,
 			"approvalMode": "gated",
 			"instructions": GeneratedContextDocumentWithDelivery(repo, delivery),
-			"delivery":     delivery.workspace(repo),
+			"delivery":     delivery.metadata(repo),
 		},
 		BudgetMonthlyCents: budget,
 	}
@@ -250,14 +259,25 @@ func (d InternalDeliveryConfig) withDefaults() InternalDeliveryConfig {
 
 func (d InternalDeliveryConfig) workspace(repo string) map[string]any {
 	return map[string]any{
-		"name":                  "caboose-ai.io",
+		"name":       "caboose-ai.io",
+		"cwd":        repo,
+		"repoRef":    "main",
+		"defaultRef": "main",
+		"isPrimary":  true,
+		"sourceType": "local_path",
+		"repoUrl":    d.ForgejoRepoURL,
+		"metadata": map[string]any{
+			"delivery": d.metadata(repo),
+		},
+	}
+}
+
+func (d InternalDeliveryConfig) metadata(repo string) map[string]any {
+	return map[string]any{
 		"cwd":                   repo,
-		"repoRef":               "main",
-		"defaultRef":            "main",
-		"isPrimary":             true,
-		"sourceType":            "local_path",
 		"reviewSurface":         d.ReviewSurface,
-		"repoUrl":               d.ForgejoRepoURL,
+		"forgejoUrl":            d.ForgejoURL,
+		"forgejoRepoUrl":        d.ForgejoRepoURL,
 		"remoteName":            d.ForgejoRemote,
 		"branchPrefix":          d.BranchPrefix,
 		"ciProvider":            "woodpecker",
@@ -304,14 +324,14 @@ func SeedSoftwareShopWithDelivery(ctx context.Context, client *Client, repo stri
 	}
 
 	for _, p := range plan.Projects {
-		if _, created, err := client.ensureByName(ctx, fmt.Sprintf("/api/companies/%s/projects", company.ID), p.Name, p); err != nil {
+		if _, created, err := client.ensureProject(ctx, company.ID, p); err != nil {
 			return nil, err
 		} else {
 			count(report, "projects", created)
 		}
 	}
 	for _, a := range plan.Agents {
-		if _, created, err := client.ensureByName(ctx, fmt.Sprintf("/api/companies/%s/agents", company.ID), a.Name, a); err != nil {
+		if _, created, err := client.ensureByNameUpdating(ctx, fmt.Sprintf("/api/companies/%s/agents", company.ID), "/api/agents", a.Name, a); err != nil {
 			return nil, err
 		} else {
 			count(report, "agents", created)
@@ -340,20 +360,108 @@ func (c *Client) ensureCompany(ctx context.Context, seed CompanySeed) (apiEntity
 }
 
 func (c *Client) ensureByName(ctx context.Context, path, name string, payload any) (apiEntity, bool, error) {
-	return c.ensure(ctx, path, func(e apiEntity) bool { return e.Name == name }, payload)
+	return c.ensure(ctx, path, func(e apiEntity) bool { return e.Name == name }, payload, "")
+}
+
+func (c *Client) ensureByNameUpdating(ctx context.Context, path, updateBasePath, name string, payload any) (apiEntity, bool, error) {
+	return c.ensure(ctx, path, func(e apiEntity) bool { return e.Name == name }, payload, updateBasePath)
 }
 
 func (c *Client) ensureByTitle(ctx context.Context, path, title string, payload any) (apiEntity, bool, error) {
-	return c.ensure(ctx, path, func(e apiEntity) bool { return e.Title == title }, payload)
+	return c.ensure(ctx, path, func(e apiEntity) bool { return e.Title == title }, payload, "")
 }
 
-func (c *Client) ensure(ctx context.Context, path string, match func(apiEntity) bool, payload any) (apiEntity, bool, error) {
+func (c *Client) ensureProject(ctx context.Context, companyID string, seed ProjectSeed) (apiEntity, bool, error) {
+	path := fmt.Sprintf("/api/companies/%s/projects", companyID)
+	var existing []apiEntity
+	if err := c.do(ctx, http.MethodGet, path, nil, &existing); err != nil {
+		return apiEntity{}, false, err
+	}
+	for _, entity := range existing {
+		if entity.Name != seed.Name {
+			continue
+		}
+		projectPath := "/api/projects/" + url.PathEscape(entity.ID)
+		projectPatch := projectUpdateSeed{Name: seed.Name, Description: seed.Description}
+		var updated apiEntity
+		if err := c.do(ctx, http.MethodPatch, projectPath, projectPatch, &updated); err != nil {
+			return apiEntity{}, false, err
+		}
+		if len(seed.Workspace) == 0 {
+			if updated.ID != "" {
+				return updated, false, nil
+			}
+			return entity, false, nil
+		}
+		workspaceID, err := c.primaryWorkspaceID(ctx, projectPath, entity)
+		if err != nil {
+			return apiEntity{}, false, err
+		}
+		var workspace apiEntity
+		if workspaceID == "" {
+			if err := c.do(ctx, http.MethodPost, projectPath+"/workspaces", seed.Workspace, &workspace); err != nil {
+				return apiEntity{}, false, err
+			}
+		} else if err := c.do(ctx, http.MethodPatch, projectPath+"/workspaces/"+url.PathEscape(workspaceID), seed.Workspace, &workspace); err != nil {
+			return apiEntity{}, false, err
+		}
+		if updated.ID != "" {
+			return updated, false, nil
+		}
+		return entity, false, nil
+	}
+	var created apiEntity
+	if err := c.do(ctx, http.MethodPost, path, seed, &created); err != nil {
+		return apiEntity{}, false, err
+	}
+	return created, true, nil
+}
+
+func (c *Client) primaryWorkspaceID(ctx context.Context, projectPath string, entity apiEntity) (string, error) {
+	if workspaceID := entity.primaryWorkspaceID(); workspaceID != "" {
+		return workspaceID, nil
+	}
+	var hydrated apiEntity
+	if err := c.do(ctx, http.MethodGet, projectPath, nil, &hydrated); err != nil {
+		return "", err
+	}
+	return hydrated.primaryWorkspaceID(), nil
+}
+
+func (e apiEntity) primaryWorkspaceID() string {
+	if e.PrimaryWorkspace != nil && e.PrimaryWorkspace.ID != "" {
+		return e.PrimaryWorkspace.ID
+	}
+	for _, workspace := range e.Workspaces {
+		if workspace.IsPrimary && workspace.ID != "" {
+			return workspace.ID
+		}
+	}
+	for _, workspace := range e.Workspaces {
+		if workspace.ID != "" {
+			return workspace.ID
+		}
+	}
+	return ""
+}
+
+func (c *Client) ensure(ctx context.Context, path string, match func(apiEntity) bool, payload any, updateBasePath string) (apiEntity, bool, error) {
 	var existing []apiEntity
 	if err := c.do(ctx, http.MethodGet, path, nil, &existing); err != nil {
 		return apiEntity{}, false, err
 	}
 	for _, entity := range existing {
 		if match(entity) {
+			if updateBasePath != "" {
+				var updated apiEntity
+				updatePath := strings.TrimRight(updateBasePath, "/") + "/" + url.PathEscape(entity.ID)
+				if err := c.do(ctx, http.MethodPatch, updatePath, payload, &updated); err != nil {
+					return apiEntity{}, false, err
+				}
+				if updated.ID != "" {
+					return updated, false, nil
+				}
+			}
 			return entity, false, nil
 		}
 	}

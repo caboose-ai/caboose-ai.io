@@ -65,7 +65,7 @@ func main() {
 	fs.StringVar(&opts.paperclipProfile, "profile", "software-shop", "Paperclip seed profile")
 	fs.StringVar(&opts.paperclipRepo, "repo", "/home/caboose/dev/caboose-ai.io", "Repository path for Paperclip project workspaces")
 	fs.StringVar(&opts.paperclipAPIBase, "api-base", "", "Paperclip API base URL")
-	fs.StringVar(&opts.paperclipAPIKey, "api-key", "", "Paperclip API key")
+	fs.StringVar(&opts.paperclipAPIKey, "api-key", "", "Paperclip API key; prefer PAPERCLIP_API_KEY or the secret store")
 	fs.StringVar(&opts.paperclipForgejoRepoURL, "forgejo-repo-url", "", "Forgejo repository URL for Paperclip branch and PR work")
 	fs.StringVar(&opts.paperclipForgejoRemote, "forgejo-remote", "", "Local git remote name for Forgejo")
 	fs.StringVar(&opts.paperclipBranchPrefix, "branch-prefix", "", "Branch prefix for Paperclip-created Forgejo branches")
@@ -401,7 +401,7 @@ func runOAuthSetup(opts cliOpts) int {
 
 func runPaperclip(opts cliOpts, args []string) int {
 	if len(args) == 0 || args[0] != "seed-company" {
-		fmt.Fprintln(os.Stderr, "Usage: homelab paperclip seed-company --profile software-shop --repo /home/caboose/dev/caboose-ai.io [--api-base http://127.0.0.1:3100] [--api-key token] [--forgejo-repo-url https://git.caboose-ai.io/caboose-ai/caboose-ai.io.git]")
+		fmt.Fprintln(os.Stderr, "Usage: homelab paperclip seed-company --profile software-shop --repo /home/caboose/dev/caboose-ai.io [--api-base http://127.0.0.1:3100] [--forgejo-repo-url https://git.caboose-ai.io/caboose-ai/caboose-ai.io.git]")
 		return 1
 	}
 	fs := flag.NewFlagSet("paperclip seed-company", flag.ExitOnError)
@@ -410,7 +410,7 @@ func runPaperclip(opts cliOpts, args []string) int {
 	fs.StringVar(&opts.paperclipProfile, "profile", opts.paperclipProfile, "Paperclip seed profile")
 	fs.StringVar(&opts.paperclipRepo, "repo", opts.paperclipRepo, "Repository path for Paperclip project workspaces")
 	fs.StringVar(&opts.paperclipAPIBase, "api-base", opts.paperclipAPIBase, "Paperclip API base URL")
-	fs.StringVar(&opts.paperclipAPIKey, "api-key", opts.paperclipAPIKey, "Paperclip API key")
+	fs.StringVar(&opts.paperclipAPIKey, "api-key", opts.paperclipAPIKey, "Paperclip API key; prefer PAPERCLIP_API_KEY or the secret store")
 	fs.StringVar(&opts.paperclipForgejoRepoURL, "forgejo-repo-url", opts.paperclipForgejoRepoURL, "Forgejo repository URL for Paperclip branch and PR work")
 	fs.StringVar(&opts.paperclipForgejoRemote, "forgejo-remote", opts.paperclipForgejoRemote, "Local git remote name for Forgejo")
 	fs.StringVar(&opts.paperclipBranchPrefix, "branch-prefix", opts.paperclipBranchPrefix, "Branch prefix for Paperclip-created Forgejo branches")
@@ -418,7 +418,7 @@ func runPaperclip(opts cliOpts, args []string) int {
 	fs.StringVar(&opts.paperclipPortainerURL, "portainer-url", opts.paperclipPortainerURL, "Portainer URL for approved runtime inspection")
 	_ = fs.Parse(args[1:])
 	if len(fs.Args()) != 0 {
-		fmt.Fprintln(os.Stderr, "Usage: homelab paperclip seed-company --profile software-shop --repo /home/caboose/dev/caboose-ai.io [--api-base http://127.0.0.1:3100] [--api-key token] [--forgejo-repo-url https://git.caboose-ai.io/caboose-ai/caboose-ai.io.git]")
+		fmt.Fprintln(os.Stderr, "Usage: homelab paperclip seed-company --profile software-shop --repo /home/caboose/dev/caboose-ai.io [--api-base http://127.0.0.1:3100] [--forgejo-repo-url https://git.caboose-ai.io/caboose-ai/caboose-ai.io.git]")
 		return 1
 	}
 	if opts.paperclipProfile != "software-shop" {

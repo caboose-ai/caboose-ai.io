@@ -243,8 +243,9 @@ manifest-owned flow, for example `mise run paperclip:smoke`.
 - **Forgejo + Woodpecker + Portainer** self-hosted delivery loop — Forgejo is
   the branch/PR source, Woodpecker is the CI verification surface, and
   Portainer is Docker visibility plus approved operational handoff rather than
-  an unchecked executor. `.woodpecker.yml` mirrors the GitHub build/test gate
-  for repositories enabled in Woodpecker.
+  an unchecked executor. `.woodpecker.yml` mirrors the GitHub docs, secret,
+  release-helper, Go test, and build gates for repositories enabled in
+  Woodpecker.
 - **OpenClaw** external runtime — tracked for URL, Authentik proxy, dashboard,
   smoke, and health metadata without claiming a local compose service
 - **Telegram Agent Bridge** external runtime — host-run long-polling bot that
