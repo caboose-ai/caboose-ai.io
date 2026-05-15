@@ -124,7 +124,9 @@ container recreation.
 ### Docker Compose
 - `dev/homelab/docker-compose.yml` — all services
 - Secrets via `${VAR}` from `.env`
-- DB networks: `*-internal` with `internal: true`
+- DB networks: `*-internal` with `internal: true`, except Paperclip's DB bridge
+  which stays private but not `internal` so Docker publishes the loopback DB port
+  used by the host-network Paperclip app.
 - App networks: `apps`
 - Homarr is pinned to `ghcr.io/homarr-labs/homarr:v1.61.0`, persists `/appdata`
   in `homarr_data`, and uses native Authentik OIDC for the root homepage.
@@ -167,7 +169,7 @@ container recreation.
 - Caddy reverse proxy on the host
 - Cloudflare tunnel for `chat` and `sonar` subdomains
 - Ollama on host for local LLM inference
-- Paperclip runs behind the compose `paperclip` profile with Authentik forward-auth provider `paperclip-proxy`; Paperclip itself uses `local_trusted` mode on host loopback so Authentik is the only browser login. Start it with `mise run paperclip:up`, verify it with `mise run paperclip:smoke`, and seed it with `homelab paperclip seed-company --profile software-shop --repo /home/caboose/dev/caboose-ai.io`.
+- Paperclip runs behind the compose `paperclip` profile with Authentik forward-auth provider `paperclip-proxy`; Paperclip itself uses `local_trusted` mode on host loopback so Authentik is the only browser login. Its container bind-mounts `PAPERCLIP_WORKSPACE_ROOT` at the same path inside the container for repo-aware agent runs, and its DB publishes a loopback-only port for the host-network app. Start it with `mise run paperclip:up`, verify it with `mise run paperclip:smoke`, and seed it with `homelab paperclip seed-company --profile software-shop --repo /home/caboose/dev/caboose-ai.io`.
 - Paperclip-driven agent control starts as a planner/audit ledger. Prefer the
   self-hosted delivery loop for implementation work: Forgejo/Gitea branches and
   PRs, Woodpecker CI, and Portainer Docker visibility. Confirmed execution must

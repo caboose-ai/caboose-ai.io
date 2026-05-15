@@ -26,7 +26,11 @@ func TestPaperclipComposeProfile(t *testing.T) {
 			Volumes     []string          `yaml:"volumes"`
 			Networks    []string          `yaml:"networks"`
 		} `yaml:"services"`
-		Volumes map[string]any `yaml:"volumes"`
+		Volumes  map[string]any `yaml:"volumes"`
+		Networks map[string]struct {
+			Driver   string `yaml:"driver"`
+			Internal bool   `yaml:"internal"`
+		} `yaml:"networks"`
 	}
 	if err := yaml.Unmarshal(data, &compose); err != nil {
 		t.Fatalf("parse compose: %v", err)
@@ -106,6 +110,16 @@ func TestPaperclipComposeProfile(t *testing.T) {
 	}
 	if !contains(paperclipDB.Networks, "paperclip-internal") {
 		t.Fatalf("paperclip-db networks = %v", paperclipDB.Networks)
+	}
+	paperclipInternal, ok := compose.Networks["paperclip-internal"]
+	if !ok {
+		t.Fatal("paperclip-internal network missing")
+	}
+	if paperclipInternal.Driver != "bridge" {
+		t.Fatalf("paperclip-internal driver = %q", paperclipInternal.Driver)
+	}
+	if paperclipInternal.Internal {
+		t.Fatal("paperclip-internal must publish the host-loopback DB port for the host-network Paperclip app")
 	}
 	if _, ok := compose.Volumes["paperclip_db"]; !ok {
 		t.Fatal("paperclip_db volume missing")

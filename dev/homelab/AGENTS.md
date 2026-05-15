@@ -9,7 +9,10 @@ These instructions apply to `dev/homelab/`.
 - `docker-compose.yml` is the canonical local stack definition.
 - Use `${VAR}` substitution for secrets and runtime values; do not hardcode real
   values into compose, scripts, examples, or docs.
-- Keep database-only networks marked `internal: true`.
+- Keep database-only networks marked `internal: true` unless a host-network app
+  must reach the database through a published loopback port. Paperclip DB is the
+  documented exception because the Paperclip app runs in host network mode and
+  connects to Postgres through `127.0.0.1:5433`.
 - App-facing services that need Authentik token exchange should join the `apps`
   network.
 - Use `HOMELAB_BIND_ADDRESS` and `serve_mode` behavior for app host port
@@ -57,6 +60,14 @@ Bad:
 ```yaml
 networks:
   service-internal: {}
+```
+
+Good:
+
+```yaml
+# Host-network app reaches this DB through a loopback-only published port.
+paperclip-internal:
+  driver: bridge
 ```
 
 Good:

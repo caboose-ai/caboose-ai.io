@@ -103,7 +103,9 @@ require explicit human approval.
 
 - Services in `dev/homelab/docker-compose.yml`
 - Secrets via `${VAR}` env var substitution from `.env` file
-- Internal-only DB networks (`*-internal` with `internal: true`)
+- Internal-only DB networks (`*-internal` with `internal: true`), except
+  Paperclip's private DB bridge which must allow Docker to publish the
+  loopback-only DB port used by the host-network Paperclip app.
 - App-facing services join the `apps` network
 - Homarr is pinned to `ghcr.io/homarr-labs/homarr:v1.61.0`, persists `/appdata`
   in `homarr_data`, and uses native Authentik OIDC for the root homepage.

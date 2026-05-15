@@ -491,8 +491,9 @@ networks:
   sonarqube-internal:
     driver: bridge
     internal: true
-  # Paperclip DB tier — host-loopback port is used by the Paperclip app running
-  # in host network mode so the app can bind local_trusted loopback.
+  # Paperclip DB tier — this stays off the shared apps network, but it is not
+  # marked internal because Docker does not publish the loopback DB port from an
+  # internal-only network reliably. The host-loopback port is required by the
+  # Paperclip app running in host network mode.
   paperclip-internal:
     driver: bridge
-    internal: true

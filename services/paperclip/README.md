@@ -25,6 +25,11 @@ this value aligned with the repo path passed to `paperclip:seed`; otherwise
 Paperclip-managed agent runs will skip the workspace because the local path is
 not available inside the container.
 
+The Paperclip app runs with `network_mode: host` and reaches Postgres through
+`${PAPERCLIP_DB_BIND_ADDRESS:-127.0.0.1}:5433`. Keep that bind address on
+loopback. The Paperclip DB bridge is intentionally not marked `internal: true`
+so Docker publishes the loopback DB port for the host-network app.
+
 The seed path creates missing company, goal, project, agent, and routine
 records. It does not update existing Paperclip records in place; when seed
 guidance changes, reseeding adds any new Agent Control Plan project or routine
