@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"errors"
+	"io"
 	"reflect"
 	"testing"
 	"time"
@@ -62,15 +64,124 @@ func TestTelegramConfigReadsBotTokenFromOnePassword(t *testing.T) {
 func TestFetchPRLoadsReviewComments(t *testing.T) {
 	mock := runner.NewMockRunner()
 	mock.On("gh pr view 6 --json", []byte(`{"number":6,"headRefOid":"abc123"}`), nil)
-	mock.On("gh api repos/caboose-ai/ai-skills/pulls/6/comments", []byte(`[{"user":{"login":"chatgpt-codex-connector"},"body":"Fix it","commit_id":"abc123"}]`), nil)
+	mock.On("gh api --paginate repos/caboose-ai/ai-skills/pulls/6/comments --jq .[]", []byte(`{"user":{"login":"chatgpt-codex-connector"},"body":"Fix it","commit_id":"abc123"}
+{"user":{"login":"reviewer"},"body":"Other","commit_id":"abc123"}`), nil)
+	mock.On("gh api graphql", []byte(`{"data":{"repository":{"pullRequest":{"timelineItems":{"nodes":[
+{"__typename":"PullRequestCommit","commit":{"oid":"abc123"}},
+{"__typename":"IssueComment","author":{"login":"cxm6467"},"body":"@codex review"}
+]}}}}}`), nil)
 
 	pr, err := fetchPR(context.Background(), mock, options{Repo: "caboose-ai/ai-skills", PRNumber: 6})
 
 	if err != nil {
 		t.Fatalf("fetchPR() error = %v", err)
 	}
-	if len(pr.ReviewComments) != 1 {
-		t.Fatalf("ReviewComments = %v, want one Codex review comment", pr.ReviewComments)
+	if len(pr.ReviewComments) != 2 {
+		t.Fatalf("ReviewComments = %v, want two review comments", pr.ReviewComments)
+	}
+	if !pr.LatestRequestAfterHead {
+		t.Fatal("LatestRequestAfterHead = false, want true")
+	}
+}
+
+func TestLatestCodexRequestAfterHeadUsesTimelineOrder(t *testing.T) {
+	mock := runner.NewMockRunner()
+	mock.On("gh api graphql", []byte(`{"data":{"repository":{"pullRequest":{"timelineItems":{"nodes":[
+{"__typename":"IssueComment","author":{"login":"cxm6467"},"body":"@codex review"},
+{"__typename":"PullRequestCommit","commit":{"oid":"head-sha"}},
+{"__typename":"IssueComment","author":{"login":"cxm6467"},"body":"@codex review"}
+]}}}}}`), nil)
+
+	got, err := latestCodexRequestAfterHead(context.Background(), mock, "caboose-ai/ai-skills", 6, "head-sha")
+
+	if err != nil {
+		t.Fatalf("latestCodexRequestAfterHead() error = %v", err)
+	}
+	if !got {
+		t.Fatal("latestCodexRequestAfterHead() = false, want true")
+	}
+}
+
+func TestLatestCodexRequestAfterHeadIgnoresRequestsBeforeHead(t *testing.T) {
+	mock := runner.NewMockRunner()
+	mock.On("gh api graphql", []byte(`{"data":{"repository":{"pullRequest":{"timelineItems":{"nodes":[
+{"__typename":"IssueComment","author":{"login":"cxm6467"},"body":"@codex review"},
+{"__typename":"PullRequestCommit","commit":{"oid":"head-sha"}}
+]}}}}}`), nil)
+
+	got, err := latestCodexRequestAfterHead(context.Background(), mock, "caboose-ai/ai-skills", 6, "head-sha")
+
+	if err != nil {
+		t.Fatalf("latestCodexRequestAfterHead() error = %v", err)
+	}
+	if got {
+		t.Fatal("latestCodexRequestAfterHead() = true, want false")
+	}
+}
+
+func TestLatestCodexRequestAfterHeadPaginatesBackwardToHead(t *testing.T) {
+	mock := runner.NewMockRunner()
+	calls := 0
+	mock.OnFunc("gh api graphql", func(args []string) ([]byte, error) {
+		calls++
+		switch calls {
+		case 1:
+			if containsArg(args, "before=cursor-1") {
+				t.Fatalf("first graphql call args = %#v, should not include before cursor", args)
+			}
+			return []byte(`{"data":{"repository":{"pullRequest":{"timelineItems":{"pageInfo":{"hasPreviousPage":true,"startCursor":"cursor-1"},"nodes":[
+{"__typename":"IssueComment","author":{"login":"cxm6467"},"body":"@codex review"}
+]}}}}}`), nil
+		case 2:
+			if !containsArg(args, "before=cursor-1") {
+				t.Fatalf("second graphql call args = %#v, want before cursor", args)
+			}
+			return []byte(`{"data":{"repository":{"pullRequest":{"timelineItems":{"pageInfo":{"hasPreviousPage":false,"startCursor":"cursor-0"},"nodes":[
+{"__typename":"PullRequestCommit","commit":{"oid":"head-sha"}}
+]}}}}}`), nil
+		default:
+			t.Fatalf("unexpected graphql call %d with args %#v", calls, args)
+			return nil, nil
+		}
+	})
+
+	got, err := latestCodexRequestAfterHead(context.Background(), mock, "caboose-ai/ai-skills", 6, "head-sha")
+
+	if err != nil {
+		t.Fatalf("latestCodexRequestAfterHead() error = %v", err)
+	}
+	if !got {
+		t.Fatal("latestCodexRequestAfterHead() = false, want true")
+	}
+	if calls != 2 {
+		t.Fatalf("graphql calls = %d, want 2", calls)
+	}
+}
+
+func TestFetchReviewCommentsAcceptsEmptyPaginatedOutput(t *testing.T) {
+	mock := runner.NewMockRunner()
+	mock.On("gh api --paginate repos/caboose-ai/ai-skills/pulls/6/comments --jq .[]", []byte("\n"), nil)
+
+	comments, err := fetchReviewComments(context.Background(), mock, "caboose-ai/ai-skills", 6)
+
+	if err != nil {
+		t.Fatalf("fetchReviewComments() error = %v", err)
+	}
+	if len(comments) != 0 {
+		t.Fatalf("comments = %#v, want empty", comments)
+	}
+}
+
+func TestWatchReportsTimeoutWhenCheckCommandExceedsDeadline(t *testing.T) {
+	err := watch(context.Background(), contextDeadlineRunner{}, options{
+		Repo:     "caboose-ai/ai-skills",
+		PRNumber: 6,
+		Poll:     time.Minute,
+		Timeout:  time.Millisecond,
+	}, io.Discard, io.Discard)
+
+	if !errors.Is(err, errTimedOut) {
+		t.Fatalf("watch() error = %v, want errTimedOut", err)
 	}
 }
 
@@ -85,4 +196,24 @@ func TestParseOptionsDefaultsToTenMinuteWatcher(t *testing.T) {
 	if opts.Timeout != 10*time.Minute {
 		t.Fatalf("Timeout = %s, want 10m", opts.Timeout)
 	}
+}
+
+type contextDeadlineRunner struct{}
+
+func (contextDeadlineRunner) Run(ctx context.Context, _ string, _ ...string) ([]byte, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func (r contextDeadlineRunner) RunWithStdin(ctx context.Context, _ io.Reader, name string, args ...string) ([]byte, error) {
+	return r.Run(ctx, name, args...)
+}
+
+func containsArg(args []string, want string) bool {
+	for _, arg := range args {
+		if arg == want {
+			return true
+		}
+	}
+	return false
 }

@@ -137,6 +137,60 @@ func TestAssessRequiresCodexCompletionAfterLatestRequest(t *testing.T) {
 	}
 }
 
+func TestAssessRequiresCommentCodexCompletionAfterCurrentHeadSignal(t *testing.T) {
+	pr := readyPR()
+	pr.HeadRefOID = "new-head"
+	pr.LatestRequestAfterHead = false
+	pr.Comments = []Comment{
+		{Author: User{Login: "cxm6467"}, Body: "@codex review", CreatedAt: "2026-05-13T03:09:00Z"},
+		{Author: User{Login: "chatgpt-codex-connector"}, Body: "Codex Review: done", CreatedAt: "2026-05-13T03:10:00Z"},
+	}
+	pr.Reviews = nil
+
+	got := Assess(pr)
+
+	if got.State != Waiting {
+		t.Fatalf("Assess().State = %q, want %q; findings=%v", got.State, Waiting, got.Findings)
+	}
+}
+
+func TestAssessAcceptsCommentCodexCompletionAfterCurrentHeadSignal(t *testing.T) {
+	pr := readyPR()
+	pr.HeadRefOID = "new-head"
+	pr.LatestRequestAfterHead = true
+	pr.Comments = []Comment{
+		{Author: User{Login: "cxm6467"}, Body: "@codex review", CreatedAt: "2026-05-13T03:20:00Z"},
+		{Author: User{Login: "chatgpt-codex-connector"}, Body: "Codex Review: done", CreatedAt: "2026-05-13T03:21:00Z"},
+	}
+	pr.Reviews = nil
+
+	got := Assess(pr)
+
+	if got.State != Ready {
+		t.Fatalf("Assess().State = %q, want %q; findings=%v", got.State, Ready, got.Findings)
+	}
+}
+
+func TestAssessDoesNotUseTruncatedCommitListAsCurrentHeadSignal(t *testing.T) {
+	pr := readyPR()
+	pr.HeadRefOID = "new-head"
+	pr.Commits = []Commit{
+		{OID: "older-head", CommittedDate: "2026-05-13T04:20:00Z", AuthoredDate: "2026-05-13T04:20:00Z"},
+	}
+	pr.LatestRequestAfterHead = false
+	pr.Comments = []Comment{
+		{Author: User{Login: "cxm6467"}, Body: "@codex review", CreatedAt: "2026-05-13T04:00:00Z"},
+		{Author: User{Login: "chatgpt-codex-connector"}, Body: "Codex Review: done", CreatedAt: "2026-05-13T04:30:00Z"},
+	}
+	pr.Reviews = nil
+
+	got := Assess(pr)
+
+	if got.State != Waiting {
+		t.Fatalf("Assess().State = %q, want %q; findings=%v", got.State, Waiting, got.Findings)
+	}
+}
+
 func TestAssessRequiresCodexReviewForCurrentHead(t *testing.T) {
 	pr := readyPR()
 	pr.HeadRefOID = "new-head"
@@ -152,6 +206,22 @@ func TestAssessRequiresCodexReviewForCurrentHead(t *testing.T) {
 
 	if got.State != Waiting {
 		t.Fatalf("Assess().State = %q, want %q; findings=%v", got.State, Waiting, got.Findings)
+	}
+}
+
+func TestAssessAcceptsReviewCodexCompletionForCurrentHead(t *testing.T) {
+	pr := readyPR()
+	pr.HeadRefOID = "new-head"
+	pr.Comments = nil
+	pr.LatestReviews = []Review{
+		{Author: User{Login: "chatgpt-codex-connector"}, State: "COMMENTED", SubmittedAt: "2026-05-13T03:10:00Z", Commit: Commit{OID: "new-head"}},
+	}
+	pr.Reviews = nil
+
+	got := Assess(pr)
+
+	if got.State != Ready {
+		t.Fatalf("Assess().State = %q, want %q; findings=%v", got.State, Ready, got.Findings)
 	}
 }
 
@@ -236,6 +306,11 @@ func TestAssessBlocksCurrentHeadCodexReviewComments(t *testing.T) {
 func TestAssessIgnoresOutdatedCodexReviewComments(t *testing.T) {
 	pr := readyPR()
 	pr.HeadRefOID = "current-head"
+	pr.LatestRequestAfterHead = true
+	pr.Comments = []Comment{
+		{Author: User{Login: "cxm6467"}, Body: "@codex review", CreatedAt: "2026-05-13T03:00:00Z"},
+		{Author: User{Login: "chatgpt-codex-connector"}, Body: "Codex Review: done", CreatedAt: "2026-05-13T03:01:00Z"},
+	}
 	pr.ReviewComments = []ReviewComment{
 		{Author: User{Login: "chatgpt-codex-connector"}, Body: "Fix this.", CommitID: "old-head"},
 	}
@@ -250,12 +325,43 @@ func TestAssessIgnoresOutdatedCodexReviewComments(t *testing.T) {
 func TestAssessIgnoresRetargetedOutdatedCodexReviewComments(t *testing.T) {
 	pr := readyPR()
 	pr.HeadRefOID = "current-head"
+	pr.LatestRequestAfterHead = true
+	pr.Comments = []Comment{
+		{Author: User{Login: "cxm6467"}, Body: "@codex review", CreatedAt: "2026-05-13T03:10:00Z"},
+		{Author: User{Login: "chatgpt-codex-connector"}, Body: "Codex Review: done", CreatedAt: "2026-05-13T03:11:00Z"},
+	}
 	pr.ReviewComments = []ReviewComment{
 		{
 			Author:           User{Login: "chatgpt-codex-connector"},
 			Body:             "Fix this.",
 			CommitID:         "current-head",
 			OriginalCommitID: "old-head",
+			CreatedAt:        "2026-05-13T03:00:00Z",
+		},
+	}
+
+	got := Assess(pr)
+
+	if got.State != Ready {
+		t.Fatalf("Assess().State = %q, want %q; findings=%v", got.State, Ready, got.Findings)
+	}
+}
+
+func TestAssessIgnoresRetargetedCodexReviewCommentsBeforeLatestRequest(t *testing.T) {
+	pr := readyPR()
+	pr.HeadRefOID = "current-head"
+	pr.LatestRequestAfterHead = true
+	pr.Comments = []Comment{
+		{Author: User{Login: "cxm6467"}, Body: "@codex review", CreatedAt: "2026-05-13T03:10:00Z"},
+		{Author: User{Login: "chatgpt-codex-connector"}, Body: "Codex Review: done", CreatedAt: "2026-05-13T03:21:00Z"},
+	}
+	pr.ReviewComments = []ReviewComment{
+		{
+			Author:           User{Login: "chatgpt-codex-connector"},
+			Body:             "Fix this.",
+			CommitID:         "current-head",
+			OriginalCommitID: "old-head",
+			CreatedAt:        "2026-05-13T03:05:00Z",
 		},
 	}
 

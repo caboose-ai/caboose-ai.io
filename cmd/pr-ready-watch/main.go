@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -102,8 +103,22 @@ func watch(ctx context.Context, commandRunner runner.CommandRunner, opts options
 	}
 
 	for {
-		pr, assessment, err := checkOnce(ctx, commandRunner, opts)
+		checkCtx := ctx
+		cancel := func() {}
+		if !deadline.IsZero() {
+			remaining := time.Until(deadline)
+			if remaining <= 0 {
+				return fmt.Errorf("%w after %s", errTimedOut, opts.Timeout)
+			}
+			checkCtx, cancel = context.WithTimeout(ctx, remaining)
+		}
+		pr, assessment, err := checkOnce(checkCtx, commandRunner, opts)
+		checkErr := checkCtx.Err()
+		cancel()
 		if err != nil {
+			if errors.Is(checkErr, context.DeadlineExceeded) || (!deadline.IsZero() && !time.Now().Before(deadline)) {
+				return fmt.Errorf("%w after %s", errTimedOut, opts.Timeout)
+			}
 			return err
 		}
 		fmt.Fprintf(stderr, "pr-ready-watch: PR #%d %s (%s)\n", pr.Number, assessment.State, assessment.Summary)
@@ -171,6 +186,11 @@ func fetchPR(ctx context.Context, commandRunner runner.CommandRunner, opts optio
 		return prwatch.PullRequest{}, err
 	}
 	pr.ReviewComments = reviewComments
+	latestRequestAfterHead, err := latestCodexRequestAfterHead(ctx, commandRunner, repo, pr.Number, pr.HeadRefOID)
+	if err != nil {
+		return prwatch.PullRequest{}, err
+	}
+	pr.LatestRequestAfterHead = latestRequestAfterHead
 	return pr, nil
 }
 
@@ -193,15 +213,159 @@ func fetchReviewComments(ctx context.Context, commandRunner runner.CommandRunner
 	if strings.TrimSpace(repo) == "" || prNumber <= 0 {
 		return nil, nil
 	}
-	out, err := commandRunner.Run(ctx, "gh", "api", fmt.Sprintf("repos/%s/pulls/%d/comments", repo, prNumber))
+	out, err := commandRunner.Run(ctx, "gh", "api", "--paginate", fmt.Sprintf("repos/%s/pulls/%d/comments", repo, prNumber), "--jq", ".[]")
 	if err != nil {
 		return nil, err
 	}
+	if strings.TrimSpace(string(out)) == "" {
+		return nil, nil
+	}
 	var comments []prwatch.ReviewComment
-	if err := json.Unmarshal(out, &comments); err != nil {
-		return nil, fmt.Errorf("parse pull review comments JSON: %w", err)
+	decoder := json.NewDecoder(bytes.NewReader(out))
+	for {
+		var comment prwatch.ReviewComment
+		if err := decoder.Decode(&comment); err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return nil, fmt.Errorf("parse pull review comments JSON: %w", err)
+		}
+		comments = append(comments, comment)
 	}
 	return comments, nil
+}
+
+func latestCodexRequestAfterHead(ctx context.Context, commandRunner runner.CommandRunner, repo string, prNumber int, headRefOID string) (bool, error) {
+	headRefOID = strings.TrimSpace(headRefOID)
+	if strings.TrimSpace(repo) == "" || prNumber <= 0 || headRefOID == "" {
+		return false, nil
+	}
+	owner, name, ok := strings.Cut(strings.TrimSpace(repo), "/")
+	if !ok || owner == "" || name == "" {
+		return false, fmt.Errorf("repository must be owner/name, got %q", repo)
+	}
+
+	latestRequestAfterHead := false
+	before := ""
+	for {
+		out, err := fetchTimelinePage(ctx, commandRunner, owner, name, prNumber, before)
+		if err != nil {
+			return false, err
+		}
+
+		var response timelineResponse
+		if err := json.Unmarshal(out, &response); err != nil {
+			return false, fmt.Errorf("parse PR timeline JSON: %w", err)
+		}
+
+		timeline := response.Data.Repository.PullRequest.TimelineItems
+		for i := len(timeline.Nodes) - 1; i >= 0; i-- {
+			node := timeline.Nodes[i]
+			switch node.TypeName {
+			case "IssueComment":
+				if isCodexRequestComment(node) {
+					latestRequestAfterHead = true
+				}
+			case "PullRequestCommit":
+				if strings.EqualFold(strings.TrimSpace(node.Commit.OID), headRefOID) {
+					return latestRequestAfterHead, nil
+				}
+			}
+		}
+
+		if !timeline.PageInfo.HasPreviousPage || strings.TrimSpace(timeline.PageInfo.StartCursor) == "" {
+			return false, nil
+		}
+		before = timeline.PageInfo.StartCursor
+	}
+}
+
+func fetchTimelinePage(ctx context.Context, commandRunner runner.CommandRunner, owner, name string, prNumber int, before string) ([]byte, error) {
+	args := []string{
+		"api", "graphql",
+		"-f", "owner=" + owner,
+		"-f", "name=" + name,
+		"-F", "number=" + strconv.Itoa(prNumber),
+	}
+	if strings.TrimSpace(before) == "" {
+		args = append(args, "-f", "query="+timelineQuery)
+	} else {
+		args = append(args, "-f", "before="+before, "-f", "query="+timelineBeforeQuery)
+	}
+	return commandRunner.Run(ctx, "gh", args...)
+}
+
+const timelineQuery = `query($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      timelineItems(last: 100, itemTypes: [PULL_REQUEST_COMMIT, ISSUE_COMMENT]) {
+        pageInfo { hasPreviousPage startCursor }
+        nodes {
+          __typename
+          ... on PullRequestCommit {
+            commit { oid }
+          }
+          ... on IssueComment {
+            author { login }
+            body
+          }
+        }
+      }
+    }
+  }
+}`
+
+const timelineBeforeQuery = `query($owner: String!, $name: String!, $number: Int!, $before: String!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      timelineItems(last: 100, before: $before, itemTypes: [PULL_REQUEST_COMMIT, ISSUE_COMMENT]) {
+        pageInfo { hasPreviousPage startCursor }
+        nodes {
+          __typename
+          ... on PullRequestCommit {
+            commit { oid }
+          }
+          ... on IssueComment {
+            author { login }
+            body
+          }
+        }
+      }
+    }
+  }
+}`
+
+type timelineResponse struct {
+	Data struct {
+		Repository struct {
+			PullRequest struct {
+				TimelineItems timelineItems `json:"timelineItems"`
+			} `json:"pullRequest"`
+		} `json:"repository"`
+	} `json:"data"`
+}
+
+type timelineItems struct {
+	PageInfo struct {
+		HasPreviousPage bool   `json:"hasPreviousPage"`
+		StartCursor     string `json:"startCursor"`
+	} `json:"pageInfo"`
+	Nodes []timelineNode `json:"nodes"`
+}
+
+type timelineNode struct {
+	TypeName string `json:"__typename"`
+	Commit   struct {
+		OID string `json:"oid"`
+	} `json:"commit"`
+	Author struct {
+		Login string `json:"login"`
+	} `json:"author"`
+	Body string `json:"body"`
+}
+
+func isCodexRequestComment(node timelineNode) bool {
+	return strings.EqualFold(strings.TrimSpace(node.Body), "@codex review")
 }
 
 func prViewArgs(opts options) []string {

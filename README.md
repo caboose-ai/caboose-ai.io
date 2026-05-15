@@ -49,6 +49,7 @@ container recreation.
   - Includes `homelab-mcp access <request|import|token|status>` for admin-approved external client access.
 - **`cmd/telegram-agent`** — Private Telegram bot that runs local OpenClaw gateway prompts and role-scoped agent prompts for allowlisted Telegram users.
 - **`cmd/pr-ready-watch`** — Local GitHub PR watcher that polls Codex review, checks, and review state, then notifies Telegram when the PR is ready for final human review.
+  - Treats Codex review signals as current only when they occur after the latest PR head commit, so stale review comments cannot mark new changes ready.
 
 ## Homebrew
 
