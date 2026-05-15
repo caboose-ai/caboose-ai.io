@@ -3,7 +3,7 @@ steps:
     image: golang:1.26
     commands:
       - git config --global --add safe.directory "$PWD"
-      - git fetch origin main || true
+      - git fetch origin "+refs/heads/${CI_COMMIT_TARGET_BRANCH:-main}:refs/remotes/origin/${CI_COMMIT_TARGET_BRANCH:-main}" || true
       - |
         set -eu
         resolve_range_base() {
@@ -16,7 +16,9 @@ steps:
             printf '%s\n' "$prev"
             return
           fi
-          git merge-base HEAD origin/main 2>/dev/null || git rev-parse HEAD~1
+          target_branch="$(printenv CI_COMMIT_TARGET_BRANCH 2>/dev/null || true)"
+          target_branch="${target_branch:-main}"
+          git merge-base HEAD "origin/$target_branch" 2>/dev/null || git rev-parse HEAD~1
         }
         base="$(resolve_range_base)"
         changed_files="$(git diff --name-only "$base" HEAD)"
@@ -46,7 +48,7 @@ steps:
     image: ghcr.io/gitleaks/gitleaks:v8.30.1
     commands:
       - git config --global --add safe.directory "$PWD"
-      - git fetch origin main || true
+      - git fetch origin "+refs/heads/${CI_COMMIT_TARGET_BRANCH:-main}:refs/remotes/origin/${CI_COMMIT_TARGET_BRANCH:-main}" || true
       - |
         set -eu
         resolve_range_base() {
@@ -59,7 +61,9 @@ steps:
             printf '%s\n' "$prev"
             return
           fi
-          git merge-base HEAD origin/main 2>/dev/null || git rev-parse HEAD~1
+          target_branch="$(printenv CI_COMMIT_TARGET_BRANCH 2>/dev/null || true)"
+          target_branch="${target_branch:-main}"
+          git merge-base HEAD "origin/$target_branch" 2>/dev/null || git rev-parse HEAD~1
         }
         base="$(resolve_range_base)"
         head="$(printenv CI_COMMIT_SHA 2>/dev/null || git rev-parse HEAD)"
