@@ -21,7 +21,7 @@ import (
 	"github.com/caboose-ai/caboose-ai.io/internal/telegrambot"
 )
 
-const githubFields = "number,title,url,state,isDraft,mergeStateStatus,reviewDecision,statusCheckRollup,comments,reviews,latestReviews,reviewRequests,headRefName,headRefOid,baseRefName,headRepository,headRepositoryOwner,commits"
+const githubFields = "number,title,url,state,isDraft,mergeStateStatus,reviewDecision,statusCheckRollup,comments,reviews,latestReviews,reviewRequests,headRefName,headRefOid,baseRefName,headRepository,headRepositoryOwner"
 
 var (
 	errWaiting  = errors.New("PR is still waiting")

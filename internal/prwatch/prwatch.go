@@ -113,8 +113,8 @@ func Assess(pr PullRequest) Assessment {
 		}
 	}
 	latestRequest := latestCodexRequest(pr.Comments)
-	headCommitTime := currentHeadCommitTime(pr.Commits, pr.HeadRefOID)
-	if count := currentHeadCodexReviewCommentCount(pr, latestRequest, headCommitTime); count > 0 {
+	headSignalTime := currentHeadSignalTime(pr)
+	if count := currentHeadCodexReviewCommentCount(pr, latestRequest, headSignalTime); count > 0 {
 		blockers = append(blockers, pluralize(count, "Codex review has %d current-head comment", "Codex review has %d current-head comments"))
 	}
 
@@ -153,7 +153,7 @@ func Assess(pr PullRequest) Assessment {
 		notes = append(notes, "draft PR: human should mark ready after final review")
 	}
 
-	if !hasCodexReview(pr, latestRequest, headCommitTime) {
+	if !hasCodexReview(pr, latestRequest, headSignalTime) {
 		waiting = append(waiting, "Codex review has not completed")
 	} else {
 		notes = append(notes, "Codex review completed")
@@ -249,12 +249,12 @@ func summarizeChecks(items []map[string]any) checkSummary {
 	return summary
 }
 
-func hasCodexReview(pr PullRequest, latestRequest, headCommitTime time.Time) bool {
+func hasCodexReview(pr PullRequest, latestRequest, headSignalTime time.Time) bool {
 	for _, comment := range pr.Comments {
 		if isCodexActor(comment.Author.Login) &&
 			looksLikeCompletedCodexReview(comment.Body) &&
 			completedAfter(comment.CreatedAt, latestRequest) &&
-			completedAfter(comment.CreatedAt, headCommitTime) {
+			commentMatchesHeadSignal(comment, pr.HeadRefOID, headSignalTime) {
 			return true
 		}
 	}
@@ -263,8 +263,7 @@ func hasCodexReview(pr PullRequest, latestRequest, headCommitTime time.Time) boo
 			if isCodexActor(review.Author.Login) &&
 				!strings.EqualFold(strings.TrimSpace(review.State), "PENDING") &&
 				reviewMatchesHead(review, pr.HeadRefOID) &&
-				completedAfter(review.SubmittedAt, latestRequest) &&
-				completedAfter(review.SubmittedAt, headCommitTime) {
+				completedAfter(review.SubmittedAt, latestRequest) {
 				return true
 			}
 		}
@@ -290,42 +289,6 @@ func looksLikeCodexRequest(body string) bool {
 	return strings.EqualFold(strings.TrimSpace(body), "@codex review")
 }
 
-func currentHeadCommitTime(commits []Commit, headRefOID string) time.Time {
-	headRefOID = strings.TrimSpace(headRefOID)
-	if headRefOID != "" {
-		for _, commit := range commits {
-			if strings.EqualFold(strings.TrimSpace(commit.OID), headRefOID) {
-				return firstCommitTime(commit)
-			}
-		}
-	}
-
-	var latestCommitted time.Time
-	var latestAuthored time.Time
-	for _, commit := range commits {
-		if committedAt, ok := parseGitHubTime(commit.CommittedDate); ok && committedAt.After(latestCommitted) {
-			latestCommitted = committedAt
-		}
-		if authoredAt, ok := parseGitHubTime(commit.AuthoredDate); ok && authoredAt.After(latestAuthored) {
-			latestAuthored = authoredAt
-		}
-	}
-	if !latestCommitted.IsZero() {
-		return latestCommitted
-	}
-	return latestAuthored
-}
-
-func firstCommitTime(commit Commit) time.Time {
-	if committedAt, ok := parseGitHubTime(commit.CommittedDate); ok {
-		return committedAt
-	}
-	if authoredAt, ok := parseGitHubTime(commit.AuthoredDate); ok {
-		return authoredAt
-	}
-	return time.Time{}
-}
-
 func completedAfter(completedAt string, cutoff time.Time) bool {
 	if cutoff.IsZero() {
 		return true
@@ -340,18 +303,60 @@ func reviewMatchesHead(review Review, headRefOID string) bool {
 	return headRefOID == "" || (reviewOID != "" && strings.EqualFold(reviewOID, headRefOID))
 }
 
+func currentHeadSignalTime(pr PullRequest) time.Time {
+	if strings.TrimSpace(pr.HeadRefOID) == "" {
+		return time.Time{}
+	}
+	var earliest time.Time
+	for _, item := range pr.StatusCheckRollup {
+		raw := firstString(item, "startedAt", "createdAt")
+		startedAt, ok := parseGitHubTime(raw)
+		if !ok {
+			continue
+		}
+		if earliest.IsZero() || startedAt.Before(earliest) {
+			earliest = startedAt
+		}
+	}
+	return earliest
+}
+
+func commentMatchesHeadSignal(comment Comment, headRefOID string, headSignalTime time.Time) bool {
+	headRefOID = strings.TrimSpace(headRefOID)
+	if headRefOID == "" {
+		return true
+	}
+	if bodyMentionsHead(comment.Body, headRefOID) {
+		return true
+	}
+	return !headSignalTime.IsZero() && completedAfter(comment.CreatedAt, headSignalTime)
+}
+
+func bodyMentionsHead(body, headRefOID string) bool {
+	headRefOID = strings.TrimSpace(headRefOID)
+	if headRefOID == "" {
+		return false
+	}
+	body = strings.ToLower(body)
+	headRefOID = strings.ToLower(headRefOID)
+	if strings.Contains(body, headRefOID) {
+		return true
+	}
+	return len(headRefOID) >= 12 && strings.Contains(body, headRefOID[:12])
+}
+
 func parseGitHubTime(raw string) (time.Time, bool) {
 	parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(raw))
 	return parsed, err == nil
 }
 
-func currentHeadCodexReviewCommentCount(pr PullRequest, latestRequest, headCommitTime time.Time) int {
+func currentHeadCodexReviewCommentCount(pr PullRequest, latestRequest, headSignalTime time.Time) int {
 	var count int
 	for _, comment := range pr.ReviewComments {
 		if !isCodexActor(comment.Author.Login) {
 			continue
 		}
-		if !reviewCommentMatchesHead(comment, pr.HeadRefOID, latestRequest, headCommitTime) {
+		if !reviewCommentMatchesHead(comment, pr.HeadRefOID, latestRequest, headSignalTime) {
 			continue
 		}
 		count++
@@ -359,7 +364,7 @@ func currentHeadCodexReviewCommentCount(pr PullRequest, latestRequest, headCommi
 	return count
 }
 
-func reviewCommentMatchesHead(comment ReviewComment, headRefOID string, latestRequest, headCommitTime time.Time) bool {
+func reviewCommentMatchesHead(comment ReviewComment, headRefOID string, latestRequest, headSignalTime time.Time) bool {
 	headRefOID = strings.TrimSpace(headRefOID)
 	if headRefOID == "" {
 		return true
@@ -371,7 +376,7 @@ func reviewCommentMatchesHead(comment ReviewComment, headRefOID string, latestRe
 		}
 		return strings.EqualFold(strings.TrimSpace(comment.CommitID), headRefOID) &&
 			completedAfter(comment.CreatedAt, latestRequest) &&
-			completedAfter(comment.CreatedAt, headCommitTime)
+			(headSignalTime.IsZero() || completedAfter(comment.CreatedAt, headSignalTime))
 	}
 	return strings.EqualFold(strings.TrimSpace(comment.CommitID), headRefOID)
 }

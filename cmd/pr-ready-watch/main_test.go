@@ -19,7 +19,7 @@ func TestPRViewArgsUsesExplicitRepoAndPR(t *testing.T) {
 		"view",
 		"6",
 		"--json",
-		"number,title,url,state,isDraft,mergeStateStatus,reviewDecision,statusCheckRollup,comments,reviews,latestReviews,reviewRequests,headRefName,headRefOid,baseRefName,headRepository,headRepositoryOwner,commits",
+		"number,title,url,state,isDraft,mergeStateStatus,reviewDecision,statusCheckRollup,comments,reviews,latestReviews,reviewRequests,headRefName,headRefOid,baseRefName,headRepository,headRepositoryOwner",
 		"--repo",
 		"caboose-ai/ai-skills",
 	}

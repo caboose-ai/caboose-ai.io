@@ -137,11 +137,11 @@ func TestAssessRequiresCodexCompletionAfterLatestRequest(t *testing.T) {
 	}
 }
 
-func TestAssessRequiresCommentCodexCompletionAfterLatestCommit(t *testing.T) {
+func TestAssessRequiresCommentCodexCompletionAfterCurrentHeadSignal(t *testing.T) {
 	pr := readyPR()
 	pr.HeadRefOID = "new-head"
-	pr.Commits = []Commit{
-		{OID: "new-head", CommittedDate: "2026-05-13T03:20:00Z"},
+	pr.StatusCheckRollup = []map[string]any{
+		{"__typename": "CheckRun", "name": "test", "status": "COMPLETED", "conclusion": "SUCCESS", "startedAt": "2026-05-13T03:20:00Z"},
 	}
 	pr.Comments = []Comment{
 		{Author: User{Login: "chatgpt-codex-connector"}, Body: "Codex Review: done", CreatedAt: "2026-05-13T03:10:00Z"},
@@ -155,11 +155,11 @@ func TestAssessRequiresCommentCodexCompletionAfterLatestCommit(t *testing.T) {
 	}
 }
 
-func TestAssessAcceptsCommentCodexCompletionAfterLatestCommit(t *testing.T) {
+func TestAssessAcceptsCommentCodexCompletionAfterCurrentHeadSignal(t *testing.T) {
 	pr := readyPR()
 	pr.HeadRefOID = "new-head"
-	pr.Commits = []Commit{
-		{OID: "new-head", CommittedDate: "2026-05-13T03:20:00Z"},
+	pr.StatusCheckRollup = []map[string]any{
+		{"__typename": "CheckRun", "name": "test", "status": "COMPLETED", "conclusion": "SUCCESS", "startedAt": "2026-05-13T03:20:00Z"},
 	}
 	pr.Comments = []Comment{
 		{Author: User{Login: "chatgpt-codex-connector"}, Body: "Codex Review: done", CreatedAt: "2026-05-13T03:21:00Z"},
@@ -173,22 +173,24 @@ func TestAssessAcceptsCommentCodexCompletionAfterLatestCommit(t *testing.T) {
 	}
 }
 
-func TestAssessUsesCurrentHeadCommitTimeForCodexCompletion(t *testing.T) {
+func TestAssessDoesNotUseTruncatedCommitListAsCurrentHeadSignal(t *testing.T) {
 	pr := readyPR()
 	pr.HeadRefOID = "new-head"
 	pr.Commits = []Commit{
-		{OID: "new-head", CommittedDate: "2026-05-13T03:20:00Z"},
 		{OID: "older-head", CommittedDate: "2026-05-13T04:20:00Z", AuthoredDate: "2026-05-13T04:20:00Z"},
 	}
+	pr.StatusCheckRollup = []map[string]any{
+		{"__typename": "CheckRun", "name": "test", "status": "COMPLETED", "conclusion": "SUCCESS", "startedAt": "2026-05-13T05:00:00Z"},
+	}
 	pr.Comments = []Comment{
-		{Author: User{Login: "chatgpt-codex-connector"}, Body: "Codex Review: done", CreatedAt: "2026-05-13T03:21:00Z"},
+		{Author: User{Login: "chatgpt-codex-connector"}, Body: "Codex Review: done", CreatedAt: "2026-05-13T04:30:00Z"},
 	}
 	pr.Reviews = nil
 
 	got := Assess(pr)
 
-	if got.State != Ready {
-		t.Fatalf("Assess().State = %q, want %q; findings=%v", got.State, Ready, got.Findings)
+	if got.State != Waiting {
+		t.Fatalf("Assess().State = %q, want %q; findings=%v", got.State, Waiting, got.Findings)
 	}
 }
 
@@ -210,13 +212,10 @@ func TestAssessRequiresCodexReviewForCurrentHead(t *testing.T) {
 	}
 }
 
-func TestAssessRequiresReviewCodexCompletionAfterLatestCommit(t *testing.T) {
+func TestAssessAcceptsReviewCodexCompletionForCurrentHead(t *testing.T) {
 	pr := readyPR()
 	pr.HeadRefOID = "new-head"
 	pr.Comments = nil
-	pr.Commits = []Commit{
-		{OID: "new-head", CommittedDate: "2026-05-13T03:20:00Z"},
-	}
 	pr.LatestReviews = []Review{
 		{Author: User{Login: "chatgpt-codex-connector"}, State: "COMMENTED", SubmittedAt: "2026-05-13T03:10:00Z", Commit: Commit{OID: "new-head"}},
 	}
@@ -224,8 +223,8 @@ func TestAssessRequiresReviewCodexCompletionAfterLatestCommit(t *testing.T) {
 
 	got := Assess(pr)
 
-	if got.State != Waiting {
-		t.Fatalf("Assess().State = %q, want %q; findings=%v", got.State, Waiting, got.Findings)
+	if got.State != Ready {
+		t.Fatalf("Assess().State = %q, want %q; findings=%v", got.State, Ready, got.Findings)
 	}
 }
 
@@ -310,6 +309,12 @@ func TestAssessBlocksCurrentHeadCodexReviewComments(t *testing.T) {
 func TestAssessIgnoresOutdatedCodexReviewComments(t *testing.T) {
 	pr := readyPR()
 	pr.HeadRefOID = "current-head"
+	pr.StatusCheckRollup = []map[string]any{
+		{"__typename": "CheckRun", "name": "test", "status": "COMPLETED", "conclusion": "SUCCESS", "startedAt": "2026-05-13T03:00:00Z"},
+	}
+	pr.Comments = []Comment{
+		{Author: User{Login: "chatgpt-codex-connector"}, Body: "Codex Review: done", CreatedAt: "2026-05-13T03:01:00Z"},
+	}
 	pr.ReviewComments = []ReviewComment{
 		{Author: User{Login: "chatgpt-codex-connector"}, Body: "Fix this.", CommitID: "old-head"},
 	}
@@ -324,6 +329,9 @@ func TestAssessIgnoresOutdatedCodexReviewComments(t *testing.T) {
 func TestAssessIgnoresRetargetedOutdatedCodexReviewComments(t *testing.T) {
 	pr := readyPR()
 	pr.HeadRefOID = "current-head"
+	pr.StatusCheckRollup = []map[string]any{
+		{"__typename": "CheckRun", "name": "test", "status": "COMPLETED", "conclusion": "SUCCESS", "startedAt": "2026-05-13T03:10:30Z"},
+	}
 	pr.Comments = []Comment{
 		{Author: User{Login: "cxm6467"}, Body: "@codex review", CreatedAt: "2026-05-13T03:10:00Z"},
 		{Author: User{Login: "chatgpt-codex-connector"}, Body: "Codex Review: done", CreatedAt: "2026-05-13T03:11:00Z"},
@@ -345,11 +353,11 @@ func TestAssessIgnoresRetargetedOutdatedCodexReviewComments(t *testing.T) {
 	}
 }
 
-func TestAssessIgnoresRetargetedCodexReviewCommentsBeforeCurrentHeadCommit(t *testing.T) {
+func TestAssessIgnoresRetargetedCodexReviewCommentsBeforeCurrentHeadSignal(t *testing.T) {
 	pr := readyPR()
 	pr.HeadRefOID = "current-head"
-	pr.Commits = []Commit{
-		{OID: "current-head", CommittedDate: "2026-05-13T03:20:00Z"},
+	pr.StatusCheckRollup = []map[string]any{
+		{"__typename": "CheckRun", "name": "test", "status": "COMPLETED", "conclusion": "SUCCESS", "startedAt": "2026-05-13T03:20:00Z"},
 	}
 	pr.Comments = []Comment{
 		{Author: User{Login: "cxm6467"}, Body: "@codex review", CreatedAt: "2026-05-13T03:10:00Z"},
