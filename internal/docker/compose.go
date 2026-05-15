@@ -1,8 +1,12 @@
 package docker
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 
@@ -58,5 +62,57 @@ func (c *ComposeClient) IsRunning(ctx context.Context, service string) (bool, er
 	if err != nil {
 		return false, fmt.Errorf("checking service %s: %w", service, err)
 	}
-	return strings.Contains(string(out), service), nil
+	running, err := composeServiceIsRunning(out, service)
+	if err != nil {
+		return false, fmt.Errorf("parsing compose ps for service %s: %w", service, err)
+	}
+	return running, nil
+}
+
+type composePSRow struct {
+	Name    string `json:"Name"`
+	Service string `json:"Service"`
+	State   string `json:"State"`
+}
+
+func composeServiceIsRunning(out []byte, service string) (bool, error) {
+	rows, err := parseComposePSRows(out)
+	if err != nil {
+		return false, err
+	}
+	for _, row := range rows {
+		if row.Service != service && row.Name != service {
+			continue
+		}
+		return row.State == "" || strings.EqualFold(row.State, "running"), nil
+	}
+	return false, nil
+}
+
+func parseComposePSRows(out []byte) ([]composePSRow, error) {
+	trimmed := bytes.TrimSpace(out)
+	if len(trimmed) == 0 {
+		return nil, nil
+	}
+	if trimmed[0] == '[' {
+		var rows []composePSRow
+		if err := json.Unmarshal(trimmed, &rows); err != nil {
+			return nil, err
+		}
+		return rows, nil
+	}
+
+	decoder := json.NewDecoder(bytes.NewReader(trimmed))
+	var rows []composePSRow
+	for {
+		var row composePSRow
+		if err := decoder.Decode(&row); err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return nil, err
+		}
+		rows = append(rows, row)
+	}
+	return rows, nil
 }

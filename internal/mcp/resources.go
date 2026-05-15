@@ -252,23 +252,23 @@ func (s *Server) registerPrompts() {
 }
 
 func (s *Server) handleDiagnoseServicePrompt(ctx context.Context, req *sdkmcp.GetPromptRequest) (*sdkmcp.GetPromptResult, error) {
-	service := req.Params.Arguments["service"]
-	if service == "" {
+	serviceName := req.Params.Arguments["service"]
+	if serviceName == "" {
 		return nil, fmt.Errorf("service argument is required")
 	}
 
 	var parts []string
-	parts = append(parts, fmt.Sprintf("# Diagnostic Report: %s\n", service))
+	parts = append(parts, fmt.Sprintf("# Diagnostic Report: %s\n", serviceName))
 
-	running, err := s.compose.IsRunning(ctx, service)
-	if err != nil {
-		parts = append(parts, fmt.Sprintf("## Container Status\nError checking: %v\n", err))
+	composeServices, runtime := s.diagnosticRuntime(serviceName)
+	if runtime == service.RuntimeExternal {
+		parts = append(parts, "## Container Status\nRuntime: external\nNo local compose container is expected.\n")
 	} else {
-		parts = append(parts, fmt.Sprintf("## Container Status\nRunning: %v\n", running))
+		parts = append(parts, s.diagnosticContainerStatus(ctx, composeServices))
 	}
 
 	for _, c := range s.checkers {
-		if strings.EqualFold(c.Name(), service) {
+		if strings.EqualFold(c.Name(), serviceName) {
 			if err := c.Check(ctx); err != nil {
 				parts = append(parts, fmt.Sprintf("## Health Check\nUnhealthy: %v\n", err))
 			} else {
@@ -278,15 +278,14 @@ func (s *Server) handleDiagnoseServicePrompt(ctx context.Context, req *sdkmcp.Ge
 		}
 	}
 
-	logs, err := s.compose.Logs(ctx, service, 50)
-	if err != nil {
-		parts = append(parts, fmt.Sprintf("## Recent Logs\nError fetching: %v\n", err))
+	if runtime == service.RuntimeExternal {
+		parts = append(parts, "## Recent Logs\nSkipped: external service has no local compose logs.\n")
 	} else {
-		parts = append(parts, fmt.Sprintf("## Recent Logs (last 50 lines)\n```\n%s\n```\n", string(logs)))
+		parts = append(parts, s.diagnosticLogs(ctx, composeServices))
 	}
 
 	for _, svc := range s.configurators() {
-		if strings.EqualFold(svc.Slug(), service) || strings.EqualFold(svc.Name(), service) {
+		if strings.EqualFold(svc.Slug(), serviceName) || strings.EqualFold(svc.Name(), serviceName) {
 			configured, err := svc.CheckConfigured(ctx)
 			if err != nil {
 				parts = append(parts, fmt.Sprintf("## SSO Configuration\nError checking: %v\n", err))
@@ -298,7 +297,7 @@ func (s *Server) handleDiagnoseServicePrompt(ctx context.Context, req *sdkmcp.Ge
 	}
 
 	return &sdkmcp.GetPromptResult{
-		Description: fmt.Sprintf("Diagnostic report for %s", service),
+		Description: fmt.Sprintf("Diagnostic report for %s", serviceName),
 		Messages: []*sdkmcp.PromptMessage{
 			{
 				Role:    "user",
@@ -306,6 +305,49 @@ func (s *Server) handleDiagnoseServicePrompt(ctx context.Context, req *sdkmcp.Ge
 			},
 		},
 	}, nil
+}
+
+func (s *Server) diagnosticRuntime(serviceName string) ([]string, service.Runtime) {
+	composeServices := []string{serviceName}
+	runtime := service.RuntimeCompose
+	if s.registry == nil {
+		return composeServices, runtime
+	}
+	if manifest, ok := s.registry.Manifest(serviceName); ok {
+		runtime = manifest.Runtime
+		if len(manifest.ComposeServices) > 0 {
+			composeServices = manifest.ComposeServices
+		}
+	}
+	return composeServices, runtime
+}
+
+func (s *Server) diagnosticContainerStatus(ctx context.Context, composeServices []string) string {
+	var lines []string
+	lines = append(lines, "## Container Status")
+	for _, composeService := range composeServices {
+		running, err := s.compose.IsRunning(ctx, composeService)
+		if err != nil {
+			lines = append(lines, fmt.Sprintf("- %s: error checking: %v", composeService, err))
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("- %s: running=%v", composeService, running))
+	}
+	return strings.Join(lines, "\n") + "\n"
+}
+
+func (s *Server) diagnosticLogs(ctx context.Context, composeServices []string) string {
+	var parts []string
+	parts = append(parts, "## Recent Logs (last 50 lines)")
+	for _, composeService := range composeServices {
+		logs, err := s.compose.Logs(ctx, composeService, 50)
+		if err != nil {
+			parts = append(parts, fmt.Sprintf("### %s\nError fetching: %v", composeService, err))
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("### %s\n```\n%s\n```", composeService, string(logs)))
+	}
+	return strings.Join(parts, "\n") + "\n"
 }
 
 func (s *Server) handleFullStackReportPrompt(ctx context.Context, _ *sdkmcp.GetPromptRequest) (*sdkmcp.GetPromptResult, error) {
