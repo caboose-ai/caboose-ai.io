@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/caboose-ai/caboose-ai.io/internal/install"
+	"github.com/caboose-ai/caboose-ai.io/services/authentik"
 )
 
 func TestSSO_Config(t *testing.T) {
@@ -121,25 +122,62 @@ func TestSSO_Config(t *testing.T) {
 		if stage == nil {
 			t.Fatal("default-authentication-flow identification stage not found")
 		}
+		if len(stage.UserFields) != 0 {
+			t.Fatalf("default-authentication-flow user_fields=%v, want empty to remove local email login", stage.UserFields)
+		}
+		if !stage.ShowSourceLabels {
+			t.Fatal("default-authentication-flow show_source_labels=false, want true for branded Google source button")
+		}
 
 		boundSources := make(map[string]bool, len(stage.Sources))
 		for _, pk := range stage.Sources {
 			boundSources[pk] = true
 		}
 
+		sources, err := s.AK.ListSources(ctx)
+		if err != nil {
+			t.Fatalf("ListSources: %v", err)
+		}
+		sourceBySlug := make(map[string]authentik.OAuthSource, len(sources))
+		for _, source := range sources {
+			sourceBySlug[source.Slug] = source
+		}
+
 		for _, slug := range []string{"github", "google"} {
 			t.Run(slug, func(t *testing.T) {
-				pk, err := s.AK.GetSourcePK(ctx, slug)
-				if err != nil {
-					t.Fatalf("GetSourcePK(%q): %v", slug, err)
-				}
-				if pk == "" {
+				source, ok := sourceBySlug[slug]
+				if !ok || source.PK == "" {
 					t.Skipf("social source %q not configured", slug)
 				}
-				if !boundSources[pk] {
-					t.Fatalf("source %q exists but is not bound to default-authentication-flow", slug)
+				if slug == "github" {
+					if boundSources[source.PK] {
+						t.Fatalf("github source is bound to default-authentication-flow; only Google should be offered")
+					}
+					if source.Enabled {
+						t.Fatalf("github source is enabled; it should remain configured but unavailable for login")
+					}
+					if source.Promoted {
+						t.Fatalf("github source is promoted; it should not be shown as a login option")
+					}
 				}
-				t.Logf("source %q: pk=%s", slug, pk)
+				if slug == "google" {
+					if !source.Enabled {
+						t.Fatalf("google source enabled=%v, want enabled", source.Enabled)
+					}
+					if !boundSources[source.PK] {
+						t.Fatalf("google source exists but is not bound to default-authentication-flow")
+					}
+					if source.Promoted {
+						t.Fatalf("google source promoted=%v, want false so Authentik renders the source icon", source.Promoted)
+					}
+					if source.UserMatchingMode != "email_link" {
+						t.Fatalf("google user_matching_mode=%q, want email_link", source.UserMatchingMode)
+					}
+					if source.IconURL == "" {
+						t.Fatalf("google source has empty icon_url")
+					}
+				}
+				t.Logf("source %q: pk=%s enabled=%v promoted=%v matching=%s icon=%s", slug, source.PK, source.Enabled, source.Promoted, source.UserMatchingMode, source.IconURL)
 			})
 		}
 	})

@@ -2,6 +2,7 @@ package authentik
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -72,6 +73,63 @@ func TestGetDefaultBrand(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSetBrandCustomCSS(t *testing.T) {
+	var body string
+	client := &Client{
+		BaseURL: "http://localhost",
+		Token:   "test-token",
+		HTTP: &mockHTTPClient{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				if req.Method != http.MethodPatch {
+					t.Fatalf("method = %s, want PATCH", req.Method)
+				}
+				if !strings.Contains(req.URL.Path, "/api/v3/core/brands/abc-123/") {
+					t.Fatalf("unexpected path: %s", req.URL.Path)
+				}
+				data, err := io.ReadAll(req.Body)
+				if err != nil {
+					t.Fatalf("reading request body: %v", err)
+				}
+				body = string(data)
+				return mockResponse(200, `{}`), nil
+			},
+		},
+	}
+
+	if err := client.SetBrandCustomCSS(context.Background(), "abc-123", "button { color: black; }"); err != nil {
+		t.Fatalf("SetBrandCustomCSS returned error: %v", err)
+	}
+	if !strings.Contains(body, `"branding_custom_css":"button { color: black; }"`) {
+		t.Fatalf("PATCH body = %s, want branding_custom_css", body)
+	}
+}
+
+func TestEnsureGoogleSignInBrandCSS(t *testing.T) {
+	t.Run("appends block", func(t *testing.T) {
+		got := EnsureGoogleSignInBrandCSS("body { color: black; }\n")
+		if !strings.Contains(got, "body { color: black; }") {
+			t.Fatalf("existing CSS missing from %q", got)
+		}
+		if !strings.Contains(got, googleSignInCSSStart) || !strings.Contains(got, googleSignInCSSEnd) {
+			t.Fatalf("Google CSS markers missing from %q", got)
+		}
+	})
+
+	t.Run("replaces existing block", func(t *testing.T) {
+		existing := "a {}\n\n" + googleSignInCSSStart + "\nold\n" + googleSignInCSSEnd + "\n\nb {}\n"
+		got := EnsureGoogleSignInBrandCSS(existing)
+		if strings.Contains(got, "\nold\n") {
+			t.Fatalf("old block was not replaced: %q", got)
+		}
+		if strings.Count(got, googleSignInCSSStart) != 1 {
+			t.Fatalf("marker count in %q, want 1", got)
+		}
+		if !strings.Contains(got, "a {}") || !strings.Contains(got, "b {}") {
+			t.Fatalf("surrounding CSS was not preserved: %q", got)
+		}
+	})
 }
 
 func TestSetBrandRecoveryFlow(t *testing.T) {

@@ -21,6 +21,8 @@ func New(ak *authentik.Client, social config.SocialConfig) *Configurator {
 func (c *Configurator) Name() string { return "Social Login" }
 func (c *Configurator) Slug() string { return "social" }
 
+const googleUserMatchingMode = "email_link"
+
 func (c *Configurator) CheckConfigured(ctx context.Context) (bool, error) {
 	if c.Social.GitHub != nil && c.Social.GitHub.ClientID != "" {
 		pk, _ := c.AK.GetSourcePK(ctx, "github")
@@ -39,7 +41,7 @@ func (c *Configurator) CheckConfigured(ctx context.Context) (bool, error) {
 
 func (c *Configurator) Configure(ctx context.Context, opts service.ConfigureOpts) (*service.ConfigureResult, error) {
 	configured := 0
-	promoted := true
+	googleConfigured := false
 
 	var authFlowPK, enrollFlowPK string
 	if !opts.DryRun {
@@ -55,17 +57,7 @@ func (c *Configurator) Configure(ctx context.Context, opts service.ConfigureOpts
 		if opts.DryRun {
 			configured++
 		} else {
-			err := c.AK.UpsertSource(ctx, authentik.UpsertSourceParams{
-				Name:               "GitHub",
-				Slug:               "github",
-				Enabled:            true,
-				Promoted:           &promoted,
-				ProviderType:       "github",
-				ConsumerKey:        creds.ClientID,
-				ConsumerSecret:     creds.ClientSecret,
-				AuthenticationFlow: authFlowPK,
-				EnrollmentFlow:     enrollFlowPK,
-			})
+			err := c.AK.UpsertSource(ctx, githubSourceParams(*creds, authFlowPK, enrollFlowPK))
 			if err != nil {
 				return nil, err
 			}
@@ -77,20 +69,11 @@ func (c *Configurator) Configure(ctx context.Context, opts service.ConfigureOpts
 		if opts.DryRun {
 			configured++
 		} else {
-			err := c.AK.UpsertSource(ctx, authentik.UpsertSourceParams{
-				Name:               "Google",
-				Slug:               "google",
-				Enabled:            true,
-				Promoted:           &promoted,
-				ProviderType:       "google",
-				ConsumerKey:        creds.ClientID,
-				ConsumerSecret:     creds.ClientSecret,
-				AuthenticationFlow: authFlowPK,
-				EnrollmentFlow:     enrollFlowPK,
-			})
+			err := c.AK.UpsertSource(ctx, googleSourceParams(*creds, authFlowPK, enrollFlowPK))
 			if err != nil {
 				return nil, err
 			}
+			googleConfigured = true
 			configured++
 		}
 	}
@@ -99,8 +82,8 @@ func (c *Configurator) Configure(ctx context.Context, opts service.ConfigureOpts
 		return &service.ConfigureResult{Status: service.StatusSkipped, Message: "No social login credentials provided"}, nil
 	}
 
-	if !opts.DryRun {
-		if err := c.bindSourcesToLoginFlow(ctx); err != nil {
+	if !opts.DryRun && googleConfigured {
+		if err := c.bindGoogleSourceToLoginFlow(ctx); err != nil {
 			return nil, fmt.Errorf("binding sources to login flow: %w", err)
 		}
 	}
@@ -115,7 +98,38 @@ func (c *Configurator) Configure(ctx context.Context, opts service.ConfigureOpts
 	}, nil
 }
 
-func (c *Configurator) bindSourcesToLoginFlow(ctx context.Context) error {
+func githubSourceParams(creds config.OAuthCredentials, authFlowPK, enrollFlowPK string) authentik.UpsertSourceParams {
+	promoted := false
+	return authentik.UpsertSourceParams{
+		Name:               "GitHub",
+		Slug:               "github",
+		Enabled:            false,
+		Promoted:           &promoted,
+		ProviderType:       "github",
+		ConsumerKey:        creds.ClientID,
+		ConsumerSecret:     creds.ClientSecret,
+		AuthenticationFlow: authFlowPK,
+		EnrollmentFlow:     enrollFlowPK,
+	}
+}
+
+func googleSourceParams(creds config.OAuthCredentials, authFlowPK, enrollFlowPK string) authentik.UpsertSourceParams {
+	promoted := false
+	return authentik.UpsertSourceParams{
+		Name:               "Google",
+		Slug:               "google",
+		Enabled:            true,
+		Promoted:           &promoted,
+		ProviderType:       "google",
+		UserMatchingMode:   googleUserMatchingMode,
+		ConsumerKey:        creds.ClientID,
+		ConsumerSecret:     creds.ClientSecret,
+		AuthenticationFlow: authFlowPK,
+		EnrollmentFlow:     enrollFlowPK,
+	}
+}
+
+func (c *Configurator) bindGoogleSourceToLoginFlow(ctx context.Context) error {
 	stage, err := c.AK.GetIdentificationStage(ctx, "default-authentication-flow")
 	if err != nil || stage == nil {
 		return err
@@ -126,10 +140,20 @@ func (c *Configurator) bindSourcesToLoginFlow(ctx context.Context) error {
 		return err
 	}
 
-	pks := make([]string, len(sources))
-	for i, s := range sources {
-		pks[i] = s.PK
+	pks := googleLoginSourcePKs(sources)
+	if len(pks) == 0 {
+		return fmt.Errorf("enabled google source not found")
 	}
 
 	return c.AK.SetIdentificationStageSources(ctx, stage.PK, pks)
+}
+
+func googleLoginSourcePKs(sources []authentik.OAuthSource) []string {
+	pks := make([]string, 0, 1)
+	for _, source := range sources {
+		if source.Slug == "google" && source.Enabled && source.PK != "" {
+			pks = append(pks, source.PK)
+		}
+	}
+	return pks
 }

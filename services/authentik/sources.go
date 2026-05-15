@@ -8,11 +8,15 @@ import (
 )
 
 type OAuthSource struct {
-	PK           string `json:"pk"`
-	Name         string `json:"name"`
-	Slug         string `json:"slug"`
-	Enabled      bool   `json:"enabled"`
-	ProviderType string `json:"provider_type"`
+	PK               string `json:"pk"`
+	Name             string `json:"name"`
+	Slug             string `json:"slug"`
+	Enabled          bool   `json:"enabled"`
+	Promoted         bool   `json:"promoted"`
+	ProviderType     string `json:"provider_type"`
+	UserMatchingMode string `json:"user_matching_mode"`
+	Icon             string `json:"icon"`
+	IconURL          string `json:"icon_url"`
 }
 
 type sourceList struct {
@@ -54,6 +58,8 @@ type UpsertSourceParams struct {
 	Enabled            bool   `json:"enabled"`
 	Promoted           *bool  `json:"promoted,omitempty"`
 	ProviderType       string `json:"provider_type"`
+	UserMatchingMode   string `json:"user_matching_mode,omitempty"`
+	Icon               string `json:"icon,omitempty"`
 	ConsumerKey        string `json:"consumer_key"`
 	ConsumerSecret     string `json:"consumer_secret"`
 	AuthenticationFlow string `json:"authentication_flow,omitempty"`

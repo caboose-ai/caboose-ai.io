@@ -81,6 +81,9 @@ func (inst *Installer) ConfigureBrand(ctx context.Context) error {
 	if err := inst.AK.SetBrandRecoveryFlow(ctx, brand.BrandUUID, flow.PK); err != nil {
 		return fmt.Errorf("setting recovery flow: %w", err)
 	}
+	if err := inst.AK.SetBrandCustomCSS(ctx, brand.BrandUUID, authentik.EnsureGoogleSignInBrandCSS(brand.BrandingCustomCSS)); err != nil {
+		return fmt.Errorf("setting brand custom CSS: %w", err)
+	}
 	return nil
 }
 

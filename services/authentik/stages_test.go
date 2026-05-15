@@ -3,6 +3,7 @@ package authentik
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
@@ -257,5 +258,82 @@ func TestPatchUserWriteStage(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 		})
+	}
+}
+
+func TestGetIdentificationStageIncludesLoginPresentation(t *testing.T) {
+	client := &Client{
+		BaseURL: "http://localhost",
+		Token:   "test-token",
+		HTTP: &mockHTTPClient{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				if req.Method != http.MethodGet {
+					t.Fatalf("method = %s, want GET", req.Method)
+				}
+				if !strings.Contains(req.URL.Path, "/api/v3/stages/identification/") {
+					t.Fatalf("unexpected path: %s", req.URL.Path)
+				}
+				return mockResponse(200, `{"results":[{"pk":"stage-1","name":"default-authentication-identification","sources":["google-pk"],"user_fields":[],"show_source_labels":true}]}`), nil
+			},
+		},
+	}
+
+	stage, err := client.GetIdentificationStage(context.Background(), "default-authentication-flow")
+	if err != nil {
+		t.Fatalf("GetIdentificationStage returned error: %v", err)
+	}
+	if stage == nil {
+		t.Fatal("GetIdentificationStage returned nil stage")
+	}
+	if len(stage.UserFields) != 0 {
+		t.Fatalf("UserFields = %#v, want empty", stage.UserFields)
+	}
+	if !stage.ShowSourceLabels {
+		t.Fatal("ShowSourceLabels = false, want true")
+	}
+}
+
+func TestSetIdentificationStageSourcesMakesLoginSourceOnly(t *testing.T) {
+	var patchBody map[string]any
+	client := &Client{
+		BaseURL: "http://localhost",
+		Token:   "test-token",
+		HTTP: &mockHTTPClient{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				if req.Method != http.MethodPatch {
+					t.Fatalf("method = %s, want PATCH", req.Method)
+				}
+				if !strings.Contains(req.URL.Path, "/api/v3/stages/identification/stage-1/") {
+					t.Fatalf("unexpected path: %s", req.URL.Path)
+				}
+				data, err := io.ReadAll(req.Body)
+				if err != nil {
+					t.Fatalf("reading request body: %v", err)
+				}
+				if err := json.Unmarshal(data, &patchBody); err != nil {
+					t.Fatalf("parsing request body: %v", err)
+				}
+				return mockResponse(200, `{}`), nil
+			},
+		},
+	}
+
+	if err := client.SetIdentificationStageSources(context.Background(), "stage-1", []string{"google-pk"}); err != nil {
+		t.Fatalf("SetIdentificationStageSources returned error: %v", err)
+	}
+
+	if got, ok := patchBody["show_source_labels"].(bool); !ok || !got {
+		t.Fatalf("show_source_labels = %#v, want true (body: %#v)", patchBody["show_source_labels"], patchBody)
+	}
+	fields, ok := patchBody["user_fields"].([]any)
+	if !ok {
+		t.Fatalf("user_fields = %#v, want array (body: %#v)", patchBody["user_fields"], patchBody)
+	}
+	if len(fields) != 0 {
+		t.Fatalf("user_fields = %#v, want empty", fields)
+	}
+	sources, ok := patchBody["sources"].([]any)
+	if !ok || len(sources) != 1 || sources[0] != "google-pk" {
+		t.Fatalf("sources = %#v, want [google-pk]", patchBody["sources"])
 	}
 }

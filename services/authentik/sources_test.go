@@ -98,6 +98,70 @@ func TestUpsertSourcePromotedOmitEmpty(t *testing.T) {
 	}
 }
 
+func TestUpsertSourceSendsDisplayAndMatchingFields(t *testing.T) {
+	var patchBody map[string]any
+	requests := 0
+	client := &Client{
+		BaseURL: "http://localhost",
+		Token:   "test-token",
+		HTTP: &mockHTTPClient{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				requests++
+				switch requests {
+				case 1:
+					if req.Method != http.MethodGet {
+						t.Fatalf("first request method = %s, want GET", req.Method)
+					}
+					return mockResponse(200, `{"results":[{"pk":"source-pk","slug":"google"}]}`), nil
+				case 2:
+					if req.Method != http.MethodPatch {
+						t.Fatalf("second request method = %s, want PATCH", req.Method)
+					}
+					data, err := io.ReadAll(req.Body)
+					if err != nil {
+						t.Fatalf("reading PATCH body: %v", err)
+					}
+					if err := json.Unmarshal(data, &patchBody); err != nil {
+						t.Fatalf("parsing PATCH body: %v", err)
+					}
+					return mockResponse(200, `{}`), nil
+				default:
+					t.Fatalf("unexpected extra request %d", requests)
+					return nil, nil
+				}
+			},
+		},
+	}
+
+	err := client.UpsertSource(context.Background(), UpsertSourceParams{
+		Name:             "Google",
+		Slug:             "google",
+		Enabled:          true,
+		Promoted:         boolPtr(false),
+		ProviderType:     "google",
+		UserMatchingMode: "email_link",
+		Icon:             "google.svg",
+		ConsumerKey:      "client-id",
+		ConsumerSecret:   "client-secret",
+	})
+	if err != nil {
+		t.Fatalf("UpsertSource returned error: %v", err)
+	}
+	if requests != 2 {
+		t.Fatalf("requests = %d, want 2", requests)
+	}
+
+	for key, want := range map[string]any{
+		"user_matching_mode": "email_link",
+		"icon":               "google.svg",
+		"promoted":           false,
+	} {
+		if got := patchBody[key]; got != want {
+			t.Fatalf("%s = %#v, want %#v (body: %#v)", key, got, want, patchBody)
+		}
+	}
+}
+
 func boolPtr(v bool) *bool {
 	return &v
 }
