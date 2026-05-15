@@ -64,6 +64,9 @@ func TestPaperclipComposeProfile(t *testing.T) {
 	if paperclip.Environment["PAPERCLIP_PUBLIC_URL"] != "${PAPERCLIP_PUBLIC_URL:-https://paperclip.caboose-ai.io}" {
 		t.Fatalf("PAPERCLIP_PUBLIC_URL = %q", paperclip.Environment["PAPERCLIP_PUBLIC_URL"])
 	}
+	if paperclip.Environment["PAPERCLIP_API_URL"] != "http://127.0.0.1:3100" {
+		t.Fatalf("PAPERCLIP_API_URL = %q", paperclip.Environment["PAPERCLIP_API_URL"])
+	}
 	if paperclip.Environment["PAPERCLIP_RUNTIME_API_URL"] != "http://127.0.0.1:3100" {
 		t.Fatalf("PAPERCLIP_RUNTIME_API_URL = %q", paperclip.Environment["PAPERCLIP_RUNTIME_API_URL"])
 	}
@@ -153,9 +156,13 @@ func TestPaperclipSeedTaskUsesWorkspaceRoot(t *testing.T) {
 		t.Fatalf("read mise config: %v", err)
 	}
 
-	want := `--repo "${PAPERCLIP_WORKSPACE_ROOT:-/home/caboose/dev/caboose-ai.io}"`
-	if !strings.Contains(string(data), want) {
-		t.Fatalf("paperclip:seed must use workspace root, missing %q", want)
+	for _, want := range []string{
+		`[ ! -f "$HOMELAB_COMPOSE_DIR/.env" ] || . "$HOMELAB_COMPOSE_DIR/.env"`,
+		`--repo "${PAPERCLIP_WORKSPACE_ROOT:-/home/caboose/dev/caboose-ai.io}"`,
+	} {
+		if !strings.Contains(string(data), want) {
+			t.Fatalf("paperclip:seed must use compose workspace root, missing %q", want)
+		}
 	}
 }
 

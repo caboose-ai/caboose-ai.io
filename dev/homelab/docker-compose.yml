@@ -384,6 +384,7 @@ services:
       PAPERCLIP_HOME: /paperclip
       PAPERCLIP_CONFIG: /paperclip/instances/default/config.json
       PAPERCLIP_PUBLIC_URL: "${PAPERCLIP_PUBLIC_URL:-https://paperclip.caboose-ai.io}"
+      PAPERCLIP_API_URL: "http://127.0.0.1:3100"
       PAPERCLIP_RUNTIME_API_URL: "http://127.0.0.1:3100"
       PAPERCLIP_DEPLOYMENT_MODE: local_trusted
       PAPERCLIP_DEPLOYMENT_EXPOSURE: private

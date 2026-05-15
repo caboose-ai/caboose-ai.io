@@ -107,7 +107,7 @@ require explicit human approval.
   Paperclip's private DB bridge which must allow Docker to publish the
   loopback-only DB port used by the host-network Paperclip app.
 - Paperclip's public URL remains Authentik-gated; host-network Paperclip agents
-  use `PAPERCLIP_RUNTIME_API_URL=http://127.0.0.1:3100` for local API calls.
+  use `PAPERCLIP_API_URL=http://127.0.0.1:3100` for local API calls.
 - App-facing services join the `apps` network
 - Homarr is pinned to `ghcr.io/homarr-labs/homarr:v1.61.0`, persists `/appdata`
   in `homarr_data`, and uses native Authentik OIDC for the root homepage.

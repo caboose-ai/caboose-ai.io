@@ -30,8 +30,8 @@ The Paperclip app runs with `network_mode: host` and reaches Postgres through
 loopback. The Paperclip DB bridge is intentionally not marked `internal: true`
 so Docker publishes the loopback DB port for the host-network app.
 
-Paperclip-managed agents use `PAPERCLIP_RUNTIME_API_URL=http://127.0.0.1:3100`
-for internal API calls. Keep this separate from `PAPERCLIP_PUBLIC_URL`; the
+Paperclip-managed agents use `PAPERCLIP_API_URL=http://127.0.0.1:3100` for
+internal API calls. Keep this separate from `PAPERCLIP_PUBLIC_URL`; the
 public URL is Authentik-gated and returns browser redirects to local agents.
 
 The seed path creates missing company, goal, project, agent, and routine
