@@ -47,6 +47,24 @@ type TurnstileConfig struct {
 	SecretKey string `yaml:"secret_key"`
 }
 
+type Overrides struct {
+	Domain         string
+	Email          string
+	ComposeDir     string
+	Orchestrator   string
+	ServeMode      string
+	OPVault        string
+	OPStaticVault  string
+	KubeNamespace  string
+	Kubeconfig     string
+	KubeContext    string
+	DryRun         bool
+	Force          bool
+	Verbose        bool
+	NonInteractive bool
+	SecretsEnvOnly bool
+}
+
 func DefaultConfig() *Config {
 	return &Config{
 		ComposeDir:    "dev/homelab",
@@ -69,6 +87,57 @@ func LoadFromFile(path string) (*Config, error) {
 		return nil, fmt.Errorf("parsing config file: %w", err)
 	}
 	return cfg, nil
+}
+
+func LoadWithOverrides(path string, overrides Overrides) (*Config, error) {
+	cfg := DefaultConfig()
+	if path != "" {
+		loaded, err := LoadFromFile(path)
+		if err != nil {
+			return nil, err
+		}
+		cfg = loaded
+	}
+	cfg.ApplyOverrides(overrides)
+	return cfg, nil
+}
+
+func (c *Config) ApplyOverrides(overrides Overrides) {
+	if overrides.Domain != "" {
+		c.Domain = overrides.Domain
+	}
+	if overrides.Email != "" {
+		c.Email = overrides.Email
+	}
+	if overrides.ComposeDir != "" {
+		c.ComposeDir = overrides.ComposeDir
+	}
+	if overrides.Orchestrator != "" {
+		c.Orchestrator = overrides.Orchestrator
+	}
+	if overrides.ServeMode != "" {
+		c.ServeMode = overrides.ServeMode
+	}
+	if overrides.OPVault != "" {
+		c.OPVault = overrides.OPVault
+	}
+	if overrides.OPStaticVault != "" {
+		c.OPStaticVault = overrides.OPStaticVault
+	}
+	if overrides.KubeNamespace != "" {
+		c.Kubernetes.Namespace = overrides.KubeNamespace
+	}
+	if overrides.Kubeconfig != "" {
+		c.Kubernetes.Kubeconfig = overrides.Kubeconfig
+	}
+	if overrides.KubeContext != "" {
+		c.Kubernetes.Context = overrides.KubeContext
+	}
+	c.DryRun = overrides.DryRun
+	c.Force = overrides.Force
+	c.Verbose = overrides.Verbose
+	c.NonInteractive = overrides.NonInteractive
+	c.SecretsEnvOnly = overrides.SecretsEnvOnly
 }
 
 func (c *Config) Validate() error {

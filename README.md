@@ -44,6 +44,7 @@ container recreation.
 
 - **`cmd/homelab`** — Bubbletea TUI installer that bootstraps the entire stack: generates secrets, starts containers, provisions OAuth providers, configures each service.
   - Includes `homelab service <slug> <status|configure|logs|smoke|open>` for per-service operations backed by `services/<slug>/service.yaml`.
+  - Loads config through shared `internal/config` helpers before applying command-specific domain, compose-dir, and serve-mode overrides.
 - **`cmd/mcp`** — MCP server exposing homelab tools to AI assistants.
   - The `diagnose-service` prompt uses service manifests for runtime and compose-service lookup, including external-runtime services with no local compose logs.
   - Includes `agent_invoke` provider fallback across Ollama, Claude Code, Copilot CLI, and Emberfall.

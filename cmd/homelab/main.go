@@ -103,37 +103,11 @@ func extractSubcommand(args []string) (string, []string) {
 }
 
 func runService(opts cliOpts, args []string) int {
-	cfg := config.DefaultConfig()
-	if opts.configPath != "" {
-		loaded, err := config.LoadFromFile(opts.configPath)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
-			return 1
-		}
-		cfg = loaded
+	cfg, err := config.LoadWithOverrides(opts.configPath, serviceConfigOverrides(opts))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
+		return 1
 	}
-	if opts.domain != "" {
-		cfg.Domain = opts.domain
-	}
-	if opts.composeDir != "" {
-		cfg.ComposeDir = opts.composeDir
-	}
-	if opts.orchestrator != "" {
-		cfg.Orchestrator = opts.orchestrator
-	}
-	if opts.serveMode != "" {
-		cfg.ServeMode = opts.serveMode
-	}
-	if opts.opVault != "" {
-		cfg.OPVault = opts.opVault
-	}
-	if opts.opStaticVault != "" {
-		cfg.OPStaticVault = opts.opStaticVault
-	}
-	cfg.DryRun = opts.dryRun
-	cfg.Force = opts.force
-	cfg.Verbose = opts.verbose
-	cfg.SecretsEnvOnly = opts.secretsEnvOnly
 
 	cmdRunner := runner.NewLocalRunner()
 	secretStore := secretStoreForConfig(cfg, cmdRunner)
@@ -149,31 +123,14 @@ func runMCP(opts cliOpts, args []string) int {
 		fmt.Fprintf(os.Stderr, "unknown command %q\n", args[0])
 		return 1
 	}
-	cfg := config.DefaultConfig()
-	if opts.configPath != "" {
-		loaded, err := config.LoadFromFile(opts.configPath)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
-			return 1
-		}
-		cfg = loaded
-	}
-	if opts.domain != "" {
-		cfg.Domain = opts.domain
+	cfg, err := config.LoadWithOverrides(opts.configPath, mcpConfigOverrides(opts))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
+		return 1
 	}
 	if cfg.Domain == "" {
 		cfg.Domain = "caboose-ai.io"
 	}
-	if opts.composeDir != "" {
-		cfg.ComposeDir = opts.composeDir
-	}
-	if opts.opVault != "" {
-		cfg.OPVault = opts.opVault
-	}
-	if opts.opStaticVault != "" {
-		cfg.OPStaticVault = opts.opStaticVault
-	}
-	cfg.SecretsEnvOnly = opts.secretsEnvOnly
 
 	cmdRunner := runner.NewLocalRunner()
 	secretStore := secretStoreForConfig(cfg, cmdRunner)
@@ -214,56 +171,94 @@ type cliOpts struct {
 	paperclipAPIKey     string
 }
 
+func serviceConfigOverrides(opts cliOpts) config.Overrides {
+	return config.Overrides{
+		Domain:         opts.domain,
+		ComposeDir:     opts.composeDir,
+		Orchestrator:   opts.orchestrator,
+		ServeMode:      opts.serveMode,
+		OPVault:        opts.opVault,
+		OPStaticVault:  opts.opStaticVault,
+		DryRun:         opts.dryRun,
+		Force:          opts.force,
+		Verbose:        opts.verbose,
+		SecretsEnvOnly: opts.secretsEnvOnly,
+	}
+}
+
+func mcpConfigOverrides(opts cliOpts) config.Overrides {
+	return config.Overrides{
+		Domain:         opts.domain,
+		ComposeDir:     opts.composeDir,
+		OPVault:        opts.opVault,
+		OPStaticVault:  opts.opStaticVault,
+		SecretsEnvOnly: opts.secretsEnvOnly,
+	}
+}
+
+func installConfigOverrides(opts cliOpts) config.Overrides {
+	return config.Overrides{
+		Domain:         opts.domain,
+		ComposeDir:     opts.composeDir,
+		Orchestrator:   opts.orchestrator,
+		ServeMode:      opts.serveMode,
+		KubeNamespace:  opts.kubeNamespace,
+		Kubeconfig:     opts.kubeconfig,
+		KubeContext:    opts.kubeContext,
+		OPVault:        opts.opVault,
+		OPStaticVault:  opts.opStaticVault,
+		Email:          opts.email,
+		DryRun:         opts.dryRun,
+		Force:          opts.force,
+		Verbose:        opts.verbose,
+		NonInteractive: opts.nonInteractive,
+		SecretsEnvOnly: opts.secretsEnvOnly,
+	}
+}
+
+func resetConfigOverrides(opts cliOpts) config.Overrides {
+	return config.Overrides{
+		ComposeDir:     opts.composeDir,
+		Orchestrator:   opts.orchestrator,
+		ServeMode:      opts.serveMode,
+		KubeNamespace:  opts.kubeNamespace,
+		Kubeconfig:     opts.kubeconfig,
+		KubeContext:    opts.kubeContext,
+		OPVault:        opts.opVault,
+		OPStaticVault:  opts.opStaticVault,
+		DryRun:         opts.dryRun,
+		SecretsEnvOnly: opts.secretsEnvOnly,
+	}
+}
+
+func migrateConfigOverrides(opts cliOpts) config.Overrides {
+	return config.Overrides{ComposeDir: opts.composeDir}
+}
+
+func oauthSetupConfigOverrides(opts cliOpts) config.Overrides {
+	return config.Overrides{Domain: opts.domain}
+}
+
+func paperclipConfigOverrides(opts cliOpts) config.Overrides {
+	return config.Overrides{
+		Domain:     opts.domain,
+		ComposeDir: opts.composeDir,
+	}
+}
+
+func recoveryConfigOverrides(opts cliOpts) config.Overrides {
+	return config.Overrides{
+		Domain:     opts.domain,
+		ComposeDir: opts.composeDir,
+	}
+}
+
 func runInstall(opts cliOpts) int {
-	var cfg *config.Config
-
-	if opts.configPath != "" {
-		var err error
-		cfg, err = config.LoadFromFile(opts.configPath)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
-			return 1
-		}
-	} else {
-		cfg = config.DefaultConfig()
+	cfg, err := config.LoadWithOverrides(opts.configPath, installConfigOverrides(opts))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
+		return 1
 	}
-
-	if opts.domain != "" {
-		cfg.Domain = opts.domain
-	}
-	if opts.composeDir != "" {
-		cfg.ComposeDir = opts.composeDir
-	}
-	if opts.orchestrator != "" {
-		cfg.Orchestrator = opts.orchestrator
-	}
-	if opts.serveMode != "" {
-		cfg.ServeMode = opts.serveMode
-	}
-	if opts.kubeNamespace != "" {
-		cfg.Kubernetes.Namespace = opts.kubeNamespace
-	}
-	if opts.kubeconfig != "" {
-		cfg.Kubernetes.Kubeconfig = opts.kubeconfig
-	}
-	if opts.kubeContext != "" {
-		cfg.Kubernetes.Context = opts.kubeContext
-	}
-	if opts.opVault != "" {
-		cfg.OPVault = opts.opVault
-	}
-	if opts.opStaticVault != "" {
-		cfg.OPStaticVault = opts.opStaticVault
-	}
-	if opts.email != "" {
-		cfg.Email = opts.email
-	}
-
-	cfg.DryRun = opts.dryRun
-	cfg.Force = opts.force
-	cfg.Verbose = opts.verbose
-	cfg.NonInteractive = opts.nonInteractive
-	cfg.SecretsEnvOnly = opts.secretsEnvOnly
 
 	if opts.nonInteractive {
 		if err := cfg.Validate(); err != nil {
@@ -300,45 +295,11 @@ func runReset(opts cliOpts) int {
 		return 1
 	}
 
-	var cfg *config.Config
-
-	if opts.configPath != "" {
-		var err error
-		cfg, err = config.LoadFromFile(opts.configPath)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
-			return 1
-		}
-	} else {
-		cfg = config.DefaultConfig()
+	cfg, err := config.LoadWithOverrides(opts.configPath, resetConfigOverrides(opts))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
+		return 1
 	}
-
-	if opts.composeDir != "" {
-		cfg.ComposeDir = opts.composeDir
-	}
-	if opts.orchestrator != "" {
-		cfg.Orchestrator = opts.orchestrator
-	}
-	if opts.serveMode != "" {
-		cfg.ServeMode = opts.serveMode
-	}
-	if opts.kubeNamespace != "" {
-		cfg.Kubernetes.Namespace = opts.kubeNamespace
-	}
-	if opts.kubeconfig != "" {
-		cfg.Kubernetes.Kubeconfig = opts.kubeconfig
-	}
-	if opts.kubeContext != "" {
-		cfg.Kubernetes.Context = opts.kubeContext
-	}
-	if opts.opVault != "" {
-		cfg.OPVault = opts.opVault
-	}
-	if opts.opStaticVault != "" {
-		cfg.OPStaticVault = opts.opStaticVault
-	}
-	cfg.DryRun = opts.dryRun
-	cfg.SecretsEnvOnly = opts.secretsEnvOnly
 
 	cmdRunner := runner.NewLocalRunner()
 	httpClient := runner.NewHTTPClient()
@@ -364,21 +325,10 @@ func secretStoreForConfig(cfg *config.Config, r runner.CommandRunner) secrets.Se
 }
 
 func runMigrate(opts cliOpts) int {
-	var cfg *config.Config
-
-	if opts.configPath != "" {
-		var err error
-		cfg, err = config.LoadFromFile(opts.configPath)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
-			return 1
-		}
-	} else {
-		cfg = config.DefaultConfig()
-	}
-
-	if opts.composeDir != "" {
-		cfg.ComposeDir = opts.composeDir
+	cfg, err := config.LoadWithOverrides(opts.configPath, migrateConfigOverrides(opts))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
+		return 1
 	}
 
 	cmdRunner := runner.NewLocalRunner()
@@ -409,21 +359,10 @@ func runMigrate(opts cliOpts) int {
 }
 
 func runOAuthSetup(opts cliOpts) int {
-	var cfg *config.Config
-
-	if opts.configPath != "" {
-		var err error
-		cfg, err = config.LoadFromFile(opts.configPath)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
-			return 1
-		}
-	} else {
-		cfg = config.DefaultConfig()
-	}
-
-	if opts.domain != "" {
-		cfg.Domain = opts.domain
+	cfg, err := config.LoadWithOverrides(opts.configPath, oauthSetupConfigOverrides(opts))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
+		return 1
 	}
 	if cfg.Domain == "" {
 		fmt.Fprintln(os.Stderr, "Config validation error: domain is required")
@@ -437,7 +376,7 @@ func runOAuthSetup(opts cliOpts) int {
 		opts.cloudflareAPIToken = os.Getenv("CLOUDFLARE_API_TOKEN")
 	}
 
-	_, err := cli.RunOAuthSetup(context.Background(), os.Stdout, cfg, cli.OAuthSetupOptions{
+	_, err = cli.RunOAuthSetup(context.Background(), os.Stdout, cfg, cli.OAuthSetupOptions{
 		CreateTurnstile:     opts.createTurnstile,
 		CloudflareAccountID: opts.cloudflareAccountID,
 		CloudflareAPIToken:  opts.cloudflareAPIToken,
@@ -472,12 +411,10 @@ func runPaperclip(opts cliOpts, args []string) int {
 		return 1
 	}
 
-	cfg := config.DefaultConfig()
-	if opts.domain != "" {
-		cfg.Domain = opts.domain
-	}
-	if opts.composeDir != "" {
-		cfg.ComposeDir = opts.composeDir
+	cfg, err := config.LoadWithOverrides(opts.configPath, paperclipConfigOverrides(opts))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
+		return 1
 	}
 	apiBase := opts.paperclipAPIBase
 	if apiBase == "" {
@@ -503,20 +440,10 @@ func runPaperclip(opts cliOpts, args []string) int {
 }
 
 func runRecovery(opts cliOpts, args []string) int {
-	cfg := config.DefaultConfig()
-	if opts.configPath != "" {
-		loaded, err := config.LoadFromFile(opts.configPath)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
-			return 1
-		}
-		cfg = loaded
-	}
-	if opts.domain != "" {
-		cfg.Domain = opts.domain
-	}
-	if opts.composeDir != "" {
-		cfg.ComposeDir = opts.composeDir
+	cfg, err := config.LoadWithOverrides(opts.configPath, recoveryConfigOverrides(opts))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
+		return 1
 	}
 	if cfg.Domain == "" {
 		cfg.Domain = "caboose-ai.io"
