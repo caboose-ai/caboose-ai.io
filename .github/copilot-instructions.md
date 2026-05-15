@@ -93,6 +93,9 @@ approves a runtime mutation.
 - `homelab service <slug> smoke` runs the manifest-owned `smoke_flow`; leave
   health-only services without a flow.
 - Run tests: `go test ./...`
+- Run format checks: `mise run fmt`
+- Run lint checks: `mise run lint`
+- Run vulnerability checks: `mise run vulncheck`
 - Run smoke tests: `mise run sso:check` (full) or `mise run sso:check-quick` (API only)
 - Run MCP endpoint checks: `mise run mcp:probe` locally and `mise run mcp:probe-external` publicly
 - Run MCP access setup via `homelab mcp access setup`, approve client blobs with `homelab mcp access approve`, and request/import/token from `homelab-mcp access`.

@@ -116,6 +116,15 @@ one registry. The shared `ServiceConfigurator` contract lives in
 # Build
 mise run build
 
+# Format Go packages
+mise run fmt
+
+# Lint Go packages
+mise run lint
+
+# Check for known vulnerabilities
+mise run vulncheck
+
 # Build the homelab CLI
 mise run homelab:build
 
@@ -212,6 +221,8 @@ require explicit human approval before being run against live state.
 
 ```bash
 go test ./...                       # unit tests
+mise run lint                       # golangci-lint
+mise run vulncheck                  # govulncheck
 
 # SSO smoke tests (requires live stack running)
 mise run sso:check                  # full suite: config + endpoints + browser login

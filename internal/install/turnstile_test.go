@@ -20,11 +20,11 @@ func TestResolveTurnstileCredentials(t *testing.T) {
 		promptCalled    bool
 	}{
 		{
-			name:         "config provides both — stored to secrets, no prompt called",
-			cfgSiteKey:   "cfg-site",
-			cfgSecretKey: "cfg-secret",
-			secretsData:  map[string]string{},
-			wantSiteKey:  "cfg-site",
+			name:          "config provides both — stored to secrets, no prompt called",
+			cfgSiteKey:    "cfg-site",
+			cfgSecretKey:  "cfg-secret",
+			secretsData:   map[string]string{},
+			wantSiteKey:   "cfg-site",
 			wantSecretKey: "cfg-secret",
 			wantInSecrets: map[string]string{
 				"TURNSTILE_SITE_KEY":   "cfg-site",
@@ -33,7 +33,7 @@ func TestResolveTurnstileCredentials(t *testing.T) {
 			promptCalled: false,
 		},
 		{
-			name:        "secrets store provides both — stored to config",
+			name: "secrets store provides both — stored to config",
 			secretsData: map[string]string{
 				"TURNSTILE_SITE_KEY":   "op-site",
 				"TURNSTILE_SECRET_KEY": "op-secret",
@@ -62,7 +62,7 @@ func TestResolveTurnstileCredentials(t *testing.T) {
 			promptCalled: true,
 		},
 		{
-			name:        "site key provided but secret key empty — skip",
+			name: "site key provided but secret key empty — skip",
 			secretsData: map[string]string{
 				"TURNSTILE_SITE_KEY": "op-site",
 			},

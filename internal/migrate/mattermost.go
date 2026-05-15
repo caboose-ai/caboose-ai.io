@@ -18,18 +18,18 @@ type Step struct {
 }
 
 type Mattermost struct {
-	Runner        runner.CommandRunner
-	Compose       *docker.ComposeClient
-	DockerExec    *docker.ExecClient
-	DumpPath      string
-	DataDir       string
-	Container     string
-	DBContainer   string
-	DBUser        string
-	DBName        string
-	PollInterval  time.Duration
-	PollTimeout   time.Duration
-	ProgressFn    func(Step)
+	Runner       runner.CommandRunner
+	Compose      *docker.ComposeClient
+	DockerExec   *docker.ExecClient
+	DumpPath     string
+	DataDir      string
+	Container    string
+	DBContainer  string
+	DBUser       string
+	DBName       string
+	PollInterval time.Duration
+	PollTimeout  time.Duration
+	ProgressFn   func(Step)
 }
 
 func NewMattermost(r runner.CommandRunner, compose *docker.ComposeClient, dockerExec *docker.ExecClient) *Mattermost {

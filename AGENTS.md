@@ -20,6 +20,8 @@ These instructions apply to the whole `caboose-ai.io` repository. Nested
 
 - `go test ./...`: run unit tests before claiming Go changes are complete.
 - `go build ./...`: build all packages and binaries.
+- `mise run lint`: run repository golangci-lint checks.
+- `mise run vulncheck`: run govulncheck across repository packages.
 - `mise run test`: repo wrapper for verbose Go tests.
 - `mise run sso:check-quick`: live Authentik API smoke checks.
 - `mise run sso:check`: full live SSO smoke suite.

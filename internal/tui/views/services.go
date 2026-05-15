@@ -6,8 +6,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/caboose-ai/caboose-ai.io/internal/install"
-	"github.com/caboose-ai/caboose-ai.io/internal/tui/styles"
 	"github.com/caboose-ai/caboose-ai.io/internal/tui/components"
+	"github.com/caboose-ai/caboose-ai.io/internal/tui/styles"
 )
 
 type AllServicesConfiguredMsg struct {

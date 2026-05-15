@@ -538,12 +538,18 @@ func (s *Suite) ScreenshotOnFailure(t *testing.T, page *rod.Page) {
 	}
 
 	dir := filepath.Join(testdataDir(), "failures")
-	os.MkdirAll(dir, 0755)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Logf("Screenshot directory unavailable: %s: %v", dir, err)
+		return
+	}
 
 	name := fmt.Sprintf("%s-%d.png", safeName(t.Name()), time.Now().Unix())
 	path := filepath.Join(dir, name)
 	data := page.MustScreenshot()
-	os.WriteFile(path, data, 0644)
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		t.Logf("Screenshot write failed: %s: %v", path, err)
+		return
+	}
 	t.Logf("Screenshot saved: %s", path)
 }
 
