@@ -119,6 +119,45 @@ func TestLatestCodexRequestAfterHeadIgnoresRequestsBeforeHead(t *testing.T) {
 	}
 }
 
+func TestLatestCodexRequestAfterHeadPaginatesBackwardToHead(t *testing.T) {
+	mock := runner.NewMockRunner()
+	calls := 0
+	mock.OnFunc("gh api graphql", func(args []string) ([]byte, error) {
+		calls++
+		switch calls {
+		case 1:
+			if containsArg(args, "before=cursor-1") {
+				t.Fatalf("first graphql call args = %#v, should not include before cursor", args)
+			}
+			return []byte(`{"data":{"repository":{"pullRequest":{"timelineItems":{"pageInfo":{"hasPreviousPage":true,"startCursor":"cursor-1"},"nodes":[
+{"__typename":"IssueComment","author":{"login":"cxm6467"},"body":"@codex review"}
+]}}}}}`), nil
+		case 2:
+			if !containsArg(args, "before=cursor-1") {
+				t.Fatalf("second graphql call args = %#v, want before cursor", args)
+			}
+			return []byte(`{"data":{"repository":{"pullRequest":{"timelineItems":{"pageInfo":{"hasPreviousPage":false,"startCursor":"cursor-0"},"nodes":[
+{"__typename":"PullRequestCommit","commit":{"oid":"head-sha"}}
+]}}}}}`), nil
+		default:
+			t.Fatalf("unexpected graphql call %d with args %#v", calls, args)
+			return nil, nil
+		}
+	})
+
+	got, err := latestCodexRequestAfterHead(context.Background(), mock, "caboose-ai/ai-skills", 6, "head-sha")
+
+	if err != nil {
+		t.Fatalf("latestCodexRequestAfterHead() error = %v", err)
+	}
+	if !got {
+		t.Fatal("latestCodexRequestAfterHead() = false, want true")
+	}
+	if calls != 2 {
+		t.Fatalf("graphql calls = %d, want 2", calls)
+	}
+}
+
 func TestFetchReviewCommentsAcceptsEmptyPaginatedOutput(t *testing.T) {
 	mock := runner.NewMockRunner()
 	mock.On("gh api --paginate repos/caboose-ai/ai-skills/pulls/6/comments --jq .[]", []byte("\n"), nil)
@@ -168,4 +207,13 @@ func (contextDeadlineRunner) Run(ctx context.Context, _ string, _ ...string) ([]
 
 func (r contextDeadlineRunner) RunWithStdin(ctx context.Context, _ io.Reader, name string, args ...string) ([]byte, error) {
 	return r.Run(ctx, name, args...)
+}
+
+func containsArg(args []string, want string) bool {
+	for _, arg := range args {
+		if arg == want {
+			return true
+		}
+	}
+	return false
 }

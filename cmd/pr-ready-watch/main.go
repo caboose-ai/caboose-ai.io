@@ -245,42 +245,81 @@ func latestCodexRequestAfterHead(ctx context.Context, commandRunner runner.Comma
 		return false, fmt.Errorf("repository must be owner/name, got %q", repo)
 	}
 
-	out, err := commandRunner.Run(ctx, "gh", "api", "graphql",
-		"-f", "owner="+owner,
-		"-f", "name="+name,
-		"-F", "number="+strconv.Itoa(prNumber),
-		"-f", "query="+timelineQuery)
-	if err != nil {
-		return false, err
-	}
-
-	var response timelineResponse
-	if err := json.Unmarshal(out, &response); err != nil {
-		return false, fmt.Errorf("parse PR timeline JSON: %w", err)
-	}
-
-	seenHead := false
 	latestRequestAfterHead := false
-	for _, node := range response.Data.Repository.PullRequest.TimelineItems.Nodes {
-		switch node.TypeName {
-		case "PullRequestCommit":
-			if strings.EqualFold(strings.TrimSpace(node.Commit.OID), headRefOID) {
-				seenHead = true
-				latestRequestAfterHead = false
-			}
-		case "IssueComment":
-			if seenHead && isCodexRequestComment(node) {
-				latestRequestAfterHead = true
+	before := ""
+	for {
+		out, err := fetchTimelinePage(ctx, commandRunner, owner, name, prNumber, before)
+		if err != nil {
+			return false, err
+		}
+
+		var response timelineResponse
+		if err := json.Unmarshal(out, &response); err != nil {
+			return false, fmt.Errorf("parse PR timeline JSON: %w", err)
+		}
+
+		timeline := response.Data.Repository.PullRequest.TimelineItems
+		for i := len(timeline.Nodes) - 1; i >= 0; i-- {
+			node := timeline.Nodes[i]
+			switch node.TypeName {
+			case "IssueComment":
+				if isCodexRequestComment(node) {
+					latestRequestAfterHead = true
+				}
+			case "PullRequestCommit":
+				if strings.EqualFold(strings.TrimSpace(node.Commit.OID), headRefOID) {
+					return latestRequestAfterHead, nil
+				}
 			}
 		}
+
+		if !timeline.PageInfo.HasPreviousPage || strings.TrimSpace(timeline.PageInfo.StartCursor) == "" {
+			return false, nil
+		}
+		before = timeline.PageInfo.StartCursor
 	}
-	return latestRequestAfterHead, nil
+}
+
+func fetchTimelinePage(ctx context.Context, commandRunner runner.CommandRunner, owner, name string, prNumber int, before string) ([]byte, error) {
+	args := []string{
+		"api", "graphql",
+		"-f", "owner=" + owner,
+		"-f", "name=" + name,
+		"-F", "number=" + strconv.Itoa(prNumber),
+	}
+	if strings.TrimSpace(before) == "" {
+		args = append(args, "-f", "query="+timelineQuery)
+	} else {
+		args = append(args, "-f", "before="+before, "-f", "query="+timelineBeforeQuery)
+	}
+	return commandRunner.Run(ctx, "gh", args...)
 }
 
 const timelineQuery = `query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
     pullRequest(number: $number) {
       timelineItems(last: 100, itemTypes: [PULL_REQUEST_COMMIT, ISSUE_COMMENT]) {
+        pageInfo { hasPreviousPage startCursor }
+        nodes {
+          __typename
+          ... on PullRequestCommit {
+            commit { oid }
+          }
+          ... on IssueComment {
+            author { login }
+            body
+          }
+        }
+      }
+    }
+  }
+}`
+
+const timelineBeforeQuery = `query($owner: String!, $name: String!, $number: Int!, $before: String!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      timelineItems(last: 100, before: $before, itemTypes: [PULL_REQUEST_COMMIT, ISSUE_COMMENT]) {
+        pageInfo { hasPreviousPage startCursor }
         nodes {
           __typename
           ... on PullRequestCommit {
@@ -300,12 +339,18 @@ type timelineResponse struct {
 	Data struct {
 		Repository struct {
 			PullRequest struct {
-				TimelineItems struct {
-					Nodes []timelineNode `json:"nodes"`
-				} `json:"timelineItems"`
+				TimelineItems timelineItems `json:"timelineItems"`
 			} `json:"pullRequest"`
 		} `json:"repository"`
 	} `json:"data"`
+}
+
+type timelineItems struct {
+	PageInfo struct {
+		HasPreviousPage bool   `json:"hasPreviousPage"`
+		StartCursor     string `json:"startCursor"`
+	} `json:"pageInfo"`
+	Nodes []timelineNode `json:"nodes"`
 }
 
 type timelineNode struct {
