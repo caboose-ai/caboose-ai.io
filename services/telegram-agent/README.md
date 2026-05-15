@@ -24,6 +24,10 @@ Optional:
 export TELEGRAM_DEFAULT_MODEL=github-copilot/claude-opus-4.6
 export TELEGRAM_ALLOWED_MODELS=github-copilot/claude-opus-4.6,github-copilot/gpt-5.3-codex,ollama/qwen3:14b,ollama/qwen3:8b
 export TELEGRAM_REQUIRE_CONFIRMATION=true
+export HOMELAB_MCP_CONFIG=/home/caboose/dev/caboose-ai.io/homelab.yml
+export HOMELAB_MCP_BINARY=/path/to/homelab-mcp
+export HOMELAB_MCP_WORKDIR=/home/caboose/dev/caboose-ai.io
+export HOMELAB_MCP_TIMEOUT=2m
 ```
 
 `TELEGRAM_REQUIRE_CONFIRMATION` is retained for compatibility with existing
@@ -51,6 +55,10 @@ Supported Telegram commands:
 /model
 /model <provider/model>
 /status
+/lab status
+/lab docker
+/lab service <slug>
+/lab ask <prompt>
 ```
 
 `/agent <role> <task>` drafts a role-scoped plan. The prompt requires intended
@@ -65,6 +73,13 @@ other runtime mutations.
 Agent plans should prefer self-hosted delivery first: Forgejo/Gitea branches or
 PRs where applicable, Woodpecker CI for validation, and Docker inspection
 through Portainer, MCP, or CLI before changing runtime state.
+
+`/lab` commands use the local Homelab MCP server over stdio. By default the bot
+generates a temporary MCP config from `HOMELAB_*` environment values and runs
+`go run -buildvcs=false ./cmd/mcp --config <tempfile>`. Set
+`HOMELAB_MCP_CONFIG`, `HOMELAB_MCP_BINARY`, or `HOMELAB_MCP_WORKDIR` to pin the
+MCP runtime path. The supported MCP surface is intentionally narrow: full-stack
+health, Docker listing, per-service status resources, and `agent_invoke`.
 
 ## PR Readiness Notifications
 
