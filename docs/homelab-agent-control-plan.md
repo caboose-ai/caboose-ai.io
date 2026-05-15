@@ -401,6 +401,10 @@ For new apps, websites, and APIs:
   operator, and release assistant.
 - Wire Forgejo, Woodpecker, SonarQube, and Telegram notifications into the PR
   lifecycle.
+- Keep Paperclip implementation work on the internal delivery route: Forgejo
+  `paperclip/*` branches and PRs, Woodpecker evidence from `.woodpecker.yml`,
+  and Portainer inspection-only until a human explicitly approves runtime
+  mutation.
 - Add templates for new services, skills, APIs, apps, websites, and runbooks.
 - Add local-first model routing with explicit external-token confirmation.
 

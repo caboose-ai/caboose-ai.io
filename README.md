@@ -31,6 +31,11 @@ Portainer gives Docker visibility for approved operational handoffs. Paperclip
 is the planning and audit ledger; confirmed execution still routes through
 approved OpenClaw, Telegram, MCP, Homelab CLI, PR, or Portainer handoffs, and
 Docker mutations remain confirmation-gated.
+The `paperclip:seed` profile now stores that route in each Paperclip project
+workspace: local agents should push `paperclip/*` branches to the `forgejo`
+remote, open Forgejo pull requests, attach Woodpecker evidence from
+`https://ci.caboose-ai.io`, and keep Portainer at `https://docker.caboose-ai.io`
+inspection-only unless a human approves an ops mutation.
 
 The installer also completes first-run setup for services that expose a product
 setup or local-login boundary before they can participate in the SSO smoke
@@ -141,7 +146,10 @@ mise run service:smoke -- forgejo
 mise run paperclip:up
 mise run paperclip:status
 mise run paperclip:smoke
+mise run paperclip:forgejo-remote
 mise run paperclip:seed
+# Optional override for a differently named internal Forgejo repository
+mise run paperclip:seed -- --forgejo-repo-url https://git.caboose-ai.io/<owner>/<repo>.git
 
 # Telegram agent bridge
 mise run telegram-agent:run
@@ -235,7 +243,8 @@ manifest-owned flow, for example `mise run paperclip:smoke`.
 - **Forgejo + Woodpecker + Portainer** self-hosted delivery loop — Forgejo is
   the branch/PR source, Woodpecker is the CI verification surface, and
   Portainer is Docker visibility plus approved operational handoff rather than
-  an unchecked executor
+  an unchecked executor. `.woodpecker.yml` mirrors the GitHub build/test gate
+  for repositories enabled in Woodpecker.
 - **OpenClaw** external runtime — tracked for URL, Authentik proxy, dashboard,
   smoke, and health metadata without claiming a local compose service
 - **Telegram Agent Bridge** external runtime — host-run long-polling bot that

@@ -11,6 +11,7 @@ HOMELAB_MCP_HTTP_ADDR = "127.0.0.1:8090"
 HOMELAB_MCP_EXTERNAL_HOST = "mcp.caboose-ai.io"
 HOMELAB_MCP_EXTERNAL_URL = "https://mcp.caboose-ai.io"
 HOMELAB_MCP_SERVICE = "homelab-mcp.service"
+PAPERCLIP_FORGEJO_REPO_URL = "https://git.caboose-ai.io/caboose-ai/caboose-ai.io.git"
 
 [tasks.build]
 description = "Build all binaries"
@@ -84,7 +85,11 @@ run = "go run ./cmd/homelab oauth-setup --domain \"$HOMELAB_DOMAIN\""
 
 [tasks."paperclip:seed"]
 description = "Seed the Paperclip software-shop company profile"
-run = 'set -a; [ ! -f "$HOMELAB_COMPOSE_DIR/.env" ] || . "$HOMELAB_COMPOSE_DIR/.env"; set +a; go run ./cmd/homelab paperclip seed-company --profile software-shop --repo "${PAPERCLIP_WORKSPACE_ROOT:-/home/caboose/dev/caboose-ai.io}"'
+run = 'set -a; [ ! -f "$HOMELAB_COMPOSE_DIR/.env" ] || . "$HOMELAB_COMPOSE_DIR/.env"; set +a; go run ./cmd/homelab paperclip seed-company --profile software-shop --repo "${PAPERCLIP_WORKSPACE_ROOT:-/home/caboose/dev/caboose-ai.io}" --forgejo-repo-url "${PAPERCLIP_FORGEJO_REPO_URL:-https://git.caboose-ai.io/caboose-ai/caboose-ai.io.git}"'
+
+[tasks."paperclip:forgejo-remote"]
+description = "Ensure the local checkout has the Forgejo remote Paperclip should push to"
+run = 'repo="${PAPERCLIP_FORGEJO_REPO_URL:-https://git.caboose-ai.io/caboose-ai/caboose-ai.io.git}"; if git remote get-url forgejo >/dev/null 2>&1; then git remote set-url forgejo "$repo"; else git remote add forgejo "$repo"; fi; git remote get-url forgejo'
 
 [tasks."paperclip:up"]
 description = "Start the optional Paperclip profile"

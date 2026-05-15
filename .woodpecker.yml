@@ -1,0 +1,15 @@
+steps:
+  - name: release-helper-tests
+    image: ghcr.io/astral-sh/uv:python3.13-bookworm-slim
+    commands:
+      - uv run python -m unittest discover -s .github/scripts -p '*_test.py'
+
+  - name: go-test-build
+    image: golang:1.26
+    commands:
+      - go mod download
+      - go test ./...
+      - go build -buildvcs=false ./...
+
+when:
+  - event: [push, pull_request]

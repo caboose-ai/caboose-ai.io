@@ -176,6 +176,11 @@ container recreation.
   route through approved OpenClaw, Telegram, MCP, Homelab CLI, PR, or Portainer
   handoffs; Docker mutations, deploys, restarts, and destructive operations
   require explicit human approval.
+- Paperclip seed data includes the internal delivery route: push `paperclip/*`
+  branches to the `forgejo` remote, open Forgejo PRs, attach Woodpecker evidence
+  from `https://ci.caboose-ai.io`, and treat `https://docker.caboose-ai.io`
+  Portainer access as inspection-only unless the human approves a runtime
+  mutation.
 - OpenClaw is an external runtime tracked by manifest, URL, Authentik proxy,
   dashboard, smoke, and health metadata; do not add a fake compose service for it.
 - Telegram Agent Bridge is an external runtime tracked by manifest and run on

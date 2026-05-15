@@ -74,6 +74,18 @@ type AuthoritySeed struct {
 	Policy string `json:"policy"`
 }
 
+type InternalDeliveryConfig struct {
+	ForgejoURL            string
+	ForgejoRepoURL        string
+	ForgejoRemote         string
+	BranchPrefix          string
+	ReviewSurface         string
+	WoodpeckerURL         string
+	WoodpeckerPipeline    string
+	PortainerURL          string
+	RuntimeMutationPolicy string
+}
+
 type SeedReport struct {
 	CompanyID string
 	Created   map[string]int
@@ -86,8 +98,31 @@ type apiEntity struct {
 	Title string `json:"title"`
 }
 
+func DefaultInternalDeliveryConfig(domain string) InternalDeliveryConfig {
+	domain = strings.TrimSpace(domain)
+	if domain == "" {
+		domain = "caboose-ai.io"
+	}
+	return InternalDeliveryConfig{
+		ForgejoURL:            "https://git." + domain,
+		ForgejoRepoURL:        "https://git." + domain + "/caboose-ai/caboose-ai.io.git",
+		ForgejoRemote:         "forgejo",
+		BranchPrefix:          "paperclip/",
+		ReviewSurface:         "forgejo",
+		WoodpeckerURL:         "https://ci." + domain,
+		WoodpeckerPipeline:    ".woodpecker.yml",
+		PortainerURL:          "https://docker." + domain,
+		RuntimeMutationPolicy: "human_approval_required",
+	}
+}
+
 func SoftwareShopPlan(repo string) SeedPlan {
-	contextDoc := GeneratedContextDocument(repo)
+	return SoftwareShopPlanWithDelivery(repo, DefaultInternalDeliveryConfig("caboose-ai.io"))
+}
+
+func SoftwareShopPlanWithDelivery(repo string, delivery InternalDeliveryConfig) SeedPlan {
+	delivery = delivery.withDefaults()
+	contextDoc := GeneratedContextDocumentWithDelivery(repo, delivery)
 	return SeedPlan{
 		Company: CompanySeed{
 			Name:               "Caboose AI Software Shop",
@@ -101,23 +136,23 @@ func SoftwareShopPlan(repo string) SeedPlan {
 			Status:      "active",
 		},
 		Projects: []ProjectSeed{
-			project("Homelab Core", "Installer, reset flows, compose, Caddy, and Authentik bootstrap.", repo),
-			project("SSO and Identity", "OAuth/OIDC, Authentik proxy apps, recovery flows, and smoke tests.", repo),
-			project("Observability", "Prometheus, Loki, Grafana, health checks, dashboards, and log review.", repo),
-			project("Service Workspaces", "Per-service manifests, configuration, docs, and service lifecycle boundaries.", repo),
-			project("Delivery", "Forgejo, Woodpecker, PRs, release verification, and deployment evidence.", repo),
-			project("Agent Control Plan", "plan-only v1 intake, approval, execution evidence, and follow-up loop for agent work. Use Forgejo/Gitea, Woodpecker, and Portainer as self-hosted delivery/control surfaces; Portainer and Docker mutations remain approval-gated.", repo),
+			projectWithDelivery("Homelab Core", "Installer, reset flows, compose, Caddy, and Authentik bootstrap.", repo, delivery),
+			projectWithDelivery("SSO and Identity", "OAuth/OIDC, Authentik proxy apps, recovery flows, and smoke tests.", repo, delivery),
+			projectWithDelivery("Observability", "Prometheus, Loki, Grafana, health checks, dashboards, and log review.", repo, delivery),
+			projectWithDelivery("Service Workspaces", "Per-service manifests, configuration, docs, and service lifecycle boundaries.", repo, delivery),
+			projectWithDelivery("Delivery", "Forgejo, Woodpecker, PRs, release verification, and deployment evidence.", repo, delivery),
+			projectWithDelivery("Agent Control Plan", "plan-only v1 intake, approval, execution evidence, and follow-up loop for agent work. Use Forgejo/Gitea, Woodpecker, and Portainer as self-hosted delivery/control surfaces; Portainer and Docker mutations remain approval-gated.", repo, delivery),
 		},
 		Agents: []AgentSeed{
-			agent("BoardOwner", "owner", "Board/Owner", "", "Human operator with final approval authority.", repo, 0),
-			agent("CEO/PM", "ceo", "CEO/PM", "BoardOwner", "Triages goals, breaks down work, and requests approvals.", repo, 2000),
-			agent("Architect", "architect", "Architect", "CEO/PM", "Designs repo and service changes, migration plans, and system boundaries.", repo, 1500),
-			agent("BackendEngineer", "engineer", "Backend Engineer", "Architect", "Go installer, MCP, config, and service integration.", repo, 1500),
-			agent("DevOpsSRE", "sre", "DevOps/SRE", "Architect", "Compose, Caddy, Authentik, Docker, metrics, logs, and deployment.", repo, 1500),
-			agent("QAEngineer", "qa", "QA Engineer", "CEO/PM", "Unit tests, smoke tests, Selenium/Rod browser checks, and regression evidence.", repo, 1000),
-			agent("SecurityEngineer", "security", "Security Engineer", "Architect", "Secret handling, Authentik/SSO, Semgrep, and dependency risk.", repo, 1000),
-			agent("UIUXEngineer", "designer", "UI/UX Engineer", "CEO/PM", "Paperclip, Homarr, and Grafana-facing usability and visual review.", repo, 750),
-			agent("RDEngineer", "researcher", "R&D Engineer", "CEO/PM", "Evaluates services, agent runtimes, and automation ideas.", repo, 750),
+			agentWithDelivery("BoardOwner", "owner", "Board/Owner", "", "Human operator with final approval authority.", repo, 0, delivery),
+			agentWithDelivery("CEO/PM", "ceo", "CEO/PM", "BoardOwner", "Triages goals, breaks down work, and requests approvals.", repo, 2000, delivery),
+			agentWithDelivery("Architect", "architect", "Architect", "CEO/PM", "Designs repo and service changes, migration plans, and system boundaries.", repo, 1500, delivery),
+			agentWithDelivery("BackendEngineer", "engineer", "Backend Engineer", "Architect", "Go installer, MCP, config, and service integration.", repo, 1500, delivery),
+			agentWithDelivery("DevOpsSRE", "sre", "DevOps/SRE", "Architect", "Compose, Caddy, Authentik, Docker, metrics, logs, and deployment.", repo, 1500, delivery),
+			agentWithDelivery("QAEngineer", "qa", "QA Engineer", "CEO/PM", "Unit tests, smoke tests, Selenium/Rod browser checks, and regression evidence.", repo, 1000, delivery),
+			agentWithDelivery("SecurityEngineer", "security", "Security Engineer", "Architect", "Secret handling, Authentik/SSO, Semgrep, and dependency risk.", repo, 1000, delivery),
+			agentWithDelivery("UIUXEngineer", "designer", "UI/UX Engineer", "CEO/PM", "Paperclip, Homarr, and Grafana-facing usability and visual review.", repo, 750, delivery),
+			agentWithDelivery("RDEngineer", "researcher", "R&D Engineer", "CEO/PM", "Evaluates services, agent runtimes, and automation ideas.", repo, 750, delivery),
 		},
 		Routines: []RoutineSeed{
 			{Title: "Daily service health and log review", Description: "Check service status, logs, and dashboards; file issues for drift.", Priority: "medium"},
@@ -135,24 +170,35 @@ func SoftwareShopPlan(repo string) SeedPlan {
 }
 
 func GeneratedContextDocument(repo string) string {
-	return fmt.Sprintf("Repo: %s\nKey context: README.md, CLAUDE.md, service manifests, MCP tools, mise tasks, smoke tests, deployment rules, and Authentik SSO contracts. Default mode is plan-only. Use Forgejo/Gitea, Woodpecker, and Portainer as self-hosted delivery/control surfaces, but direct infra execution remains approval-gated. Never deploy, reset, mutate secrets, change firewall rules, or run Portainer/Docker mutation commands without explicit human approval.", repo)
+	return GeneratedContextDocumentWithDelivery(repo, DefaultInternalDeliveryConfig("caboose-ai.io"))
+}
+
+func GeneratedContextDocumentWithDelivery(repo string, delivery InternalDeliveryConfig) string {
+	delivery = delivery.withDefaults()
+	return fmt.Sprintf("Repo: %s\nKey context: README.md, CLAUDE.md, service manifests, MCP tools, mise tasks, smoke tests, deployment rules, and Authentik SSO contracts. Default mode is plan-only. Use Forgejo/Gitea, Woodpecker, and Portainer as self-hosted delivery/control surfaces, but direct infra execution remains approval-gated. For implementation, push Paperclip work to Forgejo remote %s using %s branches, open Forgejo pull requests at %s, attach Woodpecker evidence from %s, and Portainer at %s is inspection-only unless a human explicitly approves a runtime mutation. Never deploy, reset, mutate secrets, change firewall rules, or run Portainer/Docker mutation commands without explicit human approval.", repo, delivery.ForgejoRemote, delivery.BranchPrefix, delivery.ForgejoURL, delivery.WoodpeckerURL, delivery.PortainerURL)
 }
 
 func project(name, description, repo string) ProjectSeed {
+	return projectWithDelivery(name, description, repo, DefaultInternalDeliveryConfig("caboose-ai.io"))
+}
+
+func projectWithDelivery(name, description, repo string, delivery InternalDeliveryConfig) ProjectSeed {
+	delivery = delivery.withDefaults()
+	workspace := delivery.workspace(repo)
 	return ProjectSeed{
 		Name:        name,
 		Description: description,
 		Status:      "planned",
-		Workspace: map[string]any{
-			"name":      "caboose-ai.io",
-			"cwd":       repo,
-			"repoRef":   "main",
-			"isPrimary": true,
-		},
+		Workspace:   workspace,
 	}
 }
 
 func agent(name, role, title, reportsTo, capabilities, repo string, budget int) AgentSeed {
+	return agentWithDelivery(name, role, title, reportsTo, capabilities, repo, budget, DefaultInternalDeliveryConfig("caboose-ai.io"))
+}
+
+func agentWithDelivery(name, role, title, reportsTo, capabilities, repo string, budget int, delivery InternalDeliveryConfig) AgentSeed {
+	delivery = delivery.withDefaults()
 	return AgentSeed{
 		Name:         name,
 		Role:         paperclipRole(role),
@@ -163,9 +209,63 @@ func agent(name, role, title, reportsTo, capabilities, repo string, budget int) 
 		AdapterConfig: map[string]any{
 			"cwd":          repo,
 			"approvalMode": "gated",
-			"instructions": GeneratedContextDocument(repo),
+			"instructions": GeneratedContextDocumentWithDelivery(repo, delivery),
+			"delivery":     delivery.workspace(repo),
 		},
 		BudgetMonthlyCents: budget,
+	}
+}
+
+func (d InternalDeliveryConfig) withDefaults() InternalDeliveryConfig {
+	defaults := DefaultInternalDeliveryConfig("caboose-ai.io")
+	if d.ForgejoURL == "" {
+		d.ForgejoURL = defaults.ForgejoURL
+	}
+	if d.ForgejoRepoURL == "" {
+		d.ForgejoRepoURL = defaults.ForgejoRepoURL
+	}
+	if d.ForgejoRemote == "" {
+		d.ForgejoRemote = defaults.ForgejoRemote
+	}
+	if d.BranchPrefix == "" {
+		d.BranchPrefix = defaults.BranchPrefix
+	}
+	if d.ReviewSurface == "" {
+		d.ReviewSurface = defaults.ReviewSurface
+	}
+	if d.WoodpeckerURL == "" {
+		d.WoodpeckerURL = defaults.WoodpeckerURL
+	}
+	if d.WoodpeckerPipeline == "" {
+		d.WoodpeckerPipeline = defaults.WoodpeckerPipeline
+	}
+	if d.PortainerURL == "" {
+		d.PortainerURL = defaults.PortainerURL
+	}
+	if d.RuntimeMutationPolicy == "" {
+		d.RuntimeMutationPolicy = defaults.RuntimeMutationPolicy
+	}
+	return d
+}
+
+func (d InternalDeliveryConfig) workspace(repo string) map[string]any {
+	return map[string]any{
+		"name":                  "caboose-ai.io",
+		"cwd":                   repo,
+		"repoRef":               "main",
+		"defaultRef":            "main",
+		"isPrimary":             true,
+		"sourceType":            "local_path",
+		"reviewSurface":         d.ReviewSurface,
+		"repoUrl":               d.ForgejoRepoURL,
+		"remoteName":            d.ForgejoRemote,
+		"branchPrefix":          d.BranchPrefix,
+		"ciProvider":            "woodpecker",
+		"ciUrl":                 d.WoodpeckerURL,
+		"ciPipeline":            d.WoodpeckerPipeline,
+		"runtimeSurface":        "portainer",
+		"runtimeInspectionUrl":  d.PortainerURL,
+		"runtimeMutationPolicy": d.RuntimeMutationPolicy,
 	}
 }
 
@@ -183,7 +283,11 @@ func paperclipRole(role string) string {
 }
 
 func SeedSoftwareShop(ctx context.Context, client *Client, repo string) (*SeedReport, error) {
-	plan := SoftwareShopPlan(repo)
+	return SeedSoftwareShopWithDelivery(ctx, client, repo, DefaultInternalDeliveryConfig("caboose-ai.io"))
+}
+
+func SeedSoftwareShopWithDelivery(ctx context.Context, client *Client, repo string, delivery InternalDeliveryConfig) (*SeedReport, error) {
+	plan := SoftwareShopPlanWithDelivery(repo, delivery)
 	report := &SeedReport{Created: map[string]int{}, Existing: map[string]int{}}
 
 	company, created, err := client.ensureCompany(ctx, plan.Company)

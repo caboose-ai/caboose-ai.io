@@ -56,6 +56,11 @@ PRs, Woodpecker CI, and Portainer Docker visibility. Confirmed execution routes
 through approved OpenClaw, Telegram, MCP, Homelab CLI, PR, or Portainer
 handoffs; Docker mutations, deploys, restarts, and destructive operations
 require explicit human approval.
+Seeded Paperclip workspaces carry concrete delivery metadata: `paperclip/*`
+branches go to the `forgejo` remote, review happens as Forgejo pull requests,
+Woodpecker at `https://ci.caboose-ai.io` is the CI evidence source, and
+Portainer at `https://docker.caboose-ai.io` is inspection-only unless a human
+approves a runtime mutation.
 
 ## Conventions
 

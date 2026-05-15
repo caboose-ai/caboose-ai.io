@@ -59,6 +59,36 @@ review. Portainer and Docker mutations are review inputs until a human approves
 execution through OpenClaw, Telegram Agent Bridge, Homelab MCP, or deterministic
 `mise`/`homelab` commands.
 
+### Internal Delivery Wiring
+
+`mise run paperclip:seed` writes concrete delivery metadata into each seeded
+Paperclip project workspace and agent adapter config:
+
+- Forgejo repository: `https://git.caboose-ai.io/caboose-ai/caboose-ai.io.git`
+- Forgejo remote name: `forgejo`
+- Branch prefix: `paperclip/`
+- CI evidence source: Woodpecker at `https://ci.caboose-ai.io`
+- Pipeline file: `.woodpecker.yml`
+- Runtime inspection surface: Portainer at `https://docker.caboose-ai.io`
+- Runtime mutation policy: `human_approval_required`
+
+If the internal repo path differs, reseed with:
+
+```bash
+mise run paperclip:seed -- --forgejo-repo-url https://git.caboose-ai.io/<owner>/<repo>.git
+```
+
+Before assigning implementation work, make sure the local checkout has a
+matching remote:
+
+```bash
+mise run paperclip:forgejo-remote
+```
+
+Override `PAPERCLIP_FORGEJO_REPO_URL` when the internal repository lives at a
+different owner/path. Agents should link Forgejo PRs and Woodpecker runs back to
+the Paperclip task before asking for final human review.
+
 ### Trigger Runbook
 
 1. Start and verify Paperclip:

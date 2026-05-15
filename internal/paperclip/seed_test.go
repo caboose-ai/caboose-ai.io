@@ -41,6 +41,89 @@ func TestSoftwareShopPlanSeedsAgentControlPlanProject(t *testing.T) {
 	}
 }
 
+func TestSoftwareShopPlanSeedsInternalDeliveryWorkspace(t *testing.T) {
+	plan := SoftwareShopPlan("/repo")
+	project := findProject(t, plan, "Delivery")
+
+	want := map[string]any{
+		"sourceType":            "local_path",
+		"reviewSurface":         "forgejo",
+		"repoUrl":               "https://git.caboose-ai.io/caboose-ai/caboose-ai.io.git",
+		"remoteName":            "forgejo",
+		"branchPrefix":          "paperclip/",
+		"ciProvider":            "woodpecker",
+		"ciUrl":                 "https://ci.caboose-ai.io",
+		"ciPipeline":            ".woodpecker.yml",
+		"runtimeSurface":        "portainer",
+		"runtimeInspectionUrl":  "https://docker.caboose-ai.io",
+		"runtimeMutationPolicy": "human_approval_required",
+	}
+	for key, value := range want {
+		if project.Workspace[key] != value {
+			t.Fatalf("workspace[%q] = %v, want %v", key, project.Workspace[key], value)
+		}
+	}
+}
+
+func TestSoftwareShopPlanSupportsCustomInternalDelivery(t *testing.T) {
+	delivery := DefaultInternalDeliveryConfig("example.test")
+	delivery.ForgejoRepoURL = "https://git.example.test/team/repo.git"
+	delivery.ForgejoRemote = "internal"
+	delivery.BranchPrefix = "agent/"
+
+	plan := SoftwareShopPlanWithDelivery("/repo", delivery)
+	project := findProject(t, plan, "Delivery")
+
+	if project.Workspace["repoUrl"] != "https://git.example.test/team/repo.git" {
+		t.Fatalf("repoUrl = %v", project.Workspace["repoUrl"])
+	}
+	if project.Workspace["remoteName"] != "internal" {
+		t.Fatalf("remoteName = %v", project.Workspace["remoteName"])
+	}
+	if project.Workspace["branchPrefix"] != "agent/" {
+		t.Fatalf("branchPrefix = %v", project.Workspace["branchPrefix"])
+	}
+	if project.Workspace["ciUrl"] != "https://ci.example.test" {
+		t.Fatalf("ciUrl = %v", project.Workspace["ciUrl"])
+	}
+	if project.Workspace["runtimeInspectionUrl"] != "https://docker.example.test" {
+		t.Fatalf("runtimeInspectionUrl = %v", project.Workspace["runtimeInspectionUrl"])
+	}
+}
+
+func TestSoftwareShopPlanInstructsAgentsToUseInternalDelivery(t *testing.T) {
+	plan := SoftwareShopPlan("/repo")
+
+	for _, agent := range plan.Agents {
+		delivery, ok := agent.AdapterConfig["delivery"].(map[string]any)
+		if !ok {
+			t.Fatalf("agent %s missing delivery adapter config: %#v", agent.Name, agent.AdapterConfig)
+		}
+		if delivery["reviewSurface"] != "forgejo" {
+			t.Fatalf("agent %s reviewSurface = %v, want forgejo", agent.Name, delivery["reviewSurface"])
+		}
+		if delivery["ciProvider"] != "woodpecker" {
+			t.Fatalf("agent %s ciProvider = %v, want woodpecker", agent.Name, delivery["ciProvider"])
+		}
+		if delivery["runtimeMutationPolicy"] != "human_approval_required" {
+			t.Fatalf("agent %s runtimeMutationPolicy = %v, want human_approval_required", agent.Name, delivery["runtimeMutationPolicy"])
+		}
+	}
+
+	contextDoc := GeneratedContextDocument("/repo")
+	wantContext := []string{
+		"push Paperclip work to Forgejo remote forgejo",
+		"open Forgejo pull requests",
+		"attach Woodpecker evidence from https://ci.caboose-ai.io",
+		"Portainer at https://docker.caboose-ai.io is inspection-only",
+	}
+	for _, want := range wantContext {
+		if !strings.Contains(contextDoc, want) {
+			t.Fatalf("generated context missing %q: %s", want, contextDoc)
+		}
+	}
+}
+
 func TestSoftwareShopPlanSeedsAgentControlRoutines(t *testing.T) {
 	plan := SoftwareShopPlan("/repo")
 	want := []string{
