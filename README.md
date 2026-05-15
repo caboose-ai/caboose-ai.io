@@ -258,3 +258,10 @@ Three files are kept in sync and must be updated on every PR to main:
 | `README.md` | Humans |
 
 CI checks this via `.github/workflows/docs-check.yml`. Add the `docs-exempt` label to skip.
+
+## Security
+
+- Do not commit `.env` or live secrets. Use 1Password or local untracked files.
+- Example variables live in `dev/homelab/.env.example`.
+- CI runs Gitleaks secret scanning on new push and PR commit ranges.
+- If any secret is ever committed, treat it as compromised and rotate it.
