@@ -66,6 +66,10 @@ func TestFetchPRLoadsReviewComments(t *testing.T) {
 	mock.On("gh pr view 6 --json", []byte(`{"number":6,"headRefOid":"abc123"}`), nil)
 	mock.On("gh api --paginate repos/caboose-ai/ai-skills/pulls/6/comments --jq .[]", []byte(`{"user":{"login":"chatgpt-codex-connector"},"body":"Fix it","commit_id":"abc123"}
 {"user":{"login":"reviewer"},"body":"Other","commit_id":"abc123"}`), nil)
+	mock.On("gh api graphql", []byte(`{"data":{"repository":{"pullRequest":{"timelineItems":{"nodes":[
+{"__typename":"PullRequestCommit","commit":{"oid":"abc123"}},
+{"__typename":"IssueComment","author":{"login":"cxm6467"},"body":"@codex review"}
+]}}}}}`), nil)
 
 	pr, err := fetchPR(context.Background(), mock, options{Repo: "caboose-ai/ai-skills", PRNumber: 6})
 
@@ -74,6 +78,44 @@ func TestFetchPRLoadsReviewComments(t *testing.T) {
 	}
 	if len(pr.ReviewComments) != 2 {
 		t.Fatalf("ReviewComments = %v, want two review comments", pr.ReviewComments)
+	}
+	if !pr.LatestRequestAfterHead {
+		t.Fatal("LatestRequestAfterHead = false, want true")
+	}
+}
+
+func TestLatestCodexRequestAfterHeadUsesTimelineOrder(t *testing.T) {
+	mock := runner.NewMockRunner()
+	mock.On("gh api graphql", []byte(`{"data":{"repository":{"pullRequest":{"timelineItems":{"nodes":[
+{"__typename":"IssueComment","author":{"login":"cxm6467"},"body":"@codex review"},
+{"__typename":"PullRequestCommit","commit":{"oid":"head-sha"}},
+{"__typename":"IssueComment","author":{"login":"cxm6467"},"body":"@codex review"}
+]}}}}}`), nil)
+
+	got, err := latestCodexRequestAfterHead(context.Background(), mock, "caboose-ai/ai-skills", 6, "head-sha")
+
+	if err != nil {
+		t.Fatalf("latestCodexRequestAfterHead() error = %v", err)
+	}
+	if !got {
+		t.Fatal("latestCodexRequestAfterHead() = false, want true")
+	}
+}
+
+func TestLatestCodexRequestAfterHeadIgnoresRequestsBeforeHead(t *testing.T) {
+	mock := runner.NewMockRunner()
+	mock.On("gh api graphql", []byte(`{"data":{"repository":{"pullRequest":{"timelineItems":{"nodes":[
+{"__typename":"IssueComment","author":{"login":"cxm6467"},"body":"@codex review"},
+{"__typename":"PullRequestCommit","commit":{"oid":"head-sha"}}
+]}}}}}`), nil)
+
+	got, err := latestCodexRequestAfterHead(context.Background(), mock, "caboose-ai/ai-skills", 6, "head-sha")
+
+	if err != nil {
+		t.Fatalf("latestCodexRequestAfterHead() error = %v", err)
+	}
+	if got {
+		t.Fatal("latestCodexRequestAfterHead() = true, want false")
 	}
 }
 

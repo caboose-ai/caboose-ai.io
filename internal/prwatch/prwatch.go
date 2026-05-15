@@ -16,25 +16,26 @@ const (
 )
 
 type PullRequest struct {
-	Number              int              `json:"number"`
-	Title               string           `json:"title"`
-	URL                 string           `json:"url"`
-	State               string           `json:"state"`
-	IsDraft             bool             `json:"isDraft"`
-	MergeStateStatus    string           `json:"mergeStateStatus"`
-	ReviewDecision      string           `json:"reviewDecision"`
-	Comments            []Comment        `json:"comments"`
-	Reviews             []Review         `json:"reviews"`
-	LatestReviews       []Review         `json:"latestReviews"`
-	ReviewComments      []ReviewComment  `json:"reviewComments"`
-	Commits             []Commit         `json:"commits"`
-	StatusCheckRollup   []map[string]any `json:"statusCheckRollup"`
-	ReviewRequests      []ReviewRequest  `json:"reviewRequests"`
-	HeadRefName         string           `json:"headRefName"`
-	HeadRefOID          string           `json:"headRefOid"`
-	BaseRefName         string           `json:"baseRefName"`
-	HeadRepository      Repository       `json:"headRepository"`
-	HeadRepositoryOwner RepositoryOwner  `json:"headRepositoryOwner"`
+	Number                 int              `json:"number"`
+	Title                  string           `json:"title"`
+	URL                    string           `json:"url"`
+	State                  string           `json:"state"`
+	IsDraft                bool             `json:"isDraft"`
+	MergeStateStatus       string           `json:"mergeStateStatus"`
+	ReviewDecision         string           `json:"reviewDecision"`
+	Comments               []Comment        `json:"comments"`
+	Reviews                []Review         `json:"reviews"`
+	LatestReviews          []Review         `json:"latestReviews"`
+	ReviewComments         []ReviewComment  `json:"reviewComments"`
+	Commits                []Commit         `json:"commits"`
+	StatusCheckRollup      []map[string]any `json:"statusCheckRollup"`
+	ReviewRequests         []ReviewRequest  `json:"reviewRequests"`
+	HeadRefName            string           `json:"headRefName"`
+	HeadRefOID             string           `json:"headRefOid"`
+	LatestRequestAfterHead bool             `json:"-"`
+	BaseRefName            string           `json:"baseRefName"`
+	HeadRepository         Repository       `json:"headRepository"`
+	HeadRepositoryOwner    RepositoryOwner  `json:"headRepositoryOwner"`
 }
 
 type User struct {
@@ -113,8 +114,7 @@ func Assess(pr PullRequest) Assessment {
 		}
 	}
 	latestRequest := latestCodexRequest(pr.Comments)
-	headSignalTime := currentHeadSignalTime(pr)
-	if count := currentHeadCodexReviewCommentCount(pr, latestRequest, headSignalTime); count > 0 {
+	if count := currentHeadCodexReviewCommentCount(pr, latestRequest, pr.LatestRequestAfterHead); count > 0 {
 		blockers = append(blockers, pluralize(count, "Codex review has %d current-head comment", "Codex review has %d current-head comments"))
 	}
 
@@ -153,7 +153,7 @@ func Assess(pr PullRequest) Assessment {
 		notes = append(notes, "draft PR: human should mark ready after final review")
 	}
 
-	if !hasCodexReview(pr, latestRequest, headSignalTime) {
+	if !hasCodexReview(pr, latestRequest) {
 		waiting = append(waiting, "Codex review has not completed")
 	} else {
 		notes = append(notes, "Codex review completed")
@@ -249,12 +249,12 @@ func summarizeChecks(items []map[string]any) checkSummary {
 	return summary
 }
 
-func hasCodexReview(pr PullRequest, latestRequest, headSignalTime time.Time) bool {
+func hasCodexReview(pr PullRequest, latestRequest time.Time) bool {
 	for _, comment := range pr.Comments {
 		if isCodexActor(comment.Author.Login) &&
 			looksLikeCompletedCodexReview(comment.Body) &&
 			completedAfter(comment.CreatedAt, latestRequest) &&
-			commentMatchesHeadSignal(comment, pr.HeadRefOID, headSignalTime) {
+			commentMatchesHead(comment, pr.HeadRefOID, pr.LatestRequestAfterHead) {
 			return true
 		}
 	}
@@ -303,25 +303,7 @@ func reviewMatchesHead(review Review, headRefOID string) bool {
 	return headRefOID == "" || (reviewOID != "" && strings.EqualFold(reviewOID, headRefOID))
 }
 
-func currentHeadSignalTime(pr PullRequest) time.Time {
-	if strings.TrimSpace(pr.HeadRefOID) == "" {
-		return time.Time{}
-	}
-	var earliest time.Time
-	for _, item := range pr.StatusCheckRollup {
-		raw := firstString(item, "startedAt", "createdAt")
-		startedAt, ok := parseGitHubTime(raw)
-		if !ok {
-			continue
-		}
-		if earliest.IsZero() || startedAt.Before(earliest) {
-			earliest = startedAt
-		}
-	}
-	return earliest
-}
-
-func commentMatchesHeadSignal(comment Comment, headRefOID string, headSignalTime time.Time) bool {
+func commentMatchesHead(comment Comment, headRefOID string, latestRequestAfterHead bool) bool {
 	headRefOID = strings.TrimSpace(headRefOID)
 	if headRefOID == "" {
 		return true
@@ -329,7 +311,7 @@ func commentMatchesHeadSignal(comment Comment, headRefOID string, headSignalTime
 	if bodyMentionsHead(comment.Body, headRefOID) {
 		return true
 	}
-	return !headSignalTime.IsZero() && completedAfter(comment.CreatedAt, headSignalTime)
+	return latestRequestAfterHead
 }
 
 func bodyMentionsHead(body, headRefOID string) bool {
@@ -350,13 +332,13 @@ func parseGitHubTime(raw string) (time.Time, bool) {
 	return parsed, err == nil
 }
 
-func currentHeadCodexReviewCommentCount(pr PullRequest, latestRequest, headSignalTime time.Time) int {
+func currentHeadCodexReviewCommentCount(pr PullRequest, latestRequest time.Time, latestRequestAfterHead bool) int {
 	var count int
 	for _, comment := range pr.ReviewComments {
 		if !isCodexActor(comment.Author.Login) {
 			continue
 		}
-		if !reviewCommentMatchesHead(comment, pr.HeadRefOID, latestRequest, headSignalTime) {
+		if !reviewCommentMatchesHead(comment, pr.HeadRefOID, latestRequest, latestRequestAfterHead) {
 			continue
 		}
 		count++
@@ -364,7 +346,7 @@ func currentHeadCodexReviewCommentCount(pr PullRequest, latestRequest, headSigna
 	return count
 }
 
-func reviewCommentMatchesHead(comment ReviewComment, headRefOID string, latestRequest, headSignalTime time.Time) bool {
+func reviewCommentMatchesHead(comment ReviewComment, headRefOID string, latestRequest time.Time, latestRequestAfterHead bool) bool {
 	headRefOID = strings.TrimSpace(headRefOID)
 	if headRefOID == "" {
 		return true
@@ -376,7 +358,7 @@ func reviewCommentMatchesHead(comment ReviewComment, headRefOID string, latestRe
 		}
 		return strings.EqualFold(strings.TrimSpace(comment.CommitID), headRefOID) &&
 			completedAfter(comment.CreatedAt, latestRequest) &&
-			(headSignalTime.IsZero() || completedAfter(comment.CreatedAt, headSignalTime))
+			latestRequestAfterHead
 	}
 	return strings.EqualFold(strings.TrimSpace(comment.CommitID), headRefOID)
 }

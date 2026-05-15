@@ -186,6 +186,11 @@ func fetchPR(ctx context.Context, commandRunner runner.CommandRunner, opts optio
 		return prwatch.PullRequest{}, err
 	}
 	pr.ReviewComments = reviewComments
+	latestRequestAfterHead, err := latestCodexRequestAfterHead(ctx, commandRunner, repo, pr.Number, pr.HeadRefOID)
+	if err != nil {
+		return prwatch.PullRequest{}, err
+	}
+	pr.LatestRequestAfterHead = latestRequestAfterHead
 	return pr, nil
 }
 
@@ -228,6 +233,94 @@ func fetchReviewComments(ctx context.Context, commandRunner runner.CommandRunner
 		comments = append(comments, comment)
 	}
 	return comments, nil
+}
+
+func latestCodexRequestAfterHead(ctx context.Context, commandRunner runner.CommandRunner, repo string, prNumber int, headRefOID string) (bool, error) {
+	headRefOID = strings.TrimSpace(headRefOID)
+	if strings.TrimSpace(repo) == "" || prNumber <= 0 || headRefOID == "" {
+		return false, nil
+	}
+	owner, name, ok := strings.Cut(strings.TrimSpace(repo), "/")
+	if !ok || owner == "" || name == "" {
+		return false, fmt.Errorf("repository must be owner/name, got %q", repo)
+	}
+
+	out, err := commandRunner.Run(ctx, "gh", "api", "graphql",
+		"-f", "owner="+owner,
+		"-f", "name="+name,
+		"-F", "number="+strconv.Itoa(prNumber),
+		"-f", "query="+timelineQuery)
+	if err != nil {
+		return false, err
+	}
+
+	var response timelineResponse
+	if err := json.Unmarshal(out, &response); err != nil {
+		return false, fmt.Errorf("parse PR timeline JSON: %w", err)
+	}
+
+	seenHead := false
+	latestRequestAfterHead := false
+	for _, node := range response.Data.Repository.PullRequest.TimelineItems.Nodes {
+		switch node.TypeName {
+		case "PullRequestCommit":
+			if strings.EqualFold(strings.TrimSpace(node.Commit.OID), headRefOID) {
+				seenHead = true
+				latestRequestAfterHead = false
+			}
+		case "IssueComment":
+			if seenHead && isCodexRequestComment(node) {
+				latestRequestAfterHead = true
+			}
+		}
+	}
+	return latestRequestAfterHead, nil
+}
+
+const timelineQuery = `query($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      timelineItems(last: 100, itemTypes: [PULL_REQUEST_COMMIT, ISSUE_COMMENT]) {
+        nodes {
+          __typename
+          ... on PullRequestCommit {
+            commit { oid }
+          }
+          ... on IssueComment {
+            author { login }
+            body
+          }
+        }
+      }
+    }
+  }
+}`
+
+type timelineResponse struct {
+	Data struct {
+		Repository struct {
+			PullRequest struct {
+				TimelineItems struct {
+					Nodes []timelineNode `json:"nodes"`
+				} `json:"timelineItems"`
+			} `json:"pullRequest"`
+		} `json:"repository"`
+	} `json:"data"`
+}
+
+type timelineNode struct {
+	TypeName string `json:"__typename"`
+	Commit   struct {
+		OID string `json:"oid"`
+	} `json:"commit"`
+	Author struct {
+		Login string `json:"login"`
+	} `json:"author"`
+	Body string `json:"body"`
+}
+
+func isCodexRequestComment(node timelineNode) bool {
+	return strings.EqualFold(strings.TrimSpace(node.Body), "@codex review")
 }
 
 func prViewArgs(opts options) []string {
