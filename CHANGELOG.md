@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/caboose-ai/caboose-ai.io/compare/v0.4.0...v0.4.1) (2026-05-15)
+
+
+### Bug Fixes
+
+* **paperclip:** restore local agent runtime path ([#61](https://github.com/caboose-ai/caboose-ai.io/issues/61)) ([4135f80](https://github.com/caboose-ai/caboose-ai.io/commit/4135f80bea05a9754600b7d266ff147c6941c08a))
+
 ## [0.4.0](https://github.com/caboose-ai/caboose-ai.io/compare/v0.3.1...v0.4.0) (2026-05-15)
 
 
