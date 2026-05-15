@@ -103,7 +103,11 @@ require explicit human approval.
 
 - Services in `dev/homelab/docker-compose.yml`
 - Secrets via `${VAR}` env var substitution from `.env` file
-- Internal-only DB networks (`*-internal` with `internal: true`)
+- Internal-only DB networks (`*-internal` with `internal: true`), except
+  Paperclip's private DB bridge which must allow Docker to publish the
+  loopback-only DB port used by the host-network Paperclip app.
+- Paperclip's public URL remains Authentik-gated; host-network Paperclip agents
+  use `PAPERCLIP_API_URL=http://127.0.0.1:3100` for local API calls.
 - App-facing services join the `apps` network
 - Homarr is pinned to `ghcr.io/homarr-labs/homarr:v1.61.0`, persists `/appdata`
   in `homarr_data`, and uses native Authentik OIDC for the root homepage.
@@ -183,7 +187,7 @@ go run ./cmd/homelab oauth-setup --domain caboose-ai.io
 CLOUDFLARE_ACCOUNT_ID=... CLOUDFLARE_API_TOKEN=... go run ./cmd/homelab oauth-setup --domain caboose-ai.io --create-turnstile
 go run ./cmd/homelab install --domain caboose-ai.io --compose-dir dev/homelab
 go run ./cmd/homelab service --domain caboose-ai.io --compose-dir dev/homelab forgejo status
-go run ./cmd/homelab paperclip seed-company --profile software-shop --repo /home/caboose/dev/caboose-ai.io
+mise run paperclip:seed
 go run ./cmd/telegram-agent notify "task finished"
 go run ./cmd/mcp access request --name "codex on laptop" --out mcp-request.json
 go run ./cmd/homelab mcp access setup

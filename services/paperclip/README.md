@@ -19,6 +19,21 @@ mise run paperclip:seed
 and reads `PAPERCLIP_API_KEY` from the environment or configured secret store
 when the API requires bearer auth.
 
+The Paperclip container bind-mounts `PAPERCLIP_WORKSPACE_ROOT`, defaulting to
+`/home/caboose/dev/caboose-ai.io`, at the same path inside the container. Keep
+this value aligned with the repo path passed to `paperclip:seed`; otherwise
+Paperclip-managed agent runs will skip the workspace because the local path is
+not available inside the container.
+
+The Paperclip app runs with `network_mode: host` and reaches Postgres through
+`${PAPERCLIP_DB_BIND_ADDRESS:-127.0.0.1}:5433`. Keep that bind address on
+loopback. The Paperclip DB bridge is intentionally not marked `internal: true`
+so Docker publishes the loopback DB port for the host-network app.
+
+Paperclip-managed agents use `PAPERCLIP_API_URL=http://127.0.0.1:3100` for
+internal API calls. Keep this separate from `PAPERCLIP_PUBLIC_URL`; the
+public URL is Authentik-gated and returns browser redirects to local agents.
+
 The seed path creates missing company, goal, project, agent, and routine
 records. It does not update existing Paperclip records in place; when seed
 guidance changes, reseeding adds any new Agent Control Plan project or routine

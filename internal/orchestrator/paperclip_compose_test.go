@@ -26,7 +26,11 @@ func TestPaperclipComposeProfile(t *testing.T) {
 			Volumes     []string          `yaml:"volumes"`
 			Networks    []string          `yaml:"networks"`
 		} `yaml:"services"`
-		Volumes map[string]any `yaml:"volumes"`
+		Volumes  map[string]any `yaml:"volumes"`
+		Networks map[string]struct {
+			Driver   string `yaml:"driver"`
+			Internal bool   `yaml:"internal"`
+		} `yaml:"networks"`
 	}
 	if err := yaml.Unmarshal(data, &compose); err != nil {
 		t.Fatalf("parse compose: %v", err)
@@ -60,6 +64,12 @@ func TestPaperclipComposeProfile(t *testing.T) {
 	if paperclip.Environment["PAPERCLIP_PUBLIC_URL"] != "${PAPERCLIP_PUBLIC_URL:-https://paperclip.caboose-ai.io}" {
 		t.Fatalf("PAPERCLIP_PUBLIC_URL = %q", paperclip.Environment["PAPERCLIP_PUBLIC_URL"])
 	}
+	if paperclip.Environment["PAPERCLIP_API_URL"] != "http://127.0.0.1:3100" {
+		t.Fatalf("PAPERCLIP_API_URL = %q", paperclip.Environment["PAPERCLIP_API_URL"])
+	}
+	if paperclip.Environment["PAPERCLIP_RUNTIME_API_URL"] != "http://127.0.0.1:3100" {
+		t.Fatalf("PAPERCLIP_RUNTIME_API_URL = %q", paperclip.Environment["PAPERCLIP_RUNTIME_API_URL"])
+	}
 	if paperclip.Environment["SERVE_UI"] != "true" {
 		t.Fatalf("SERVE_UI = %q", paperclip.Environment["SERVE_UI"])
 	}
@@ -87,6 +97,12 @@ func TestPaperclipComposeProfile(t *testing.T) {
 	if paperclip.Environment["PAPERCLIP_AGENT_JWT_SECRET"] != "${PAPERCLIP_AUTH_SECRET}" {
 		t.Fatalf("PAPERCLIP_AGENT_JWT_SECRET = %q", paperclip.Environment["PAPERCLIP_AGENT_JWT_SECRET"])
 	}
+	if !contains(paperclip.Volumes, "paperclip_data:/paperclip") {
+		t.Fatalf("paperclip volumes = %v, missing paperclip_data", paperclip.Volumes)
+	}
+	if !contains(paperclip.Volumes, "${PAPERCLIP_WORKSPACE_ROOT:-/home/caboose/dev/caboose-ai.io}:${PAPERCLIP_WORKSPACE_ROOT:-/home/caboose/dev/caboose-ai.io}:rw") {
+		t.Fatalf("paperclip volumes = %v, missing workspace bind mount", paperclip.Volumes)
+	}
 
 	paperclipDB, ok := compose.Services["paperclip-db"]
 	if !ok {
@@ -100,6 +116,16 @@ func TestPaperclipComposeProfile(t *testing.T) {
 	}
 	if !contains(paperclipDB.Networks, "paperclip-internal") {
 		t.Fatalf("paperclip-db networks = %v", paperclipDB.Networks)
+	}
+	paperclipInternal, ok := compose.Networks["paperclip-internal"]
+	if !ok {
+		t.Fatal("paperclip-internal network missing")
+	}
+	if paperclipInternal.Driver != "bridge" {
+		t.Fatalf("paperclip-internal driver = %q", paperclipInternal.Driver)
+	}
+	if paperclipInternal.Internal {
+		t.Fatal("paperclip-internal must publish the host-loopback DB port for the host-network Paperclip app")
 	}
 	if _, ok := compose.Volumes["paperclip_db"]; !ok {
 		t.Fatal("paperclip_db volume missing")
@@ -116,9 +142,26 @@ func TestPaperclipEnvExampleIncludesRequiredSecrets(t *testing.T) {
 		"PAPERCLIP_DB_BIND_ADDRESS=127.0.0.1",
 		"PAPERCLIP_AUTH_SECRET=CHANGE_ME",
 		"PAPERCLIP_PUBLIC_URL=https://paperclip.caboose-ai.io",
+		"PAPERCLIP_WORKSPACE_ROOT=/home/caboose/dev/caboose-ai.io",
 	} {
 		if !containsLine(string(data), want) {
 			t.Fatalf(".env.example missing %q", want)
+		}
+	}
+}
+
+func TestPaperclipSeedTaskUsesWorkspaceRoot(t *testing.T) {
+	data, err := os.ReadFile("../../mise.toml")
+	if err != nil {
+		t.Fatalf("read mise config: %v", err)
+	}
+
+	for _, want := range []string{
+		`[ ! -f "$HOMELAB_COMPOSE_DIR/.env" ] || . "$HOMELAB_COMPOSE_DIR/.env"`,
+		`--repo "${PAPERCLIP_WORKSPACE_ROOT:-/home/caboose/dev/caboose-ai.io}"`,
+	} {
+		if !strings.Contains(string(data), want) {
+			t.Fatalf("paperclip:seed must use compose workspace root, missing %q", want)
 		}
 	}
 }

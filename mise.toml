@@ -84,7 +84,7 @@ run = "go run ./cmd/homelab oauth-setup --domain \"$HOMELAB_DOMAIN\""
 
 [tasks."paperclip:seed"]
 description = "Seed the Paperclip software-shop company profile"
-run = "go run ./cmd/homelab paperclip seed-company --profile software-shop --repo /home/caboose/dev/caboose-ai.io"
+run = 'set -a; [ ! -f "$HOMELAB_COMPOSE_DIR/.env" ] || . "$HOMELAB_COMPOSE_DIR/.env"; set +a; go run ./cmd/homelab paperclip seed-company --profile software-shop --repo "${PAPERCLIP_WORKSPACE_ROOT:-/home/caboose/dev/caboose-ai.io}"'
 
 [tasks."paperclip:up"]
 description = "Start the optional Paperclip profile"
