@@ -147,6 +147,18 @@ func TestPaperclipEnvExampleIncludesRequiredSecrets(t *testing.T) {
 	}
 }
 
+func TestPaperclipSeedTaskUsesWorkspaceRoot(t *testing.T) {
+	data, err := os.ReadFile("../../mise.toml")
+	if err != nil {
+		t.Fatalf("read mise config: %v", err)
+	}
+
+	want := `--repo "${PAPERCLIP_WORKSPACE_ROOT:-/home/caboose/dev/caboose-ai.io}"`
+	if !strings.Contains(string(data), want) {
+		t.Fatalf("paperclip:seed must use workspace root, missing %q", want)
+	}
+}
+
 func contains(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {

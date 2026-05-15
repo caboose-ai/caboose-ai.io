@@ -187,7 +187,7 @@ go run ./cmd/homelab oauth-setup --domain caboose-ai.io
 CLOUDFLARE_ACCOUNT_ID=... CLOUDFLARE_API_TOKEN=... go run ./cmd/homelab oauth-setup --domain caboose-ai.io --create-turnstile
 go run ./cmd/homelab install --domain caboose-ai.io --compose-dir dev/homelab
 go run ./cmd/homelab service --domain caboose-ai.io --compose-dir dev/homelab forgejo status
-go run ./cmd/homelab paperclip seed-company --profile software-shop --repo /home/caboose/dev/caboose-ai.io
+mise run paperclip:seed
 go run ./cmd/telegram-agent notify "task finished"
 go run ./cmd/mcp access request --name "codex on laptop" --out mcp-request.json
 go run ./cmd/homelab mcp access setup
