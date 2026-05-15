@@ -64,6 +64,9 @@ func TestPaperclipComposeProfile(t *testing.T) {
 	if paperclip.Environment["PAPERCLIP_PUBLIC_URL"] != "${PAPERCLIP_PUBLIC_URL:-https://paperclip.caboose-ai.io}" {
 		t.Fatalf("PAPERCLIP_PUBLIC_URL = %q", paperclip.Environment["PAPERCLIP_PUBLIC_URL"])
 	}
+	if paperclip.Environment["PAPERCLIP_RUNTIME_API_URL"] != "http://127.0.0.1:3100" {
+		t.Fatalf("PAPERCLIP_RUNTIME_API_URL = %q", paperclip.Environment["PAPERCLIP_RUNTIME_API_URL"])
+	}
 	if paperclip.Environment["SERVE_UI"] != "true" {
 		t.Fatalf("SERVE_UI = %q", paperclip.Environment["SERVE_UI"])
 	}
