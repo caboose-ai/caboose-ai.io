@@ -397,6 +397,7 @@ services:
       - paperclip-db
     volumes:
       - paperclip_data:/paperclip
+      - "${PAPERCLIP_WORKSPACE_ROOT:-/home/caboose/dev/caboose-ai.io}:${PAPERCLIP_WORKSPACE_ROOT:-/home/caboose/dev/caboose-ai.io}:rw"
     restart: unless-stopped
 
   paperclip-db:

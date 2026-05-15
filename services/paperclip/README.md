@@ -19,6 +19,12 @@ mise run paperclip:seed
 and reads `PAPERCLIP_API_KEY` from the environment or configured secret store
 when the API requires bearer auth.
 
+The Paperclip container bind-mounts `PAPERCLIP_WORKSPACE_ROOT`, defaulting to
+`/home/caboose/dev/caboose-ai.io`, at the same path inside the container. Keep
+this value aligned with the repo path passed to `paperclip:seed`; otherwise
+Paperclip-managed agent runs will skip the workspace because the local path is
+not available inside the container.
+
 The seed path creates missing company, goal, project, agent, and routine
 records. It does not update existing Paperclip records in place; when seed
 guidance changes, reseeding adds any new Agent Control Plan project or routine

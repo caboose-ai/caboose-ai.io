@@ -87,6 +87,12 @@ func TestPaperclipComposeProfile(t *testing.T) {
 	if paperclip.Environment["PAPERCLIP_AGENT_JWT_SECRET"] != "${PAPERCLIP_AUTH_SECRET}" {
 		t.Fatalf("PAPERCLIP_AGENT_JWT_SECRET = %q", paperclip.Environment["PAPERCLIP_AGENT_JWT_SECRET"])
 	}
+	if !contains(paperclip.Volumes, "paperclip_data:/paperclip") {
+		t.Fatalf("paperclip volumes = %v, missing paperclip_data", paperclip.Volumes)
+	}
+	if !contains(paperclip.Volumes, "${PAPERCLIP_WORKSPACE_ROOT:-/home/caboose/dev/caboose-ai.io}:${PAPERCLIP_WORKSPACE_ROOT:-/home/caboose/dev/caboose-ai.io}:rw") {
+		t.Fatalf("paperclip volumes = %v, missing workspace bind mount", paperclip.Volumes)
+	}
 
 	paperclipDB, ok := compose.Services["paperclip-db"]
 	if !ok {
@@ -116,6 +122,7 @@ func TestPaperclipEnvExampleIncludesRequiredSecrets(t *testing.T) {
 		"PAPERCLIP_DB_BIND_ADDRESS=127.0.0.1",
 		"PAPERCLIP_AUTH_SECRET=CHANGE_ME",
 		"PAPERCLIP_PUBLIC_URL=https://paperclip.caboose-ai.io",
+		"PAPERCLIP_WORKSPACE_ROOT=/home/caboose/dev/caboose-ai.io",
 	} {
 		if !containsLine(string(data), want) {
 			t.Fatalf(".env.example missing %q", want)
