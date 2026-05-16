@@ -22,7 +22,13 @@ func TestKubernetesApplyBuildsCommands(t *testing.T) {
 	cfg.Kubernetes.Context = "c"
 	b := NewKubernetesBackend(r, cfg)
 
-	if err := b.Apply(context.Background()); err != nil { t.Fatal(err) }
-	if len(r.Calls) != 3 { t.Fatalf("calls=%d", len(r.Calls)) }
-	if !strings.Contains(strings.Join(r.Calls[0].Args, " "), "create namespace") { t.Fatal("missing namespace create") }
+	if err := b.Apply(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Calls) != 3 {
+		t.Fatalf("calls=%d", len(r.Calls))
+	}
+	if !strings.Contains(strings.Join(r.Calls[0].Args, " "), "create namespace") {
+		t.Fatal("missing namespace create")
+	}
 }

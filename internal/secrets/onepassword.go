@@ -83,7 +83,9 @@ func (s *OnePasswordStore) Get(ctx context.Context, key string) (string, error) 
 
 	// Sync to .env so Docker Compose can read it.
 	if field.Value != "" {
-		s.Env.Put(ctx, key, field.Value)
+		if err := s.Env.Put(ctx, key, field.Value); err != nil {
+			return "", fmt.Errorf("sync 1Password secret %s to env: %w", key, err)
+		}
 	}
 	return field.Value, nil
 }

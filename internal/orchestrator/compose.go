@@ -8,8 +8,10 @@ import (
 
 type ComposeBackend struct{ compose *docker.ComposeClient }
 
-func NewComposeBackend(compose *docker.ComposeClient) *ComposeBackend { return &ComposeBackend{compose: compose} }
-func (b *ComposeBackend) Name() string                                { return "compose" }
+func NewComposeBackend(compose *docker.ComposeClient) *ComposeBackend {
+	return &ComposeBackend{compose: compose}
+}
+func (b *ComposeBackend) Name() string { return "compose" }
 func (b *ComposeBackend) Apply(ctx context.Context) error {
 	_, err := b.compose.Up(ctx)
 	return err

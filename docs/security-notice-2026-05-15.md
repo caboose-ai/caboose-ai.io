@@ -8,9 +8,13 @@ runs or logs should still be treated as sensitive.
 Immediate remediation steps:
 - Rotate any values from local `.env` files that were live credentials and may
   have appeared in agent transcripts, logs, screenshots, or pasted output.
+- Use the tracked CAB-3 key-level checklist:
+  `docs/cab-3-secret-rotation-checklist-2026-05-15.md`.
 - Rotate historical credentials flagged by the local full-history Gitleaks trial
   before enabling a full-history CI gate.
 - Audit access logs for unusual activity for any rotated service credentials.
+  Track CAB-6 evidence in:
+  `docs/cab-6-access-log-audit-2026-05-15.md`.
 - Keep local operators on 1Password-backed secrets or untracked `.env` files.
 - Keep placeholder examples in `dev/homelab/.env.example`.
 - Use CI secret scanning to prevent future commits with secrets.

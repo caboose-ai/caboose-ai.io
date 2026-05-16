@@ -17,6 +17,9 @@ packages remain under `internal/`. No public API.
 ```bash
 go build ./...                    # build everything
 go test ./...                     # run all tests
+mise run fmt                      # format Go packages
+mise run lint                     # run golangci-lint checks
+mise run vulncheck                # run govulncheck across packages
 go test ./internal/install/ -v    # test a specific package
 go run ./cmd/homelab oauth-setup --domain caboose-ai.io  # print external OAuth/Turnstile setup
 go run ./cmd/homelab service --domain caboose-ai.io forgejo status  # inspect one service

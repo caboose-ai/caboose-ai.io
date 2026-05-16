@@ -21,6 +21,18 @@ PAPERCLIP_PORTAINER_URL = "https://docker.caboose-ai.io"
 description = "Build all binaries"
 run = "go build ./..."
 
+[tasks.fmt]
+description = "Format all Go packages"
+run = "go fmt ./..."
+
+[tasks.lint]
+description = "Run golangci-lint with repo config"
+run = "go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8 run --timeout=5m"
+
+[tasks.vulncheck]
+description = "Run govulncheck across all packages"
+run = "go run golang.org/x/vuln/cmd/govulncheck@latest ./..."
+
 [tasks."homelab:build"]
 description = "Build the homelab CLI binary"
 run = "go build -o ./homelab ./cmd/homelab"

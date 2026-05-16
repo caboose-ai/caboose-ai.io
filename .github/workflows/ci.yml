@@ -87,3 +87,6 @@ jobs:
           grep -q "Path to homelab.yml config file" /tmp/homelab-mcp.out
           /tmp/homelab-mcp access --help > /tmp/homelab-mcp-access.out 2>&1
           grep -q "Usage: homelab-mcp access" /tmp/homelab-mcp-access.out
+
+      - name: Run govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...

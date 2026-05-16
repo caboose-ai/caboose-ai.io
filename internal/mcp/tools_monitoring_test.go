@@ -16,7 +16,7 @@ type mockChecker struct {
 	err  error
 }
 
-func (m *mockChecker) Name() string                     { return m.name }
+func (m *mockChecker) Name() string                  { return m.name }
 func (m *mockChecker) Check(_ context.Context) error { return m.err }
 
 func TestHandleHealthCheck(t *testing.T) {

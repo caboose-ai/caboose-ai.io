@@ -5,9 +5,11 @@ bin/
 .remember/
 .superpowers/
 docs/superpowers/
+docs/evidence/
 /homelab
 mcp-request*.json
 mcp-release*.json
+tmp-comment.json
 dev/homelab/caddy.paperclip.example
 *.png
 __pycache__/

@@ -71,7 +71,9 @@ func main() {
 	fs.StringVar(&opts.paperclipBranchPrefix, "branch-prefix", "", "Branch prefix for Paperclip-created Forgejo branches")
 	fs.StringVar(&opts.paperclipWoodpeckerURL, "woodpecker-url", "", "Woodpecker CI URL for Paperclip evidence")
 	fs.StringVar(&opts.paperclipPortainerURL, "portainer-url", "", "Portainer URL for approved runtime inspection")
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		os.Exit(2)
+	}
 
 	switch subcmd {
 	case "install":

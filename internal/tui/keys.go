@@ -3,10 +3,10 @@ package tui
 import "github.com/charmbracelet/bubbles/key"
 
 type KeyMap struct {
-	Quit    key.Binding
-	Enter   key.Binding
-	Retry   key.Binding
-	Skip    key.Binding
+	Quit  key.Binding
+	Enter key.Binding
+	Retry key.Binding
+	Skip  key.Binding
 }
 
 var Keys = KeyMap{
