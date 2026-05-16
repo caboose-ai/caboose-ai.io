@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/caboose-ai/caboose-ai.io/compare/v0.5.0...v0.5.1) (2026-05-16)
+
+
+### Bug Fixes
+
+* **homelab:** harden reset secret generation ([#67](https://github.com/caboose-ai/caboose-ai.io/issues/67)) ([5e4e08b](https://github.com/caboose-ai/caboose-ai.io/commit/5e4e08b9d522218ce6bed17c0867b7c0d98a4c45))
+
 ## [0.5.0](https://github.com/caboose-ai/caboose-ai.io/compare/v0.4.1...v0.5.0) (2026-05-16)
 
 
