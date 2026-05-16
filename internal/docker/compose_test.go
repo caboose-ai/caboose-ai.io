@@ -3,14 +3,21 @@ package docker
 import (
 	"context"
 	"io"
+	"os"
+	"path/filepath"
+	"reflect"
 	"testing"
 )
 
 type mockRunner struct {
-	output []byte
+	output  []byte
+	command string
+	args    []string
 }
 
-func (m *mockRunner) Run(context.Context, string, ...string) ([]byte, error) {
+func (m *mockRunner) Run(_ context.Context, command string, args ...string) ([]byte, error) {
+	m.command = command
+	m.args = append([]string(nil), args...)
 	return m.output, nil
 }
 
@@ -71,5 +78,48 @@ func TestIsRunningParsesNewlineDelimitedComposeJSON(t *testing.T) {
 	}
 	if !running {
 		t.Fatal("IsRunning(paperclip) = false, want true")
+	}
+}
+
+func TestDownWithVolumesIncludesComposeProfilesAndOrphans(t *testing.T) {
+	dir := t.TempDir()
+	composePath := filepath.Join(dir, "docker-compose.yml")
+	if err := os.WriteFile(composePath, []byte(`
+services:
+  base:
+    image: example/base
+  paperclip:
+    image: example/paperclip
+    profiles:
+      - paperclip
+  worker:
+    image: example/worker
+    profiles:
+      - extras
+      - paperclip
+`), 0600); err != nil {
+		t.Fatalf("write compose: %v", err)
+	}
+
+	runner := &mockRunner{}
+	client := NewComposeClient(runner, dir)
+	if _, err := client.DownWithVolumes(context.Background()); err != nil {
+		t.Fatalf("DownWithVolumes: %v", err)
+	}
+
+	if runner.command != "docker" {
+		t.Fatalf("command = %q, want docker", runner.command)
+	}
+	want := []string{
+		"compose",
+		"-f", composePath,
+		"--profile", "extras",
+		"--profile", "paperclip",
+		"down",
+		"-v",
+		"--remove-orphans",
+	}
+	if !reflect.DeepEqual(runner.args, want) {
+		t.Fatalf("args = %#v, want %#v", runner.args, want)
 	}
 }

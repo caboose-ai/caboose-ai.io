@@ -7,10 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/caboose-ai/caboose-ai.io/internal/runner"
+	"gopkg.in/yaml.v3"
 )
 
 type ComposeClient struct {
@@ -31,7 +34,11 @@ func (c *ComposeClient) Down(ctx context.Context) ([]byte, error) {
 }
 
 func (c *ComposeClient) DownWithVolumes(ctx context.Context) ([]byte, error) {
-	return c.run(ctx, "down", "-v")
+	profiles, err := c.profiles()
+	if err != nil {
+		return nil, err
+	}
+	return c.runWithProfiles(ctx, profiles, "down", "-v", "--remove-orphans")
 }
 
 func (c *ComposeClient) UpService(ctx context.Context, services ...string) ([]byte, error) {
@@ -49,8 +56,52 @@ func (c *ComposeClient) PS(ctx context.Context) ([]byte, error) {
 }
 
 func (c *ComposeClient) run(ctx context.Context, args ...string) ([]byte, error) {
-	fullArgs := append([]string{"compose", "-f", c.ComposeDir + "/docker-compose.yml"}, args...)
+	return c.runWithProfiles(ctx, nil, args...)
+}
+
+func (c *ComposeClient) runWithProfiles(ctx context.Context, profiles []string, args ...string) ([]byte, error) {
+	fullArgs := []string{"compose", "-f", c.composePath()}
+	for _, profile := range profiles {
+		fullArgs = append(fullArgs, "--profile", profile)
+	}
+	fullArgs = append(fullArgs, args...)
 	return c.Runner.Run(ctx, "docker", fullArgs...)
+}
+
+func (c *ComposeClient) composePath() string {
+	return c.ComposeDir + "/docker-compose.yml"
+}
+
+func (c *ComposeClient) profiles() ([]string, error) {
+	data, err := os.ReadFile(c.composePath())
+	if err != nil {
+		return nil, fmt.Errorf("reading compose profiles: %w", err)
+	}
+
+	var compose struct {
+		Services map[string]struct {
+			Profiles []string `yaml:"profiles"`
+		} `yaml:"services"`
+	}
+	if err := yaml.Unmarshal(data, &compose); err != nil {
+		return nil, fmt.Errorf("parsing compose profiles: %w", err)
+	}
+
+	seen := map[string]bool{}
+	for _, service := range compose.Services {
+		for _, profile := range service.Profiles {
+			if profile != "" {
+				seen[profile] = true
+			}
+		}
+	}
+
+	profiles := make([]string, 0, len(seen))
+	for profile := range seen {
+		profiles = append(profiles, profile)
+	}
+	sort.Strings(profiles)
+	return profiles, nil
 }
 
 func (c *ComposeClient) Logs(ctx context.Context, service string, tail int) ([]byte, error) {

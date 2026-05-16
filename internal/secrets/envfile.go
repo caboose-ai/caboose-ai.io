@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"math/big"
 	"os"
 	"strings"
 )
@@ -50,7 +51,7 @@ func (s *EnvFileStore) Generate(_ context.Context, key string, length int, opts 
 	if opts.Recipe == "hex" {
 		value, err = generateHex(length / 2)
 	} else {
-		value, err = generateRandom(length)
+		value, err = generateRandom(length, opts.Recipe)
 	}
 	if err != nil {
 		return "", fmt.Errorf("generating secret for %s: %w", key, err)
@@ -157,14 +158,97 @@ func generateHex(numBytes int) (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-func generateRandom(length int) (string, error) {
-	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*"
+const (
+	randomLetters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	randomDigits  = "0123456789"
+	randomSymbols = "!@#$%^&*"
+)
+
+func generateRandom(length int, recipe string) (string, error) {
+	classes := randomClasses(recipe)
+	if length < len(classes) {
+		return "", fmt.Errorf("length %d is too short for %d required character classes", length, len(classes))
+	}
+
+	charset := strings.Join(classes, "")
 	b := make([]byte, length)
-	if _, err := rand.Read(b); err != nil {
+
+	requiredPositions, err := randomPositions(length, len(classes))
+	if err != nil {
 		return "", err
 	}
+	required := map[int]bool{}
+	for _, pos := range requiredPositions {
+		required[pos] = true
+	}
+
 	for i := range b {
-		b[i] = charset[int(b[i])%len(charset)]
+		if required[i] {
+			continue
+		}
+		ch, err := randomClassChar(charset)
+		if err != nil {
+			return "", err
+		}
+		b[i] = ch
+	}
+
+	for i, class := range classes {
+		ch, err := randomClassChar(class)
+		if err != nil {
+			return "", err
+		}
+		b[requiredPositions[i]] = ch
 	}
 	return string(b), nil
+}
+
+func randomClasses(recipe string) []string {
+	var classes []string
+	for _, part := range strings.Split(recipe, ",") {
+		switch strings.TrimSpace(part) {
+		case "letters":
+			classes = append(classes, randomLetters)
+		case "digits":
+			classes = append(classes, randomDigits)
+		case "symbols":
+			classes = append(classes, randomSymbols)
+		}
+	}
+	if len(classes) == 0 {
+		return []string{randomLetters, randomDigits, randomSymbols}
+	}
+	return classes
+}
+
+func randomPositions(length, count int) ([]int, error) {
+	used := map[int]bool{}
+	positions := make([]int, 0, count)
+	for len(positions) < count {
+		pos, err := randomIndex(length)
+		if err != nil {
+			return nil, err
+		}
+		if !used[pos] {
+			used[pos] = true
+			positions = append(positions, pos)
+		}
+	}
+	return positions, nil
+}
+
+func randomClassChar(class string) (byte, error) {
+	idx, err := randomIndex(len(class))
+	if err != nil {
+		return 0, err
+	}
+	return class[idx], nil
+}
+
+func randomIndex(max int) (int, error) {
+	n, err := rand.Int(rand.Reader, big.NewInt(int64(max)))
+	if err != nil {
+		return 0, err
+	}
+	return int(n.Int64()), nil
 }

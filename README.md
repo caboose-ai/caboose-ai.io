@@ -213,9 +213,13 @@ configuration.
 
 Direct `homelab reset` is destructive and requires `--yes` unless `--dry-run`
 is used. The recurring `mise` reset/reinstall tasks pass `--yes` explicitly so
-automation remains intentional and auditable. Homarr SQLite board seeding and
-other live Docker, SQLite, secret, reset, or destructive filesystem mutations
-require explicit human approval before being run against live state.
+automation remains intentional and auditable. Reset uses the compose file's
+declared profiles when tearing down volumes, so optional services such as
+Paperclip are included in a full reset. The `.env` fallback secret generator
+honors the configured character recipe; symbol-enabled recipes require at least
+one symbol for services such as SonarQube. Homarr SQLite board seeding and other
+live Docker, SQLite, secret, reset, or destructive filesystem mutations require
+explicit human approval before being run against live state.
 
 ## Testing
 
