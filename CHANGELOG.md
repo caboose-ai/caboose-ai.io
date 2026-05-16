@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/caboose-ai/caboose-ai.io/compare/v0.5.1...v0.6.0) (2026-05-16)
+
+
+### Features
+
+* **release:** deploy homebrew tap after approval ([#69](https://github.com/caboose-ai/caboose-ai.io/issues/69)) ([a5a9fdf](https://github.com/caboose-ai/caboose-ai.io/commit/a5a9fdf10b3d5606365c6ee74ff2c82cd9ca898b))
+
 ## [0.5.1](https://github.com/caboose-ai/caboose-ai.io/compare/v0.5.0...v0.5.1) (2026-05-16)
 
 
