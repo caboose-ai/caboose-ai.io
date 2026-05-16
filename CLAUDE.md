@@ -107,7 +107,9 @@ container recreation.
 - Published releases trigger `.github/workflows/update-homebrew-tap.yml`, which
   uses the `HOMEBREW_TAP_TOKEN` Actions secret to update
   `caboose-ai/homebrew-tap` formulae, install and `brew test` both updated
-  formulae, and open or reuse a tap PR.
+  formulae, wait for approval in the `homebrew-tap-deploy` environment, rerun
+  formula validation after approval, and push the verified formula commit
+  directly to the tap.
 - CI builds both release binaries with `go build -buildvcs=false` to avoid
   Go VCS stamping failures in linked worktrees or source archive contexts.
 - Direct `homelab reset` requires `--yes` unless `--dry-run`; live Docker,

@@ -14,9 +14,14 @@ permissions:
   contents: read
 
 jobs:
-  update-homebrew-tap:
-    name: Update tap formulae
+  prepare-homebrew-tap:
+    name: Prepare tap formulae
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      archive_url: ${{ steps.archive.outputs.url }}
+      sha256: ${{ steps.archive.outputs.sha256 }}
+      changed: ${{ steps.diff.outputs.changed }}
     steps:
       - name: Resolve release tag
         id: release
@@ -105,23 +110,26 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Prepare local tap update branch
+      - name: Write tap update patch
         if: steps.diff.outputs.changed == 'true'
         working-directory: tap
-        env:
-          BRANCH: update/caboose-ai-io-${{ steps.release.outputs.tag }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch origin "+refs/heads/${BRANCH}:refs/remotes/origin/${BRANCH}" || true
-          git switch -C "$BRANCH"
-          git add Formula/caboose-homelab.rb Formula/caboose-homelab-mcp.rb
-          git commit -m "chore: update caboose-ai.io to ${{ steps.release.outputs.tag }}"
+          git diff -- Formula/caboose-homelab.rb Formula/caboose-homelab-mcp.rb > ../homebrew-tap.patch
+
+      - name: Upload tap update patch
+        if: steps.diff.outputs.changed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: homebrew-tap-patch
+          path: homebrew-tap.patch
+          if-no-files-found: error
 
       - name: Set up Homebrew
+        if: steps.diff.outputs.changed == 'true'
         uses: Homebrew/actions/setup-homebrew@main
 
       - name: Smoke test Homebrew formulae
+        if: steps.diff.outputs.changed == 'true'
         working-directory: source
         env:
           HOMEBREW_NO_ANALYTICS: "1"
@@ -129,42 +137,85 @@ jobs:
           HOMEBREW_NO_INSTALL_CLEANUP: "1"
         run: uv run python .github/scripts/brew_release_smoke.py --tap-dir ../tap
 
-      - name: Push tap update branch
-        if: steps.diff.outputs.changed == 'true'
-        working-directory: tap
+  deploy-homebrew-tap:
+    name: Deploy tap formulae
+    runs-on: ubuntu-latest
+    needs: prepare-homebrew-tap
+    if: needs.prepare-homebrew-tap.outputs.changed == 'true'
+    environment:
+      name: homebrew-tap-deploy
+      url: https://github.com/caboose-ai/homebrew-tap
+    steps:
+      - name: Require tap token
         env:
-          BRANCH: update/caboose-ai-io-${{ steps.release.outputs.tag }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
-          git push --force-with-lease origin "HEAD:$BRANCH"
+          if [[ -z "$HOMEBREW_TAP_TOKEN" ]]; then
+            echo "::error::HOMEBREW_TAP_TOKEN must be set with write access to caboose-ai/homebrew-tap."
+            exit 1
+          fi
 
-      - name: Open or reuse tap pull request
-        if: steps.diff.outputs.changed == 'true'
+      - name: Check out source repo
+        uses: actions/checkout@v6
+        with:
+          path: source
+
+      - name: Check out Homebrew tap
+        uses: actions/checkout@v6
+        with:
+          repository: caboose-ai/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+
+      - name: Download tap update patch
+        uses: actions/download-artifact@v4
+        with:
+          name: homebrew-tap-patch
+
+      - name: Apply tap update patch
+        working-directory: tap
+        run: |
+          git apply ../homebrew-tap.patch
+          if git diff --quiet -- Formula/caboose-homelab.rb Formula/caboose-homelab-mcp.rb; then
+            echo "::error::Tap update patch did not change formulae."
+            exit 1
+          fi
+
+      - name: Validate formula syntax after approval
+        working-directory: tap
+        run: |
+          ruby -c Formula/caboose-homelab.rb
+          ruby -c Formula/caboose-homelab-mcp.rb
+
+      - name: Set up uv after approval
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: false
+
+      - name: Set up Homebrew after approval
+        uses: Homebrew/actions/setup-homebrew@main
+
+      - name: Smoke test Homebrew formulae after approval
+        working-directory: source
+        env:
+          HOMEBREW_NO_ANALYTICS: "1"
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_CLEANUP: "1"
+        run: uv run python .github/scripts/brew_release_smoke.py --tap-dir ../tap
+
+      - name: Commit and push tap update
         working-directory: tap
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          BRANCH: update/caboose-ai-io-${{ steps.release.outputs.tag }}
-          TAG: ${{ steps.release.outputs.tag }}
-          SHA256: ${{ steps.archive.outputs.sha256 }}
-          ARCHIVE_URL: ${{ steps.archive.outputs.url }}
+          TAG: ${{ needs.prepare-homebrew-tap.outputs.tag }}
+          SHA256: ${{ needs.prepare-homebrew-tap.outputs.sha256 }}
+          ARCHIVE_URL: ${{ needs.prepare-homebrew-tap.outputs.archive_url }}
         run: |
-          existing_url="$(gh pr list --repo caboose-ai/homebrew-tap --head "$BRANCH" --json url --jq '.[0].url')"
-          if [[ -n "$existing_url" ]]; then
-            echo "Tap pull request already exists: $existing_url"
-            exit 0
-          fi
-
-          cat > pr-body.md <<BODY
-          Updates caboose-homelab and caboose-homelab-mcp to ${TAG}.
-
-          Source archive: ${ARCHIVE_URL}
-          SHA256: ${SHA256}
-
-          Triggered by caboose-ai/caboose-ai.io release ${TAG}.
-          BODY
-
-          gh pr create \
-            --repo caboose-ai/homebrew-tap \
-            --base main \
-            --head "$BRANCH" \
-            --title "chore: update caboose-ai.io to ${TAG}" \
-            --body-file pr-body.md
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/caboose-homelab.rb Formula/caboose-homelab-mcp.rb
+          git commit -m "chore: update caboose-ai.io to ${TAG}" \
+            -m "Source archive: ${ARCHIVE_URL}" \
+            -m "SHA256: ${SHA256}" \
+            -m "Approved and deployed from caboose-ai/caboose-ai.io workflow ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}."
+          git push origin HEAD:main
