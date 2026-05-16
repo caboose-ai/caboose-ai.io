@@ -61,6 +61,7 @@ func RunInstall(ctx context.Context, inst *install.Installer) int {
 			console.Info("  ● would ensure provider", "name", spec.Name, "slug", spec.Slug)
 		}
 		console.Run("would configure all services")
+		console.Run("would start and seed Paperclip software-shop profile")
 		console.Success("install dry run complete")
 		return 0
 	}
@@ -308,6 +309,15 @@ func RunInstall(ctx context.Context, inst *install.Installer) int {
 		}
 	}
 
+	console.Phase("Paperclip")
+	console.Run("starting and seeding Paperclip software-shop profile")
+	report, err := inst.BootstrapPaperclip(ctx, inst.Paperclip)
+	if err != nil {
+		console.Error("Paperclip bootstrap failed", "error", err)
+		return 4
+	}
+	console.Success("Paperclip seeded", "company", report.CompanyID, "created", formatSeedCounts(report.Created), "existing", formatSeedCounts(report.Existing))
+
 	console.Phase("Final Health")
 	console.Run("running final health check")
 	finalHealthOK := true
@@ -334,6 +344,17 @@ func RunInstall(ctx context.Context, inst *install.Installer) int {
 	}
 	logServiceLinks(console, inst.Config.URLs())
 	return 0
+}
+
+func formatSeedCounts(counts map[string]int) string {
+	if len(counts) == 0 {
+		return "none"
+	}
+	parts := make([]string, 0, len(counts))
+	for key, count := range counts {
+		parts = append(parts, fmt.Sprintf("%s:%d", key, count))
+	}
+	return strings.Join(parts, ",")
 }
 
 func logServiceLinks(console *Console, urls config.URLs) {

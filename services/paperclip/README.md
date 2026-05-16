@@ -6,6 +6,11 @@ the Authentik forward-auth provider `paperclip-proxy`, and shown on Homarr.
 Paperclip itself runs in `local_trusted` mode on host loopback so Authentik is
 the only browser login prompt.
 
+The base installer provisions the Authentik and dashboard contract, starts the
+profile-gated `paperclip` and `paperclip-db` containers, and seeds the Caboose
+AI Software Shop workspace. Run `mise run paperclip:seed` after install only
+when repairing or refreshing the seed metadata.
+
 ## Operations
 
 ```bash
@@ -17,7 +22,8 @@ mise run paperclip:seed
 
 `paperclip:seed` uses `homelab paperclip seed-company --profile software-shop`
 and reads `PAPERCLIP_API_KEY` from the environment or configured secret store
-when the API requires bearer auth.
+when the API requires bearer auth. The installer runs the same idempotent seed
+path after bringing the profile up.
 
 The Paperclip container bind-mounts `PAPERCLIP_WORKSPACE_ROOT`, defaulting to
 `/home/caboose/dev/caboose-ai.io`, at the same path inside the container. Keep
@@ -91,13 +97,11 @@ Paperclip task before asking for final human review.
 
 ### Trigger Runbook
 
-1. Start and verify Paperclip:
+1. Verify Paperclip:
 
    ```bash
-   mise run paperclip:up
    mise run paperclip:status
    mise run paperclip:smoke
-   mise run paperclip:seed
    ```
 
 2. Open `https://paperclip.caboose-ai.io` and use the seeded Caboose AI

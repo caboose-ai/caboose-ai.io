@@ -233,11 +233,11 @@ tools are in place. Until then, Paperclip-triggered work should produce plans,
 PRs, and explicit handoffs for humans or confirmed agents to execute.
 
 A practical first implementation can work without new Paperclip runtime
-privileges:
+privileges. The installer starts and seeds Paperclip; after install:
 
-1. Start and seed Paperclip with `mise run paperclip:up`,
-   `mise run paperclip:status`, `mise run paperclip:smoke`, and
-   `mise run paperclip:seed`.
+1. Verify Paperclip with `mise run paperclip:status` and
+   `mise run paperclip:smoke`. Rerun `mise run paperclip:seed` only when
+   repairing or refreshing the workspace metadata.
 2. Open the seeded Caboose AI Software Shop workspace in Paperclip.
 3. Create a task using this format:
 

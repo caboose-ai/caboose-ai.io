@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"strings"
 	"time"
@@ -22,6 +23,7 @@ type Configurator struct {
 	Runner       runner.CommandRunner
 	PortainerURL string
 	AdminPass    string
+	AdminEmail   string
 	AuthentikURL string
 	RedirectURI  string
 }
@@ -32,7 +34,20 @@ type oauthSettings struct {
 	SSO            bool   `json:"SSO"`
 }
 
-func New(ak *authentik.Client, httpClient runner.HTTPClient, commandRunner runner.CommandRunner, portainerURL, adminPass, authentikURL, redirectURI string) *Configurator {
+type endpoint struct {
+	ID   int    `json:"Id"`
+	Name string `json:"Name"`
+	Type int    `json:"Type"`
+	URL  string `json:"URL"`
+}
+
+type user struct {
+	ID       int    `json:"Id"`
+	Username string `json:"Username"`
+	Role     int    `json:"Role"`
+}
+
+func New(ak *authentik.Client, httpClient runner.HTTPClient, commandRunner runner.CommandRunner, portainerURL, adminPass, adminEmail, authentikURL, redirectURI string) *Configurator {
 	return &Configurator{
 		AK:           ak,
 		HTTP:         httpClient,
@@ -40,6 +55,7 @@ func New(ak *authentik.Client, httpClient runner.HTTPClient, commandRunner runne
 		Runner:       commandRunner,
 		PortainerURL: portainerURL,
 		AdminPass:    adminPass,
+		AdminEmail:   adminEmail,
 		AuthentikURL: authentikURL,
 		RedirectURI:  redirectURI,
 	}
@@ -57,7 +73,11 @@ func (c *Configurator) CheckConfigured(ctx context.Context) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return settings.ClientID != "", nil
+	endpointExists, err := c.localEndpointExists(ctx, jwt)
+	if err != nil {
+		return false, err
+	}
+	return settings.ClientID != "" && settings.UserIdentifier == "email" && settings.SSO && endpointExists, nil
 }
 
 func (c *Configurator) Configure(ctx context.Context, opts service.ConfigureOpts) (*service.ConfigureResult, error) {
@@ -94,15 +114,156 @@ func (c *Configurator) Configure(ctx context.Context, opts service.ConfigureOpts
 	}
 
 	settings, _ := c.currentOAuthSettings(ctx, jwt)
-	if settings.ClientID == provider.ClientID && settings.UserIdentifier == "email" && settings.SSO && !opts.Force {
-		return &service.ConfigureResult{Status: service.StatusAlreadyConfigured, Message: "Portainer OAuth already configured"}, nil
+	endpointCreated, err := c.ensureLocalEndpoint(ctx, jwt)
+	if err != nil {
+		return nil, err
 	}
-
-	if err := c.applyOAuth(ctx, jwt, provider.ClientID, provider.ClientSecret); err != nil {
+	adminUpdated, err := c.ensureAdminUser(ctx, jwt)
+	if err != nil {
 		return nil, err
 	}
 
-	return &service.ConfigureResult{Status: service.StatusCreated, Message: "Portainer OAuth configured"}, nil
+	if settings.ClientID == provider.ClientID && settings.UserIdentifier == "email" && settings.SSO && !opts.Force && !endpointCreated && !adminUpdated {
+		return &service.ConfigureResult{Status: service.StatusAlreadyConfigured, Message: "Portainer OAuth already configured"}, nil
+	}
+
+	if settings.ClientID != provider.ClientID || settings.UserIdentifier != "email" || !settings.SSO || opts.Force {
+		if err := c.applyOAuth(ctx, jwt, provider.ClientID, provider.ClientSecret); err != nil {
+			return nil, err
+		}
+	}
+
+	return &service.ConfigureResult{Status: service.StatusCreated, Message: "Portainer local Docker environment and OAuth configured"}, nil
+}
+
+func (c *Configurator) ensureLocalEndpoint(ctx context.Context, jwt string) (bool, error) {
+	exists, err := c.localEndpointExists(ctx, jwt)
+	if err != nil {
+		return false, err
+	}
+	if exists {
+		return false, nil
+	}
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	_ = writer.WriteField("Name", "local")
+	_ = writer.WriteField("EndpointCreationType", "1")
+	_ = writer.WriteField("URL", "unix:///var/run/docker.sock")
+	if err := writer.Close(); err != nil {
+		return false, fmt.Errorf("building Portainer endpoint request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.PortainerURL+"/api/endpoints", &body)
+	if err != nil {
+		return false, err
+	}
+	req.Header.Set("Authorization", "Bearer "+jwt)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return false, fmt.Errorf("creating Portainer local Docker endpoint: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		data, _ := io.ReadAll(resp.Body)
+		return false, fmt.Errorf("Portainer endpoints POST returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(data)))
+	}
+	return true, nil
+}
+
+func (c *Configurator) localEndpointExists(ctx context.Context, jwt string) (bool, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.PortainerURL+"/api/endpoints", nil)
+	if err != nil {
+		return false, err
+	}
+	req.Header.Set("Authorization", "Bearer "+jwt)
+
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return false, fmt.Errorf("listing Portainer endpoints: %w", err)
+	}
+	defer resp.Body.Close()
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return false, fmt.Errorf("reading Portainer endpoints response: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("Portainer endpoints GET returned HTTP %d", resp.StatusCode)
+	}
+
+	var endpoints []endpoint
+	if err := json.Unmarshal(data, &endpoints); err != nil {
+		return false, fmt.Errorf("parsing Portainer endpoints response: %w", err)
+	}
+	for _, endpoint := range endpoints {
+		if endpoint.Type == 1 && endpoint.URL == "unix:///var/run/docker.sock" {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (c *Configurator) ensureAdminUser(ctx context.Context, jwt string) (bool, error) {
+	adminEmail := strings.TrimSpace(c.AdminEmail)
+	if adminEmail == "" {
+		return false, nil
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.PortainerURL+"/api/users", nil)
+	if err != nil {
+		return false, err
+	}
+	req.Header.Set("Authorization", "Bearer "+jwt)
+
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return false, fmt.Errorf("listing Portainer users: %w", err)
+	}
+	defer resp.Body.Close()
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return false, fmt.Errorf("reading Portainer users response: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("Portainer users GET returned HTTP %d", resp.StatusCode)
+	}
+
+	var users []user
+	if err := json.Unmarshal(data, &users); err != nil {
+		return false, fmt.Errorf("parsing Portainer users response: %w", err)
+	}
+
+	for _, user := range users {
+		if !strings.EqualFold(user.Username, adminEmail) {
+			continue
+		}
+		if user.Role == 1 {
+			return false, nil
+		}
+		body, _ := json.Marshal(map[string]int{"role": 1})
+		req, err := http.NewRequestWithContext(ctx, http.MethodPut, fmt.Sprintf("%s/api/users/%d", c.PortainerURL, user.ID), bytes.NewReader(body))
+		if err != nil {
+			return false, err
+		}
+		req.Header.Set("Authorization", "Bearer "+jwt)
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := c.HTTP.Do(req)
+		if err != nil {
+			return false, fmt.Errorf("promoting Portainer user %q to admin: %w", adminEmail, err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode >= 400 {
+			data, _ := io.ReadAll(resp.Body)
+			return false, fmt.Errorf("Portainer user role PUT returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(data)))
+		}
+		return true, nil
+	}
+
+	return false, nil
 }
 
 func isAdminInitTimeout(err error) bool {

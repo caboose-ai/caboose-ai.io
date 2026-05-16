@@ -37,6 +37,9 @@ func TestBuildServicesUsesLocalPortainerAPIForCompose(t *testing.T) {
 			if p.RedirectURI != "https://docker.example.com/" {
 				t.Fatalf("RedirectURI = %q, want public URL", p.RedirectURI)
 			}
+			if p.AdminEmail != "cxm6467@gmail.com" {
+				t.Fatalf("AdminEmail = %q, want default config email", p.AdminEmail)
+			}
 			return
 		}
 	}

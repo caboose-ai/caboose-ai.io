@@ -31,6 +31,7 @@ type Installer struct {
 	DockerExec *docker.ExecClient
 	AK         *authentik.Client
 	Services   []service.ServiceConfigurator
+	Paperclip  PaperclipBootstrapOptions
 }
 
 func New(cfg *config.Config, secretStore secrets.SecretStore, r runner.CommandRunner, httpClient runner.HTTPClient) *Installer {

@@ -145,6 +145,72 @@ func TestGetJWT_ContextCancelled(t *testing.T) {
 	}
 }
 
+func TestCheckConfiguredRequiresOAuthAndLocalEndpoint(t *testing.T) {
+	tests := []struct {
+		name          string
+		settingsBody  string
+		endpointsBody string
+		want          bool
+	}{
+		{
+			name:          "configured",
+			settingsBody:  `{"OAuthSettings":{"ClientID":"client-id","UserIdentifier":"email","SSO":true}}`,
+			endpointsBody: `[{"Id":1,"Name":"local","Type":1,"URL":"unix:///var/run/docker.sock"}]`,
+			want:          true,
+		},
+		{
+			name:          "missing local endpoint",
+			settingsBody:  `{"OAuthSettings":{"ClientID":"client-id","UserIdentifier":"email","SSO":true}}`,
+			endpointsBody: `[]`,
+			want:          false,
+		},
+		{
+			name:          "oauth uses wrong claim",
+			settingsBody:  `{"OAuthSettings":{"ClientID":"client-id","UserIdentifier":"username","SSO":true}}`,
+			endpointsBody: `[{"Id":1,"Name":"local","Type":1,"URL":"unix:///var/run/docker.sock"}]`,
+			want:          false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &Configurator{
+				PortainerURL: "http://localhost:9000",
+				AdminPass:    "test-pass",
+				AuthHTTP: &mockHTTP{DoFunc: func(req *http.Request) (*http.Response, error) {
+					if req.Method != http.MethodPost || req.URL.Path != "/api/auth" {
+						t.Fatalf("unexpected auth request: %s %s", req.Method, req.URL.Path)
+					}
+					return httpResponse(http.StatusOK, `{"jwt":"jwt-token"}`), nil
+				}},
+			}
+
+			c.HTTP = &mockHTTP{DoFunc: func(req *http.Request) (*http.Response, error) {
+				if req.Header.Get("Authorization") != "Bearer jwt-token" {
+					t.Fatalf("Authorization header = %q", req.Header.Get("Authorization"))
+				}
+				switch req.URL.Path {
+				case "/api/settings":
+					return httpResponse(http.StatusOK, tt.settingsBody), nil
+				case "/api/endpoints":
+					return httpResponse(http.StatusOK, tt.endpointsBody), nil
+				default:
+					t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
+					return nil, nil
+				}
+			}}
+
+			configured, err := c.CheckConfigured(context.Background())
+			if err != nil {
+				t.Fatalf("CheckConfigured: %v", err)
+			}
+			if configured != tt.want {
+				t.Fatalf("configured = %v, want %v", configured, tt.want)
+			}
+		})
+	}
+}
+
 func TestInitAdmin(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -256,5 +322,153 @@ func TestApplyOAuthEnablesSSO(t *testing.T) {
 	}
 	if !payload.OAuthSettings.SSO {
 		t.Fatal("OAuthSettings.SSO = false, want true")
+	}
+}
+
+func TestEnsureLocalEndpointCreatesMissingDockerSocket(t *testing.T) {
+	calls := 0
+	c := &Configurator{
+		PortainerURL: "http://localhost:9000",
+		HTTP: &mockHTTP{DoFunc: func(req *http.Request) (*http.Response, error) {
+			calls++
+			if req.Header.Get("Authorization") != "Bearer jwt-token" {
+				t.Fatalf("Authorization header = %q", req.Header.Get("Authorization"))
+			}
+			switch calls {
+			case 1:
+				if req.Method != http.MethodGet || req.URL.Path != "/api/endpoints" {
+					t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
+				}
+				return httpResponse(http.StatusOK, `[]`), nil
+			case 2:
+				if req.Method != http.MethodPost || req.URL.Path != "/api/endpoints" {
+					t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
+				}
+				if err := req.ParseMultipartForm(1024); err != nil {
+					t.Fatalf("ParseMultipartForm: %v", err)
+				}
+				if got := req.FormValue("Name"); got != "local" {
+					t.Fatalf("Name = %q, want local", got)
+				}
+				if got := req.FormValue("EndpointCreationType"); got != "1" {
+					t.Fatalf("EndpointCreationType = %q, want 1", got)
+				}
+				if got := req.FormValue("URL"); got != "unix:///var/run/docker.sock" {
+					t.Fatalf("URL = %q, want Docker socket", got)
+				}
+				return httpResponse(http.StatusOK, `{"Id":1}`), nil
+			default:
+				t.Fatalf("unexpected extra request %d", calls)
+				return nil, nil
+			}
+		}},
+	}
+
+	created, err := c.ensureLocalEndpoint(context.Background(), "jwt-token")
+	if err != nil {
+		t.Fatalf("ensureLocalEndpoint: %v", err)
+	}
+	if !created {
+		t.Fatal("created = false, want true")
+	}
+	if calls != 2 {
+		t.Fatalf("calls = %d, want 2", calls)
+	}
+}
+
+func TestEnsureLocalEndpointSkipsExistingDockerSocket(t *testing.T) {
+	calls := 0
+	c := &Configurator{
+		PortainerURL: "http://localhost:9000",
+		HTTP: &mockHTTP{DoFunc: func(req *http.Request) (*http.Response, error) {
+			calls++
+			if req.Method != http.MethodGet || req.URL.Path != "/api/endpoints" {
+				t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
+			}
+			return httpResponse(http.StatusOK, `[{"Id":1,"Name":"local","Type":1,"URL":"unix:///var/run/docker.sock"}]`), nil
+		}},
+	}
+
+	created, err := c.ensureLocalEndpoint(context.Background(), "jwt-token")
+	if err != nil {
+		t.Fatalf("ensureLocalEndpoint: %v", err)
+	}
+	if created {
+		t.Fatal("created = true, want false")
+	}
+	if calls != 1 {
+		t.Fatalf("calls = %d, want 1", calls)
+	}
+}
+
+func TestEnsureAdminUserPromotesConfiguredEmail(t *testing.T) {
+	calls := 0
+	c := &Configurator{
+		PortainerURL: "http://localhost:9000",
+		AdminEmail:   "admin@example.com",
+		HTTP: &mockHTTP{DoFunc: func(req *http.Request) (*http.Response, error) {
+			calls++
+			if req.Header.Get("Authorization") != "Bearer jwt-token" {
+				t.Fatalf("Authorization header = %q", req.Header.Get("Authorization"))
+			}
+			switch calls {
+			case 1:
+				if req.Method != http.MethodGet || req.URL.Path != "/api/users" {
+					t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
+				}
+				return httpResponse(http.StatusOK, `[{"Id":2,"Username":"admin@example.com","Role":2}]`), nil
+			case 2:
+				if req.Method != http.MethodPut || req.URL.Path != "/api/users/2" {
+					t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
+				}
+				var payload struct {
+					Role int `json:"role"`
+				}
+				if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+					t.Fatalf("decoding payload: %v", err)
+				}
+				if payload.Role != 1 {
+					t.Fatalf("role = %d, want 1", payload.Role)
+				}
+				return httpResponse(http.StatusOK, `{}`), nil
+			default:
+				t.Fatalf("unexpected extra request %d", calls)
+				return nil, nil
+			}
+		}},
+	}
+
+	updated, err := c.ensureAdminUser(context.Background(), "jwt-token")
+	if err != nil {
+		t.Fatalf("ensureAdminUser: %v", err)
+	}
+	if !updated {
+		t.Fatal("updated = false, want true")
+	}
+	if calls != 2 {
+		t.Fatalf("calls = %d, want 2", calls)
+	}
+}
+
+func TestEnsureAdminUserSkipsAlreadyAdmin(t *testing.T) {
+	calls := 0
+	c := &Configurator{
+		PortainerURL: "http://localhost:9000",
+		AdminEmail:   "admin@example.com",
+		HTTP: &mockHTTP{DoFunc: func(req *http.Request) (*http.Response, error) {
+			calls++
+			return httpResponse(http.StatusOK, `[{"Id":2,"Username":"admin@example.com","Role":1}]`), nil
+		}},
+	}
+
+	updated, err := c.ensureAdminUser(context.Background(), "jwt-token")
+	if err != nil {
+		t.Fatalf("ensureAdminUser: %v", err)
+	}
+	if updated {
+		t.Fatal("updated = true, want false")
+	}
+	if calls != 1 {
+		t.Fatalf("calls = %d, want 1", calls)
 	}
 }

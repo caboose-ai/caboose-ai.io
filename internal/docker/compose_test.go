@@ -123,3 +123,25 @@ services:
 		t.Fatalf("args = %#v, want %#v", runner.args, want)
 	}
 }
+
+func TestUpProfileServicesIncludesProfile(t *testing.T) {
+	runner := &mockRunner{}
+	client := NewComposeClient(runner, "/opt/homelab")
+
+	if _, err := client.UpProfileServices(context.Background(), "paperclip", "paperclip", "paperclip-db"); err != nil {
+		t.Fatalf("UpProfileServices: %v", err)
+	}
+
+	want := []string{
+		"compose",
+		"-f", "/opt/homelab/docker-compose.yml",
+		"--profile", "paperclip",
+		"up",
+		"-d",
+		"paperclip",
+		"paperclip-db",
+	}
+	if !reflect.DeepEqual(runner.args, want) {
+		t.Fatalf("args = %#v, want %#v", runner.args, want)
+	}
+}

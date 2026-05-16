@@ -29,6 +29,7 @@ type adminInitDoneMsg struct{}
 type captchaDoneMsg struct{}
 type enrollmentDoneMsg struct{}
 type forgejoDoneMsg struct{}
+type paperclipDoneMsg struct{}
 type progressMsg string
 
 type AppModel struct {
@@ -189,14 +190,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 		if len(m.installer.Services) == 0 {
-			summaryView := views.NewSummary(views.SummaryParams{
-				Results:       m.installer.State.ServiceResults,
-				Domain:        m.installer.State.Domain,
-				AdminPassword: m.installer.State.AdminPassword,
-				RecoveryLink:  m.installer.State.AdminRecoveryLink,
-			})
-			m.activeView = summaryView
-			return m, summaryView.Init()
+			m.currentProgress = "Starting and seeding Paperclip..."
+			return m, m.runBootstrapPaperclip()
 		}
 		serviceNames := make([]string, len(m.installer.Services))
 		for i, svc := range m.installer.Services {
@@ -234,6 +229,12 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// ── Restart done → summary ──────────────────────────────────────────────
 	case restartCompleteMsg:
+		m.currentProgress = "Starting and seeding Paperclip..."
+		return m, m.runBootstrapPaperclip()
+
+	// ── Paperclip seeded → summary ─────────────────────────────────────────
+	case paperclipDoneMsg:
+		m.currentProgress = ""
 		summaryView := views.NewSummary(views.SummaryParams{
 			Results:       m.installer.State.ServiceResults,
 			Domain:        m.installer.State.Domain,
@@ -522,6 +523,15 @@ func (m AppModel) runRestartServices() tea.Cmd {
 	return func() tea.Msg {
 		_ = m.installer.RestartServices(context.Background())
 		return restartCompleteMsg{}
+	}
+}
+
+func (m AppModel) runBootstrapPaperclip() tea.Cmd {
+	return func() tea.Msg {
+		if _, err := m.installer.BootstrapPaperclip(context.Background(), m.installer.Paperclip); err != nil {
+			return views.SecretsErrorMsg{Err: fmt.Errorf("Paperclip bootstrap: %w", err)}
+		}
+		return paperclipDoneMsg{}
 	}
 }
 

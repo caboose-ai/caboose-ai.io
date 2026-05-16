@@ -284,6 +284,7 @@ func runInstall(opts cliOpts) int {
 	secretStore := secretStoreForConfig(cfg, cmdRunner)
 
 	inst := install.New(cfg, secretStore, cmdRunner, httpClient)
+	inst.Paperclip = paperclipBootstrapOptions(opts, cfg)
 
 	if opts.nonInteractive || !isatty.IsTerminal(os.Stdout.Fd()) {
 		if !opts.nonInteractive {
@@ -299,6 +300,50 @@ func runInstall(opts cliOpts) int {
 		return 1
 	}
 	return 0
+}
+
+func paperclipBootstrapOptions(opts cliOpts, cfg *config.Config) install.PaperclipBootstrapOptions {
+	domain := cfg.Domain
+	if domain == "" {
+		domain = "caboose-ai.io"
+	}
+	delivery := paperclip.DefaultInternalDeliveryConfig(domain)
+	if value := firstNonEmpty(opts.paperclipForgejoRepoURL, os.Getenv("PAPERCLIP_FORGEJO_REPO_URL")); value != "" {
+		delivery.ForgejoRepoURL = value
+	}
+	if value := firstNonEmpty(opts.paperclipForgejoRemote, os.Getenv("PAPERCLIP_FORGEJO_REMOTE")); value != "" {
+		delivery.ForgejoRemote = value
+	}
+	if value := firstNonEmpty(opts.paperclipBranchPrefix, os.Getenv("PAPERCLIP_BRANCH_PREFIX")); value != "" {
+		delivery.BranchPrefix = value
+	}
+	if value := firstNonEmpty(opts.paperclipWoodpeckerURL, os.Getenv("PAPERCLIP_WOODPECKER_URL")); value != "" {
+		delivery.WoodpeckerURL = value
+	}
+	if value := firstNonEmpty(opts.paperclipPortainerURL, os.Getenv("PAPERCLIP_PORTAINER_URL")); value != "" {
+		delivery.PortainerURL = value
+	}
+
+	repo := opts.paperclipRepo
+	if envRepo := os.Getenv("PAPERCLIP_WORKSPACE_ROOT"); envRepo != "" && (repo == "" || repo == "/home/caboose/dev/caboose-ai.io") {
+		repo = envRepo
+	}
+
+	return install.PaperclipBootstrapOptions{
+		APIBase:  opts.paperclipAPIBase,
+		APIKey:   opts.paperclipAPIKey,
+		Repo:     repo,
+		Delivery: delivery,
+	}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func runReset(opts cliOpts) int {
