@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/caboose-ai/caboose-ai.io/compare/v0.4.1...v0.5.0) (2026-05-16)
+
+
+### Features
+
+* **paperclip:** route work through internal delivery ([#64](https://github.com/caboose-ai/caboose-ai.io/issues/64)) ([e43d6db](https://github.com/caboose-ai/caboose-ai.io/commit/e43d6dbb037535d706b6a591dd9cb5460ab0e79a))
+
 ## [0.4.1](https://github.com/caboose-ai/caboose-ai.io/compare/v0.4.0...v0.4.1) (2026-05-15)
 
 
