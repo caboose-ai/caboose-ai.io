@@ -118,7 +118,7 @@ jobs:
 
       - name: Upload tap update patch
         if: steps.diff.outputs.changed == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: homebrew-tap-patch
           path: homebrew-tap.patch
@@ -168,7 +168,7 @@ jobs:
           path: tap
 
       - name: Download tap update patch
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: homebrew-tap-patch
 
