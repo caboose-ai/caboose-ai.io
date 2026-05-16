@@ -46,6 +46,11 @@ func (c *ComposeClient) UpService(ctx context.Context, services ...string) ([]by
 	return c.run(ctx, args...)
 }
 
+func (c *ComposeClient) UpProfileServices(ctx context.Context, profile string, services ...string) ([]byte, error) {
+	args := append([]string{"up", "-d"}, services...)
+	return c.runWithProfiles(ctx, []string{profile}, args...)
+}
+
 func (c *ComposeClient) Restart(ctx context.Context, services ...string) ([]byte, error) {
 	args := append([]string{"restart"}, services...)
 	return c.run(ctx, args...)

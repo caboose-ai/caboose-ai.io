@@ -155,13 +155,13 @@ mise run service:status -- forgejo
 mise run service:configure -- mattermost --dry-run
 mise run service:smoke -- forgejo
 
-# Optional Paperclip profile. Base install provisions its SSO/dashboard
-# contract, but the app and DB only run after this profile is started.
-mise run paperclip:up
+# Paperclip is started and seeded by install. These commands are useful for
+# repair, verification, or intentionally restarting the profile.
 mise run paperclip:status
 mise run paperclip:smoke
 mise run paperclip:forgejo-remote
 mise run paperclip:seed
+mise run paperclip:up
 # Optional override for a differently named internal Forgejo repository
 mise run paperclip:seed -- --forgejo-repo-url https://git.caboose-ai.io/<owner>/<repo>.git
 
