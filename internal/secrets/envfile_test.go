@@ -131,6 +131,63 @@ func TestEnvFileStore_Generate(t *testing.T) {
 	}
 }
 
+func TestEnvFileStore_GenerateLettersDigitsRecipeExcludesSymbols(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".env")
+	store := NewEnvFileStore(path)
+	ctx := context.Background()
+
+	val, err := store.Generate(ctx, "TEST_SECRET", 512, GenerateOpts{Recipe: "letters,digits,512"})
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	for _, r := range val {
+		if !isASCIIAlnum(r) {
+			t.Fatalf("Generate produced non-alphanumeric character %q for letters,digits recipe", r)
+		}
+	}
+}
+
+func TestEnvFileStore_GenerateLettersDigitsSymbolsRecipeRequiresSymbol(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".env")
+	store := NewEnvFileStore(path)
+	ctx := context.Background()
+
+	for i := 0; i < 100; i++ {
+		val, err := store.Generate(ctx, "SONAR_ADMIN_PASSWORD", 32, GenerateOpts{Recipe: "letters,digits,symbols,32"})
+		if err != nil {
+			t.Fatalf("Generate: %v", err)
+		}
+		if !strings.ContainsAny(val, "!@#$%^&*") {
+			t.Fatalf("Generate produced password without required symbol on iteration %d", i)
+		}
+	}
+}
+
+func TestEnvFileStore_GenerateRequiredRecipeClassesSurviveInsertion(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".env")
+	store := NewEnvFileStore(path)
+	ctx := context.Background()
+
+	for i := 0; i < 100; i++ {
+		val, err := store.Generate(ctx, "SONAR_ADMIN_PASSWORD", 3, GenerateOpts{Recipe: "letters,digits,symbols,3"})
+		if err != nil {
+			t.Fatalf("Generate: %v", err)
+		}
+		if !strings.ContainsAny(val, randomLetters) {
+			t.Fatalf("Generate produced password without required letter on iteration %d", i)
+		}
+		if !strings.ContainsAny(val, randomDigits) {
+			t.Fatalf("Generate produced password without required digit on iteration %d", i)
+		}
+		if !strings.ContainsAny(val, randomSymbols) {
+			t.Fatalf("Generate produced password without required symbol on iteration %d", i)
+		}
+	}
+}
+
 func TestEnvFileStore_GenerateHex(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, ".env")
@@ -144,4 +201,8 @@ func TestEnvFileStore_GenerateHex(t *testing.T) {
 	if len(val) != 64 {
 		t.Errorf("len = %d, want 64", len(val))
 	}
+}
+
+func isASCIIAlnum(r rune) bool {
+	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')
 }
