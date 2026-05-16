@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/caboose-ai/caboose-ai.io/compare/v0.6.0...v0.6.1) (2026-05-16)
+
+
+### Bug Fixes
+
+* **homelab:** repair live service wiring and seed Paperclip ([#72](https://github.com/caboose-ai/caboose-ai.io/issues/72)) ([038d324](https://github.com/caboose-ai/caboose-ai.io/commit/038d3243a0724d6784dd0c821ffb82ac4ca36174))
+
 ## [0.6.0](https://github.com/caboose-ai/caboose-ai.io/compare/v0.5.1...v0.6.0) (2026-05-16)
 
 
