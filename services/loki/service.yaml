@@ -10,7 +10,7 @@ dashboard:
 sso:
   mode: none
 health:
-  path: http://127.0.0.1:3100/ready
+  path: http://127.0.0.1:3101/ready
   kind: http
 docs:
   - README.md

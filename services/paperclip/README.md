@@ -6,6 +6,10 @@ the Authentik forward-auth provider `paperclip-proxy`, and shown on Homarr.
 Paperclip itself runs in `local_trusted` mode on host loopback so Authentik is
 the only browser login prompt.
 
+The base installer provisions the Authentik and dashboard contract but does not
+start profile-gated containers. Run `mise run paperclip:up` after install before
+opening the public Paperclip URL.
+
 ## Operations
 
 ```bash

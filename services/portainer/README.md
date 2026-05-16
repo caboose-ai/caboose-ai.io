@@ -1,6 +1,9 @@
 # Portainer
 
-Portainer manages Docker resources. Its configurator sets up OIDC through Authentik.
+Portainer manages Docker resources. Its configurator sets up OIDC through
+Authentik, ensures the local Docker socket environment exists, and promotes the
+configured homelab admin email to Portainer admin when that OAuth-created user
+is present.
 
 ## Agent Control Role
 

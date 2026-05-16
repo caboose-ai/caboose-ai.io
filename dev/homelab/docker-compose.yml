@@ -50,7 +50,7 @@ services:
     restart: unless-stopped
 
   portainer:
-    image: portainer/portainer-ce:2.39.1
+    image: portainer/portainer-ce:2.39.2
     container_name: portainer
     ports:
       - "${HOMELAB_BIND_ADDRESS:-127.0.0.1}:9000:9000"
@@ -136,12 +136,11 @@ services:
   grafana:
     image: grafana/grafana:13.0.1
     container_name: grafana
-    ports:
-      - "${HOMELAB_BIND_ADDRESS:-127.0.0.1}:3001:3000"
-    extra_hosts:
-      - host.docker.internal:host-gateway
+    network_mode: host
     environment:
       GF_SERVER_ROOT_URL: https://grafana.caboose-ai.io
+      GF_SERVER_HTTP_ADDR: "${HOMELAB_BIND_ADDRESS:-127.0.0.1}"
+      GF_SERVER_HTTP_PORT: "3001"
       GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-admin}"
       GF_AUTH_GENERIC_OAUTH_ENABLED: "true"
       GF_AUTH_GENERIC_OAUTH_NAME: "authentik"
@@ -162,8 +161,6 @@ services:
       - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
       - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
-    networks:
-      - apps
     restart: unless-stopped
 
   cadvisor:
@@ -424,6 +421,8 @@ services:
     image: grafana/loki:3.5.0
     container_name: loki
     command: -config.file=/etc/loki/local-config.yaml
+    ports:
+      - "${HOMELAB_BIND_ADDRESS:-127.0.0.1}:3101:3100"
     volumes:
       - loki_data:/loki
     networks:

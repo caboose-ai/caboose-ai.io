@@ -155,7 +155,8 @@ mise run service:status -- forgejo
 mise run service:configure -- mattermost --dry-run
 mise run service:smoke -- forgejo
 
-# Optional Paperclip profile
+# Optional Paperclip profile. Base install provisions its SSO/dashboard
+# contract, but the app and DB only run after this profile is started.
 mise run paperclip:up
 mise run paperclip:status
 mise run paperclip:smoke

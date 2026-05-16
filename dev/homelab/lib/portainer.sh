@@ -8,14 +8,18 @@ PORTAINER_REDIRECT_URI="https://docker.${DOMAIN}/"
 # ── Portainer API auth ─────────────────────────────────────────────────────
 
 portainer_get_jwt() {
-  require_env PORTAINER_ADMIN_PASS || return 1
+  local admin_pass="${PORTAINER_ADMIN_PASSWORD:-${PORTAINER_ADMIN_PASS:-}}"
+  if [[ -z "$admin_pass" ]]; then
+    log_error "PORTAINER_ADMIN_PASSWORD is required (legacy PORTAINER_ADMIN_PASS is also accepted)."
+    return 1
+  fi
 
   local jwt
   jwt=$(curl_api POST "${PORTAINER_URL}/api/auth" \
     -H "Content-Type: application/json" \
-    -d "{\"Username\":\"admin\",\"Password\":\"${PORTAINER_ADMIN_PASS}\"}" \
+    -d "{\"Username\":\"admin\",\"Password\":\"${admin_pass}\"}" \
   ) || {
-    log_error "Cannot authenticate with Portainer at ${PORTAINER_URL}. Check PORTAINER_ADMIN_PASS."
+    log_error "Cannot authenticate with Portainer at ${PORTAINER_URL}. Check PORTAINER_ADMIN_PASSWORD."
     return 1
   }
 
@@ -48,9 +52,10 @@ portainer_apply_oauth() {
         \"AccessTokenURI\":       \"${AUTHENTIK_URL}/application/o/token/\",
         \"ResourceURI\":          \"${AUTHENTIK_URL}/application/o/userinfo/\",
         \"RedirectURI\":          \"${PORTAINER_REDIRECT_URI}\",
-        \"UserIdentifier\":       \"preferred_username\",
+        \"UserIdentifier\":       \"email\",
         \"Scopes\":               \"openid email profile\",
-        \"OAuthAutoCreateUsers\": true
+        \"OAuthAutoCreateUsers\": true,
+        \"SSO\":                  true
       }
     }"
 }
@@ -61,7 +66,10 @@ setup_portainer() {
   log_step "Setting up Portainer OAuth via Authentik"
 
   require_env AUTHENTIK_TOKEN || return 1
-  require_env PORTAINER_ADMIN_PASS || return 1
+  if [[ -z "${PORTAINER_ADMIN_PASSWORD:-${PORTAINER_ADMIN_PASS:-}}" ]]; then
+    log_error "PORTAINER_ADMIN_PASSWORD is required (legacy PORTAINER_ADMIN_PASS is also accepted)."
+    return 1
+  fi
 
   local client_id client_secret jwt current_client
 

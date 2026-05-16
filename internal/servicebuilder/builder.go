@@ -80,7 +80,7 @@ func Build(ctx context.Context, deps Dependencies) ([]service.ServiceConfigurato
 	return []service.ServiceConfigurator{
 		forgejo.New(deps.Authentik, deps.DockerExec, deps.Secrets, "forgejo", "auth-admin", urls.Authentik),
 		woodpecker.New(deps.DockerExec, deps.HTTP, deps.Secrets, "woodpecker-server", "auth-admin", giteaAdminPass, urls.Woodpecker+"/authorize"),
-		portainer.New(deps.Authentik, deps.HTTP, deps.Runner, portainerAPIURL, portainerAdminPass, urls.Authentik, urls.Portainer+"/"),
+		portainer.New(deps.Authentik, deps.HTTP, deps.Runner, portainerAPIURL, portainerAdminPass, deps.Config.Email, urls.Authentik, urls.Portainer+"/"),
 		grafana.New(deps.Authentik, deps.Secrets),
 		openwebui.New(deps.Authentik, deps.Secrets),
 		homarr.New(deps.Authentik, deps.Secrets, homarrAPIURL, deps.HTTP, deps.DockerExec, "homarr", homarrApps(urls, manifests)...),

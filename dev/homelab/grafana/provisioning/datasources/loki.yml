@@ -5,5 +5,5 @@ datasources:
     type: loki
     uid: loki
     access: proxy
-    url: http://loki:3100
+    url: http://127.0.0.1:3101
     editable: false
