@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 
 	"github.com/caboose-ai/caboose-ai.io/internal/mcpaccess"
 )
@@ -177,10 +178,15 @@ func printMCPAccessCredentialError(w io.Writer, path string, err error) {
 		fmt.Fprintf(w, "loading credential: %v\n", err)
 		return
 	}
+	explicitPath := path != ""
 	if path == "" {
 		if defaultPath, defaultErr := mcpaccess.DefaultCredentialPath(); defaultErr == nil {
 			path = defaultPath
 		}
+	}
+	credentialFlag := ""
+	if explicitPath {
+		credentialFlag = " --credential-file " + strconv.Quote(path)
 	}
 	if path == "" {
 		fmt.Fprintln(w, "No Homelab MCP access credential found.")
@@ -191,9 +197,9 @@ func printMCPAccessCredentialError(w io.Writer, path string, err error) {
 	fmt.Fprintln(w, "  homelab mcp access setup")
 	fmt.Fprintln(w, "  homelab-mcp access request --name \"$(hostname)\" --out mcp-request.json")
 	fmt.Fprintln(w, "  homelab mcp access approve mcp-request.json --out mcp-release.json")
-	fmt.Fprintln(w, "  homelab-mcp access import mcp-release.json")
+	fmt.Fprintf(w, "  homelab-mcp access import%s mcp-release.json\n", credentialFlag)
 	fmt.Fprintln(w, "Then retry:")
-	fmt.Fprintln(w, "  homelab-mcp access status")
+	fmt.Fprintf(w, "  homelab-mcp access status%s\n", credentialFlag)
 }
 
 func writeJSONOutput(stdout io.Writer, path string, value any) error {

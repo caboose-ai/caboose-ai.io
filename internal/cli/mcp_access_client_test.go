@@ -61,3 +61,25 @@ func TestRunMCPAccessClientStatusMissingCredentialExplainsStartupFix(t *testing.
 		}
 	}
 }
+
+func TestRunMCPAccessClientStatusMissingCredentialPreservesExplicitPath(t *testing.T) {
+	credentialPath := filepath.Join(t.TempDir(), "credential with space.json")
+	var stdout, stderr bytes.Buffer
+
+	code := RunMCPAccessClient(context.Background(), &stdout, &stderr, []string{
+		"status",
+		"--credential-file", credentialPath,
+	}, MCPAccessClientOptions{})
+	if code == 0 {
+		t.Fatalf("exit code = 0, want failure")
+	}
+	message := stderr.String()
+	for _, want := range []string{
+		`homelab-mcp access import --credential-file "` + credentialPath + `" mcp-release.json`,
+		`homelab-mcp access status --credential-file "` + credentialPath + `"`,
+	} {
+		if !strings.Contains(message, want) {
+			t.Fatalf("stderr missing %q:\n%s", want, message)
+		}
+	}
+}
