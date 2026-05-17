@@ -71,6 +71,19 @@ brew install caboose-homelab
 brew install caboose-homelab-mcp
 ```
 
+After a new `caboose-homelab` release reaches the tap, the update/reset helper
+upgrades only that formula and then runs `homelab reset --yes --keep-env`:
+
+```bash
+mise run homelab:update-reset
+
+# Poll until an update appears, then upgrade and reset
+mise run homelab:update-reset:wait
+
+# Preview the direct script path
+dev/homelab/update-homelab-and-reset.sh --dry-run
+```
+
 The formulae install `homelab` and `homelab-mcp`. Runtime prerequisites are
 intentionally documented instead of enforced as Homebrew dependencies: Docker
 with Compose for the stack itself, plus either the 1Password CLI or a populated
@@ -143,6 +156,9 @@ mise run reset
 
 # Reset, then run the verified non-interactive installer
 mise run reinstall
+
+# Upgrade only caboose-homelab from Homebrew when available, then reset
+mise run homelab:update-reset
 
 # Print GitHub, Google, and Turnstile setup URLs/callbacks
 mise run homelab:oauth-setup

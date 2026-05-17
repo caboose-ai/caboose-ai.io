@@ -87,6 +87,14 @@ run = "go run ./cmd/homelab reset --yes --domain \"$HOMELAB_DOMAIN\" --compose-d
 description = "Full factory reset then non-interactive install (wipes .env)"
 run = "go run ./cmd/homelab reset --yes --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" && go run ./cmd/homelab install --non-interactive --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" --serve-mode \"$HOMELAB_SERVE_MODE\""
 
+[tasks."homelab:update-reset"]
+description = "Upgrade caboose-homelab from Homebrew when available, then reset"
+run = "dev/homelab/update-homelab-and-reset.sh --yes --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
+
+[tasks."homelab:update-reset:wait"]
+description = "Poll Homebrew until caboose-homelab has an update, then reset"
+run = "dev/homelab/update-homelab-and-reset.sh --yes --wait --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
+
 [tasks.recovery]
 description = "Generate an Authentik admin recovery URL"
 run = "go run ./cmd/homelab recovery --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
