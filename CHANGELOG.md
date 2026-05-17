@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1](https://github.com/caboose-ai/caboose-ai.io/compare/v0.7.0...v0.7.1) (2026-05-17)
+
+
+### Bug Fixes
+
+* **mcp:** complete startup access recovery ([#76](https://github.com/caboose-ai/caboose-ai.io/issues/76)) ([e901800](https://github.com/caboose-ai/caboose-ai.io/commit/e90180026b8b49409b7f57ac93ee1fb20234b7f7))
+
 ## [0.7.0](https://github.com/caboose-ai/caboose-ai.io/compare/v0.6.1...v0.7.0) (2026-05-17)
 
 
