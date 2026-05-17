@@ -104,3 +104,53 @@ func TestGrafanaDatasourcesUseHostLoopback(t *testing.T) {
 		})
 	}
 }
+
+func TestPrometheusDoesNotScrapeMattermostTeamEditionMetrics(t *testing.T) {
+	data, err := os.ReadFile("../../dev/homelab/prometheus.yml")
+	if err != nil {
+		t.Fatalf("read prometheus config: %v", err)
+	}
+
+	var cfg struct {
+		ScrapeConfigs []struct {
+			JobName string `yaml:"job_name"`
+		} `yaml:"scrape_configs"`
+	}
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		t.Fatalf("parse prometheus config: %v", err)
+	}
+
+	for _, scrape := range cfg.ScrapeConfigs {
+		if scrape.JobName == "mattermost" {
+			t.Fatal("mattermost Team Edition does not expose HTTP /metrics; do not ship a permanently down scrape target")
+		}
+	}
+}
+
+func TestMattermostDoesNotPublishTeamEditionProfilingAsMetrics(t *testing.T) {
+	data, err := os.ReadFile("../../dev/homelab/docker-compose.yml")
+	if err != nil {
+		t.Fatalf("read compose: %v", err)
+	}
+
+	var compose struct {
+		Services map[string]struct {
+			Environment map[string]string `yaml:"environment"`
+			Ports       []string          `yaml:"ports"`
+		} `yaml:"services"`
+	}
+	if err := yaml.Unmarshal(data, &compose); err != nil {
+		t.Fatalf("parse compose: %v", err)
+	}
+
+	mattermost, ok := compose.Services["mattermost"]
+	if !ok {
+		t.Fatal("mattermost service missing")
+	}
+	if contains(mattermost.Ports, "${HOMELAB_BIND_ADDRESS:-127.0.0.1}:8067:8067") {
+		t.Fatal("mattermost Team Edition profiling listener must not be published as a metrics port")
+	}
+	if mattermost.Environment["MM_METRICSSETTINGS_ENABLE"] == "true" {
+		t.Fatal("mattermost Team Edition metrics env must stay disabled unless the image/license exposes /metrics")
+	}
+}

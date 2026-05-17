@@ -311,7 +311,9 @@ manifest-owned flow, for example `mise run paperclip:smoke`.
   for Codex review completion, check state, and final human-review handoff
 - **Cloudflare tunnel** for `chat` and `sonar` subdomains
 - **1Password** for secret storage (with `.env` fallback)
-- **Prometheus + Loki** for metrics and logs, visualized in Grafana
+- **Prometheus + Loki** for metrics and logs, visualized in Grafana. Mattermost
+  Team Edition is omitted from Prometheus scrapes because it does not expose the
+  HTTP `/metrics` endpoint.
 
 ## Documentation
 

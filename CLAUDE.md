@@ -179,7 +179,7 @@ container recreation.
 - Domain: `caboose-ai.io`
 - Auth: `auth.caboose-ai.io` (Authentik)
 - Services: git, ci, docker, grafana, ai, sonar, chat, openclaw, blog, paperclip, telegram-agent, dash
-- Observability: Prometheus (metrics), Loki + Promtail (logs), Grafana (dashboards)
+- Observability: Prometheus (metrics), Loki + Promtail (logs), Grafana (dashboards). Mattermost Team Edition is intentionally omitted from Prometheus scrapes because it does not expose HTTP `/metrics`.
 - Caddy reverse proxy on the host
 - Cloudflare tunnel for `chat` and `sonar` subdomains
 - Ollama on host for local LLM inference
