@@ -30,8 +30,8 @@ jobs:
     runs-on: ubuntu-latest
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request_target' && startsWith(github.event.pull_request.head.ref, 'release-please--branches--main--')) ||
-      (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request' && startsWith(github.event.workflow_run.head_branch, 'release-please--branches--main--'))
+      (github.event_name == 'pull_request_target' && (github.event.pull_request.head.ref == 'release-please--branches--main' || startsWith(github.event.pull_request.head.ref, 'release-please--branches--main--'))) ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request' && (github.event.workflow_run.head_branch == 'release-please--branches--main' || startsWith(github.event.workflow_run.head_branch, 'release-please--branches--main--')))
     steps:
       - name: Resolve PR number
         id: pr
@@ -78,6 +78,9 @@ jobs:
           uv run python .github/scripts/release_please_automerge.py \
             --repo "$GITHUB_REPOSITORY" \
             --pr "${{ steps.pr.outputs.number }}" \
+            --allowed-author "cxm6467" \
+            --allowed-author "github-actions[bot]" \
+            --allowed-author "release-please[bot]" \
             --expected-check "Conventional PR title" \
             --expected-check "Test and build" \
             --expected-check "docs-check" \
