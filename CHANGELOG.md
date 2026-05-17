@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/caboose-ai/caboose-ai.io/compare/v0.6.1...v0.7.0) (2026-05-17)
+
+
+### Features
+
+* **homelab:** add brew update reset helper ([#74](https://github.com/caboose-ai/caboose-ai.io/issues/74)) ([8625b7c](https://github.com/caboose-ai/caboose-ai.io/commit/8625b7c47ed57002d9c772c62ab503d6ee804d87))
+
 ## [0.6.1](https://github.com/caboose-ai/caboose-ai.io/compare/v0.6.0...v0.6.1) (2026-05-16)
 
 
