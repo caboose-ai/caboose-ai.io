@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/caboose-ai/caboose-ai.io/compare/v0.7.1...v0.8.0) (2026-05-17)
+
+
+### Features
+
+* **homelab:** add vault-backed static env reset ([#78](https://github.com/caboose-ai/caboose-ai.io/issues/78)) ([c961967](https://github.com/caboose-ai/caboose-ai.io/commit/c9619672457aefe0b337d80092b8cecd5afbf95b))
+
 ## [0.7.1](https://github.com/caboose-ai/caboose-ai.io/compare/v0.7.0...v0.7.1) (2026-05-17)
 
 
