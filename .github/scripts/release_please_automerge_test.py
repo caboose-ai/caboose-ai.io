@@ -21,7 +21,9 @@ def release_pr(**overrides):
         "title": "chore(main): release 0.9.0",
         "state": "OPEN",
         "isDraft": False,
+        "author": {"login": "cxm6467"},
         "baseRefName": "main",
+        "headRefOid": "abc123",
         "headRefName": "release-please--branches--main--components--caboose-ai.io",
         "labels": [{"name": "autorelease: pending"}],
         "headRepositoryOwner": {"login": "caboose-ai"},
@@ -30,7 +32,6 @@ def release_pr(**overrides):
             "nameWithOwner": "caboose-ai/caboose-ai.io",
         },
         "isCrossRepository": False,
-        "author": {"login": "cxm6467"},
     }
     pr.update(overrides)
     return pr
@@ -52,8 +53,17 @@ class ReleasePleaseAutomergeTest(unittest.TestCase):
     def test_identifies_release_please_prs_only(self):
         self.assertTrue(
             release_please_automerge.is_release_please_pr(
-                release_pr(), repo=REPO, allowed_authors=ALLOWED_AUTHORS
-            )
+                release_pr(),
+                repo=REPO,
+                allowed_authors=ALLOWED_AUTHORS,
+            ),
+        )
+        self.assertTrue(
+            release_please_automerge.is_release_please_pr(
+                release_pr(headRefName="release-please--branches--main"),
+                repo=REPO,
+                allowed_authors=ALLOWED_AUTHORS,
+            ),
         )
         self.assertFalse(
             release_please_automerge.is_release_please_pr(
@@ -105,7 +115,7 @@ class ReleasePleaseAutomergeTest(unittest.TestCase):
                     headRepository={
                         "name": "other",
                         "nameWithOwner": "caboose-ai/other",
-                    }
+                    },
                 ),
                 repo=REPO,
                 allowed_authors=ALLOWED_AUTHORS,
@@ -192,6 +202,19 @@ class ReleasePleaseAutomergeTest(unittest.TestCase):
         )
 
         self.assertEqual(release_please_automerge.CheckState.READY, summary.state)
+
+    def test_merge_args_pin_checked_head_sha(self):
+        args = release_please_automerge.merge_args("caboose-ai/caboose-ai.io", release_pr())
+
+        self.assertIn("--match-head-commit", args)
+        self.assertEqual("abc123", args[args.index("--match-head-commit") + 1])
+
+    def test_merge_args_require_head_sha(self):
+        with self.assertRaisesRegex(RuntimeError, "headRefOid is required"):
+            release_please_automerge.merge_args(
+                "caboose-ai/caboose-ai.io",
+                release_pr(headRefOid=""),
+            )
 
 
 if __name__ == "__main__":

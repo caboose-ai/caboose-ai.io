@@ -13,7 +13,8 @@ from typing import Any
 RELEASE_TITLE_RE = re.compile(
     r"^chore\(main\): release \d+[.]\d+[.]\d+(?:[-+][0-9A-Za-z.-]+)?$"
 )
-RELEASE_BRANCH_PREFIX = "release-please--branches--main--"
+RELEASE_BRANCH = "release-please--branches--main"
+RELEASE_BRANCH_COMPONENT_PREFIX = f"{RELEASE_BRANCH}--"
 DEFAULT_ALLOWED_AUTHORS = ("github-actions[bot]", "release-please[bot]", "cxm6467")
 
 
@@ -59,6 +60,10 @@ def nested_string(mapping: dict[str, Any], *keys: str) -> str:
     return value if isinstance(value, str) else ""
 
 
+def is_release_please_branch(branch: str) -> bool:
+    return branch == RELEASE_BRANCH or branch.startswith(RELEASE_BRANCH_COMPONENT_PREFIX)
+
+
 def is_trusted_release_source(
     pr: dict[str, Any],
     *,
@@ -96,7 +101,7 @@ def is_release_please_pr(
         return False
     if pr.get("baseRefName") != "main":
         return False
-    if not str(pr.get("headRefName") or "").startswith(RELEASE_BRANCH_PREFIX):
+    if not is_release_please_branch(str(pr.get("headRefName") or "")):
         return False
     if not RELEASE_TITLE_RE.match(str(pr.get("title") or "")):
         return False
@@ -204,11 +209,12 @@ def fetch_pr(repo: str, pr_number: int) -> dict[str, Any]:
             "state",
             "isDraft",
             "baseRefName",
+            "author",
+            "headRefOid",
             "headRefName",
             "headRepository",
             "headRepositoryOwner",
             "isCrossRepository",
-            "author",
             "labels",
             "statusCheckRollup",
         ],
@@ -242,6 +248,29 @@ def approve_pr(repo: str, pr_number: int, *, dry_run: bool) -> None:
         )
 
 
+def merge_args(repo: str, pr: dict[str, Any]) -> list[str]:
+    pr_number = int(pr["number"])
+    title = str(pr["title"])
+    head_oid = str(pr.get("headRefOid") or "")
+    if not head_oid:
+        raise RuntimeError("headRefOid is required to merge the checked Release Please PR head")
+    return [
+        "pr",
+        "merge",
+        str(pr_number),
+        "--repo",
+        repo,
+        "--squash",
+        "--delete-branch",
+        "--match-head-commit",
+        head_oid,
+        "--subject",
+        title,
+        "--body",
+        "Automatically merged after Release Please CI passed.",
+    ]
+
+
 def merge_pr(repo: str, pr: dict[str, Any], *, dry_run: bool) -> None:
     pr_number = int(pr["number"])
     title = str(pr["title"])
@@ -255,22 +284,7 @@ def merge_pr(repo: str, pr: dict[str, Any], *, dry_run: bool) -> None:
             "GH_MERGE_TOKEN or GH_TOKEN is required to merge the Release Please PR"
         )
 
-    run_gh(
-        [
-            "pr",
-            "merge",
-            str(pr_number),
-            "--repo",
-            repo,
-            "--squash",
-            "--delete-branch",
-            "--subject",
-            title,
-            "--body",
-            "Automatically merged after Release Please CI passed.",
-        ],
-        token=token,
-    )
+    run_gh(merge_args(repo, pr), token=token)
 
 
 def main() -> int:
@@ -320,14 +334,16 @@ def main() -> int:
         raise SystemExit("--expected-check is required at least once")
     if args.wait_attempts < 1:
         raise SystemExit("--wait-attempts must be at least 1")
-    allowed_authors = tuple(args.allowed_author) or DEFAULT_ALLOWED_AUTHORS
 
+    allowed_authors = tuple(args.allowed_author or DEFAULT_ALLOWED_AUTHORS)
     pr: dict[str, Any] = {}
     summary: CheckSummary | None = None
     for attempt in range(args.wait_attempts):
         pr = fetch_pr(args.repo, args.pr)
         if not is_release_please_pr(
-            pr, repo=args.repo, allowed_authors=allowed_authors
+            pr,
+            repo=args.repo,
+            allowed_authors=allowed_authors,
         ):
             print(f"PR #{args.pr} is not an open Release Please PR; skipping.")
             return 0
@@ -352,9 +368,7 @@ def main() -> int:
             waits.append(f"missing: {', '.join(summary.missing)}")
         if summary.pending:
             waits.append(f"pending: {', '.join(summary.pending)}")
-        print(
-            f"Release Please PR #{args.pr} is waiting for checks ({'; '.join(waits)})."
-        )
+        print(f"Release Please PR #{args.pr} is waiting for checks ({'; '.join(waits)}).")
         return 0
 
     print(f"Release Please PR #{args.pr} has passed expected CI checks.")
