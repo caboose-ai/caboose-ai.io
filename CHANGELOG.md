@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.1](https://github.com/caboose-ai/caboose-ai.io/compare/v0.8.0...v0.8.1) (2026-05-17)
+
+
+### Bug Fixes
+
+* **release:** harden release please auto-merge ([#81](https://github.com/caboose-ai/caboose-ai.io/issues/81)) ([a854652](https://github.com/caboose-ai/caboose-ai.io/commit/a854652bdfeb3a9202818f6b0d91741556f3c1ce))
+
 ## [0.8.0](https://github.com/caboose-ai/caboose-ai.io/compare/v0.7.1...v0.8.0) (2026-05-17)
 
 
