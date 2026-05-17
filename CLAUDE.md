@@ -22,6 +22,7 @@ mise run lint                     # run golangci-lint checks
 mise run vulncheck                # run govulncheck across packages
 go test ./internal/install/ -v    # test a specific package
 go run ./cmd/homelab oauth-setup --domain caboose-ai.io  # print external OAuth/Turnstile setup
+go run ./cmd/homelab reset --yes --store-static-env --domain caboose-ai.io --compose-dir /opt/homelab  # store static .env values in 1Password, then remove .env
 go run ./cmd/homelab service --domain caboose-ai.io forgejo status  # inspect one service
 go run ./cmd/telegram-agent notify "task finished"  # send a Telegram completion notice
 go run ./cmd/mcp access request --name "codex on laptop" --out mcp-request.json  # create MCP access request
@@ -115,6 +116,10 @@ container recreation.
 - Direct `homelab reset` requires `--yes` unless `--dry-run`; live Docker,
   SQLite, secret, reset, and destructive filesystem changes require explicit
   human approval.
+- `homelab reset --store-static-env` copies static external `.env` values
+  (GitHub, Google, Turnstile, Cloudflare) to the static 1Password vault before
+  teardown, then removes `.env`; install restores those static values from the
+  secret store into a fresh `.env`.
 
 ### Documentation
 - Every PR to main that changes code or infrastructure MUST update docs.

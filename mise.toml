@@ -63,6 +63,10 @@ run = "go run ./cmd/homelab reset --yes --keep-env --domain \"$HOMELAB_DOMAIN\" 
 description = "Reset homelab stack (keeps .env credentials by default)"
 run = "go run ./cmd/homelab reset --yes --keep-env --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
 
+[tasks."homelab:vault-reset"]
+description = "Store static .env credentials in 1Password, then reset and remove .env"
+run = "go run ./cmd/homelab reset --yes --store-static-env --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
+
 [tasks."factory-reset"]
 description = "Full factory reset — tears down everything including .env credentials"
 run = "go run ./cmd/homelab reset --yes --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
@@ -78,6 +82,10 @@ run = "go run ./cmd/homelab reset --yes --keep-env --domain \"$HOMELAB_DOMAIN\" 
 [tasks."homelab:reinstall"]
 description = "Reset (keep .env) then non-interactive install"
 run = "go run ./cmd/homelab reset --yes --keep-env --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" && go run ./cmd/homelab install --non-interactive --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" --serve-mode \"$HOMELAB_SERVE_MODE\""
+
+[tasks."homelab:vault-reinstall"]
+description = "Store static .env credentials in 1Password, remove .env, then non-interactive install"
+run = "go run ./cmd/homelab reset --yes --store-static-env --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" && go run ./cmd/homelab install --non-interactive --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" --serve-mode \"$HOMELAB_SERVE_MODE\""
 
 [tasks."factory-reinstall"]
 description = "Full factory reset then non-interactive install (wipes .env)"

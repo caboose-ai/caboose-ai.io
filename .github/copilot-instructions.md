@@ -156,6 +156,10 @@ approves a runtime mutation.
 - Direct `homelab reset` requires `--yes` unless `--dry-run`; live Docker,
   SQLite, secret, reset, and destructive filesystem changes require explicit
   human approval.
+- `homelab reset --store-static-env` copies static external `.env` values
+  (GitHub, Google, Turnstile, Cloudflare) to the static 1Password vault before
+  teardown, then removes `.env`; install restores those static values from the
+  secret store into a fresh `.env`.
 
 ## Documentation
 
@@ -195,6 +199,7 @@ approves a runtime mutation.
 ```bash
 go run ./cmd/homelab oauth-setup --domain caboose-ai.io
 CLOUDFLARE_ACCOUNT_ID=... CLOUDFLARE_API_TOKEN=... go run ./cmd/homelab oauth-setup --domain caboose-ai.io --create-turnstile
+go run ./cmd/homelab reset --yes --store-static-env --domain caboose-ai.io --compose-dir /opt/homelab
 go run ./cmd/homelab install --domain caboose-ai.io --compose-dir dev/homelab
 go run ./cmd/homelab service --domain caboose-ai.io --compose-dir dev/homelab forgejo status
 mise run paperclip:seed

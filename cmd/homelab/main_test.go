@@ -15,3 +15,17 @@ func TestValidateResetConfirmationAllowsDryRunOrYes(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateResetConfirmationRejectsStaticEnvStoreWithKeepEnv(t *testing.T) {
+	err := validateResetConfirmation(cliOpts{yes: true, keepEnv: true, storeStaticEnv: true})
+	if err == nil {
+		t.Fatal("validateResetConfirmation allowed --store-static-env with --keep-env")
+	}
+}
+
+func TestValidateResetConfirmationRejectsStaticEnvStoreWithEnvOnlySecrets(t *testing.T) {
+	err := validateResetConfirmation(cliOpts{yes: true, secretsEnvOnly: true, storeStaticEnv: true})
+	if err == nil {
+		t.Fatal("validateResetConfirmation allowed --store-static-env with --secrets-env-only")
+	}
+}

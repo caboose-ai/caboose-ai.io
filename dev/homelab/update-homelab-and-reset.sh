@@ -11,6 +11,7 @@ INTERVAL="${HOMELAB_UPDATE_POLL_INTERVAL:-300}"
 WAIT=false
 DRY_RUN=false
 YES=false
+STORE_STATIC_ENV=false
 
 usage() {
   cat <<EOF
@@ -20,9 +21,15 @@ Checks Homebrew for an update to caboose-homelab, upgrades only that formula,
 then runs:
   homelab reset --yes --keep-env --domain <domain> --compose-dir <dir>
 
+Pass --store-static-env to run reset with --store-static-env instead of
+--keep-env, which requires 1Password access and removes .env after copying
+static external credentials into the static vault.
+
 Options:
   --yes                 Confirm the destructive reset path.
   --wait                Poll until a caboose-homelab update is available.
+  --store-static-env    Store static .env credentials in 1Password before reset
+                        and remove .env instead of keeping it.
   --interval SECONDS    Poll interval for --wait. Default: $INTERVAL.
   --dry-run             Print planned commands without executing them.
   --formula NAME        Homebrew formula to check. Default: $FORMULA.
@@ -69,6 +76,9 @@ while [ "$#" -gt 0 ]; do
       ;;
     --wait)
       WAIT=true
+      ;;
+    --store-static-env)
+      STORE_STATIC_ENV=true
       ;;
     --interval)
       shift
@@ -126,7 +136,11 @@ if "$DRY_RUN"; then
     printf 'would wait %s seconds between update checks\n' "$INTERVAL"
   fi
   would_run brew upgrade "$FORMULA"
-  would_run "$HOMELAB_BIN" reset --yes --keep-env --domain "$DOMAIN" --compose-dir "$COMPOSE_DIR"
+  reset_env_args=(--keep-env)
+  if "$STORE_STATIC_ENV"; then
+    reset_env_args=(--store-static-env)
+  fi
+  would_run "$HOMELAB_BIN" reset --yes "${reset_env_args[@]}" --domain "$DOMAIN" --compose-dir "$COMPOSE_DIR"
   exit 0
 fi
 
@@ -161,4 +175,8 @@ done
 
 run_cmd brew upgrade "$FORMULA"
 command -v "$HOMELAB_BIN" >/dev/null 2>&1 || die "homelab binary not found after upgrade: $HOMELAB_BIN"
-run_cmd "$HOMELAB_BIN" reset --yes --keep-env --domain "$DOMAIN" --compose-dir "$COMPOSE_DIR"
+reset_env_args=(--keep-env)
+if "$STORE_STATIC_ENV"; then
+  reset_env_args=(--store-static-env)
+fi
+run_cmd "$HOMELAB_BIN" reset --yes "${reset_env_args[@]}" --domain "$DOMAIN" --compose-dir "$COMPOSE_DIR"

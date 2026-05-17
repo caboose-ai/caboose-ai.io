@@ -74,6 +74,13 @@ func RunInstall(ctx context.Context, inst *install.Installer) int {
 	}
 	console.Success("vaults ready")
 
+	console.Run("restoring static .env credentials from secret store")
+	if err := inst.RestoreStaticEnv(ctx); err != nil {
+		console.Error("static credential restore failed", "error", err)
+		return 2
+	}
+	console.Success("static credentials restored")
+
 	console.Run("generating and loading secrets")
 	if err := inst.GenerateSecrets(ctx, func(key string) (string, error) {
 		if key == "AUTHENTIK_BOOTSTRAP_EMAIL" && inst.Config.Email != "" {

@@ -82,6 +82,9 @@ mise run homelab:update-reset:wait
 
 # Preview the direct script path
 dev/homelab/update-homelab-and-reset.sh --dry-run
+
+# After signing in to 1Password, store static .env values before reset
+dev/homelab/update-homelab-and-reset.sh --yes --store-static-env
 ```
 
 The formulae install `homelab` and `homelab-mcp`. Runtime prerequisites are
@@ -154,8 +157,14 @@ mise run homelab
 # Reset everything while preserving static external credentials
 mise run reset
 
+# Store static .env credentials in 1Password, remove .env, then reset
+mise run homelab:vault-reset
+
 # Reset, then run the verified non-interactive installer
 mise run reinstall
+
+# Store static .env credentials in 1Password, remove .env, then reinstall
+mise run homelab:vault-reinstall
 
 # Upgrade only caboose-homelab from Homebrew when available, then reset
 mise run homelab:update-reset
@@ -241,11 +250,17 @@ Direct `homelab reset` is destructive and requires `--yes` unless `--dry-run`
 is used. The recurring `mise` reset/reinstall tasks pass `--yes` explicitly so
 automation remains intentional and auditable. Reset uses the compose file's
 declared profiles when tearing down volumes, so optional services such as
-Paperclip are included in a full reset. The `.env` fallback secret generator
-honors the configured character recipe; symbol-enabled recipes require at least
-one symbol for services such as SonarQube. Homarr SQLite board seeding and other
-live Docker, SQLite, secret, reset, or destructive filesystem mutations require
-explicit human approval before being run against live state.
+Paperclip are included in a full reset. `homelab reset --yes --store-static-env`
+copies static external credentials such as GitHub, Google, Turnstile, and
+Cloudflare values from `.env` into the static 1Password vault before teardown;
+if that copy fails, reset stops before destroying runtime state. The following
+install restores those static values from the secret store into a new `.env`, so
+the compose env file can be treated as generated runtime state when 1Password is
+available. The `.env` fallback secret generator honors the configured character
+recipe; symbol-enabled recipes require at least one symbol for services such as
+SonarQube. Homarr SQLite board seeding and other live Docker, SQLite, secret,
+reset, or destructive filesystem mutations require explicit human approval
+before being run against live state.
 
 ## Testing
 

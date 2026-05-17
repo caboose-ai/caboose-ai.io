@@ -57,6 +57,7 @@ func main() {
 	fs.StringVar(&opts.opStaticVault, "op-static-vault", "", "1Password static vault name")
 	fs.StringVar(&opts.email, "email", "", "Admin email for Authentik bootstrap")
 	fs.BoolVar(&opts.keepEnv, "keep-env", false, "Preserve .env file during reset")
+	fs.BoolVar(&opts.storeStaticEnv, "store-static-env", false, "Store static .env credentials in 1Password before reset, then remove .env")
 	fs.BoolVar(&opts.secretsEnvOnly, "secrets-env-only", false, "Use only compose .env for secrets and skip 1Password login checks")
 	fs.BoolVar(&opts.createTurnstile, "create-turnstile", false, "Create a Cloudflare Turnstile widget via API")
 	fs.StringVar(&opts.cloudflareAccountID, "cloudflare-account-id", "", "Cloudflare account ID (or CLOUDFLARE_ACCOUNT_ID)")
@@ -165,6 +166,7 @@ type cliOpts struct {
 	kubeconfig     string
 	kubeContext    string
 	keepEnv        bool
+	storeStaticEnv bool
 	secretsEnvOnly bool
 	yes            bool
 
@@ -364,10 +366,17 @@ func runReset(opts cliOpts) int {
 
 	inst := install.New(cfg, secretStore, cmdRunner, httpClient)
 	inst.State.KeepEnv = opts.keepEnv
+	inst.State.StoreStaticEnv = opts.storeStaticEnv
 	return cli.RunReset(context.Background(), inst)
 }
 
 func validateResetConfirmation(opts cliOpts) error {
+	if opts.storeStaticEnv && opts.keepEnv {
+		return fmt.Errorf("--store-static-env cannot be combined with --keep-env")
+	}
+	if opts.storeStaticEnv && opts.secretsEnvOnly {
+		return fmt.Errorf("--store-static-env requires 1Password; remove --secrets-env-only")
+	}
 	if opts.dryRun || opts.yes {
 		return nil
 	}

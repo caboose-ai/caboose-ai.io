@@ -124,6 +124,18 @@ teardown() {
   [ "$status" -eq 0 ]
 }
 
+@test "can store static env in secret store before reset after upgrade" {
+  export BREW_OUTDATED=1
+
+  run "$SCRIPT" --yes --store-static-env
+
+  [ "$status" -eq 0 ]
+  run grep -F "brew upgrade caboose-homelab" "$CALL_LOG"
+  [ "$status" -eq 0 ]
+  run grep -F "homelab reset --yes --store-static-env --domain test.example.com --compose-dir $HOMELAB_COMPOSE_DIR" "$CALL_LOG"
+  [ "$status" -eq 0 ]
+}
+
 @test "dry-run prints planned actions without executing brew or homelab" {
   run "$SCRIPT" --dry-run
 
