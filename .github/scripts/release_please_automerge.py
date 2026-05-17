@@ -10,9 +10,11 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
-
-RELEASE_TITLE_RE = re.compile(r"^chore\(main\): release \d+[.]\d+[.]\d+(?:[-+][0-9A-Za-z.-]+)?$")
+RELEASE_TITLE_RE = re.compile(
+    r"^chore\(main\): release \d+[.]\d+[.]\d+(?:[-+][0-9A-Za-z.-]+)?$"
+)
 RELEASE_BRANCH_PREFIX = "release-please--branches--main--"
+DEFAULT_ALLOWED_AUTHORS = ("github-actions[bot]", "release-please[bot]", "cxm6467")
 
 
 class CheckState(enum.Enum):
@@ -41,7 +43,53 @@ def label_names(pr: dict[str, Any]) -> set[str]:
     return names
 
 
-def is_release_please_pr(pr: dict[str, Any]) -> bool:
+def repo_parts(repo: str) -> tuple[str, str]:
+    parts = repo.split("/", 1)
+    if len(parts) != 2 or not parts[0] or not parts[1]:
+        raise ValueError(f"repo must be in OWNER/NAME form: {repo}")
+    return parts[0], parts[1]
+
+
+def nested_string(mapping: dict[str, Any], *keys: str) -> str:
+    value: Any = mapping
+    for key in keys:
+        if not isinstance(value, dict):
+            return ""
+        value = value.get(key)
+    return value if isinstance(value, str) else ""
+
+
+def is_trusted_release_source(
+    pr: dict[str, Any],
+    *,
+    repo: str,
+    allowed_authors: tuple[str, ...],
+) -> bool:
+    owner, name = repo_parts(repo)
+    head_owner = nested_string(pr, "headRepositoryOwner", "login")
+    head_repo = nested_string(pr, "headRepository", "nameWithOwner")
+    if not head_repo:
+        head_repo_name = nested_string(pr, "headRepository", "name")
+        if head_owner and head_repo_name:
+            head_repo = f"{head_owner}/{head_repo_name}"
+
+    if pr.get("isCrossRepository"):
+        return False
+    if head_owner.lower() != owner.lower():
+        return False
+    if head_repo.lower() != f"{owner}/{name}".lower():
+        return False
+
+    author = nested_string(pr, "author", "login")
+    return bool(author and author in set(allowed_authors))
+
+
+def is_release_please_pr(
+    pr: dict[str, Any],
+    *,
+    repo: str,
+    allowed_authors: tuple[str, ...],
+) -> bool:
     if pr.get("state") != "OPEN":
         return False
     if pr.get("isDraft"):
@@ -52,7 +100,9 @@ def is_release_please_pr(pr: dict[str, Any]) -> bool:
         return False
     if not RELEASE_TITLE_RE.match(str(pr.get("title") or "")):
         return False
-    return any(name.startswith("autorelease:") for name in label_names(pr))
+    if not any(name.startswith("autorelease:") for name in label_names(pr)):
+        return False
+    return is_trusted_release_source(pr, repo=repo, allowed_authors=allowed_authors)
 
 
 def rollup_name(check: dict[str, Any]) -> str:
@@ -106,7 +156,11 @@ def assess_checks(
             details = []
             for check in checks:
                 if check_status(check) == CheckState.BLOCKED:
-                    details.append(str(check.get("conclusion") or check.get("state") or "blocked").upper())
+                    details.append(
+                        str(
+                            check.get("conclusion") or check.get("state") or "blocked"
+                        ).upper()
+                    )
             failing.append(f"{expected}: {', '.join(details)}")
         elif CheckState.WAITING in states:
             pending.append(expected)
@@ -125,11 +179,15 @@ def gh_json(args: list[str], *, token: str | None = None) -> Any:
     env = os.environ.copy()
     if token:
         env["GH_TOKEN"] = token
-    result = subprocess.run(command, check=True, capture_output=True, text=True, env=env)
+    result = subprocess.run(
+        command, check=True, capture_output=True, text=True, env=env
+    )
     return json.loads(result.stdout)
 
 
-def run_gh(args: list[str], *, token: str | None = None, check: bool = True) -> subprocess.CompletedProcess[str]:
+def run_gh(
+    args: list[str], *, token: str | None = None, check: bool = True
+) -> subprocess.CompletedProcess[str]:
     command = ["gh", *args]
     env = os.environ.copy()
     if token:
@@ -147,6 +205,10 @@ def fetch_pr(repo: str, pr_number: int) -> dict[str, Any]:
             "isDraft",
             "baseRefName",
             "headRefName",
+            "headRepository",
+            "headRepositoryOwner",
+            "isCrossRepository",
+            "author",
             "labels",
             "statusCheckRollup",
         ],
@@ -175,7 +237,9 @@ def approve_pr(repo: str, pr_number: int, *, dry_run: bool) -> None:
         check=False,
     )
     if result.returncode != 0:
-        print("::notice::Could not submit an approval review; continuing to merge if branch rules allow it.")
+        print(
+            "::notice::Could not submit an approval review; continuing to merge if branch rules allow it."
+        )
 
 
 def merge_pr(repo: str, pr: dict[str, Any], *, dry_run: bool) -> None:
@@ -187,7 +251,9 @@ def merge_pr(repo: str, pr: dict[str, Any], *, dry_run: bool) -> None:
 
     token = os.environ.get("GH_MERGE_TOKEN") or os.environ.get("GH_TOKEN")
     if not token:
-        raise RuntimeError("GH_MERGE_TOKEN or GH_TOKEN is required to merge the Release Please PR")
+        raise RuntimeError(
+            "GH_MERGE_TOKEN or GH_TOKEN is required to merge the Release Please PR"
+        )
 
     run_gh(
         [
@@ -225,6 +291,15 @@ def main() -> int:
         default=[],
         help="Check run or status context to ignore when assessing readiness.",
     )
+    parser.add_argument(
+        "--allowed-author",
+        action="append",
+        default=[],
+        help=(
+            "GitHub login allowed to author Release Please PRs. Defaults to known "
+            "Release Please automation logins for this repository."
+        ),
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument(
         "--wait-attempts",
@@ -245,12 +320,15 @@ def main() -> int:
         raise SystemExit("--expected-check is required at least once")
     if args.wait_attempts < 1:
         raise SystemExit("--wait-attempts must be at least 1")
+    allowed_authors = tuple(args.allowed_author) or DEFAULT_ALLOWED_AUTHORS
 
     pr: dict[str, Any] = {}
     summary: CheckSummary | None = None
     for attempt in range(args.wait_attempts):
         pr = fetch_pr(args.repo, args.pr)
-        if not is_release_please_pr(pr):
+        if not is_release_please_pr(
+            pr, repo=args.repo, allowed_authors=allowed_authors
+        ):
             print(f"PR #{args.pr} is not an open Release Please PR; skipping.")
             return 0
 
@@ -274,7 +352,9 @@ def main() -> int:
             waits.append(f"missing: {', '.join(summary.missing)}")
         if summary.pending:
             waits.append(f"pending: {', '.join(summary.pending)}")
-        print(f"Release Please PR #{args.pr} is waiting for checks ({'; '.join(waits)}).")
+        print(
+            f"Release Please PR #{args.pr} is waiting for checks ({'; '.join(waits)})."
+        )
         return 0
 
     print(f"Release Please PR #{args.pr} has passed expected CI checks.")
