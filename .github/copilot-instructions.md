@@ -145,12 +145,16 @@ approves a runtime mutation.
 - Release Please uses conventional commits from `main` to open release PRs and
   publish GitHub releases. Starting version is `v0.1.0`; `fix:` is patch,
   `feat:` is minor, and `!` or `BREAKING CHANGE:` is major.
+- `.github/workflows/release-please-automerge.yml` approves and squash-merges
+  Release Please PRs after `Conventional PR title`, `Test and build`,
+  `docs-check`, `Gitleaks Secret Scan`, and `lint` pass. Use
+  `RELEASE_PLEASE_TOKEN` for the merge so the release publication workflow is
+  triggered by a normal token-backed push.
 - Published releases trigger `.github/workflows/update-homebrew-tap.yml`, which
   uses the `HOMEBREW_TAP_TOKEN` Actions secret to update
   `caboose-ai/homebrew-tap` formulae, install and `brew test` both updated
-  formulae, wait for approval in the `homebrew-tap-deploy` environment, rerun
-  formula validation after approval, and push the verified formula commit
-  directly to the tap.
+  formulae, rerun formula validation before deploy, and push the verified
+  formula commit directly to the tap.
 - CI builds `cmd/homelab` and `cmd/mcp` with `-buildvcs=false` so release
   checks do not depend on Go VCS stamping.
 - Direct `homelab reset` requires `--yes` unless `--dry-run`; live Docker,
