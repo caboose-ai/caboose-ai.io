@@ -1,0 +1,88 @@
+name: Auto-merge Release Please PR
+
+on:
+  pull_request_target:
+    branches: [main]
+    types: [opened, reopened, synchronize, labeled, unlabeled]
+  workflow_run:
+    workflows:
+      - CI
+      - Documentation Check
+      - Secret Scan
+      - golangci-lint
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Release Please PR number to evaluate.
+        required: true
+        type: number
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: read
+  statuses: read
+
+jobs:
+  auto-merge-release-please:
+    name: Auto-merge Release Please PR
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request_target' && startsWith(github.event.pull_request.head.ref, 'release-please--branches--main--')) ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request' && startsWith(github.event.workflow_run.head_branch, 'release-please--branches--main--'))
+    steps:
+      - name: Resolve PR number
+        id: pr
+        env:
+          DISPATCH_PR_NUMBER: ${{ inputs.pr }}
+          PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
+          WORKFLOW_RUN_PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+        run: |
+          pr="${PULL_REQUEST_NUMBER:-${WORKFLOW_RUN_PR_NUMBER:-${DISPATCH_PR_NUMBER:-}}}"
+          if [[ -z "$pr" ]]; then
+            echo "No pull request number found for this event."
+          fi
+          echo "number=$pr" >> "$GITHUB_OUTPUT"
+
+      - name: Check out automation
+        if: steps.pr.outputs.number != ''
+        uses: actions/checkout@v6
+        with:
+          ref: main
+
+      - name: Require release merge token
+        if: steps.pr.outputs.number != ''
+        env:
+          RELEASE_PLEASE_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+        run: |
+          if [[ -z "$RELEASE_PLEASE_TOKEN" ]]; then
+            echo "::error::RELEASE_PLEASE_TOKEN is required so the automated merge can trigger release publication workflows."
+            exit 1
+          fi
+
+      - name: Set up uv
+        if: steps.pr.outputs.number != ''
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: false
+
+      - name: Approve and merge after CI
+        if: steps.pr.outputs.number != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REVIEW_TOKEN: ${{ github.token }}
+          GH_MERGE_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+        run: |
+          uv run python .github/scripts/release_please_automerge.py \
+            --repo "$GITHUB_REPOSITORY" \
+            --pr "${{ steps.pr.outputs.number }}" \
+            --expected-check "Conventional PR title" \
+            --expected-check "Test and build" \
+            --expected-check "docs-check" \
+            --expected-check "Gitleaks Secret Scan" \
+            --expected-check "lint" \
+            --ignore-check "Auto-merge Release Please PR" \
+            --wait-attempts 12 \
+            --wait-seconds 10

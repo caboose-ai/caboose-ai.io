@@ -142,9 +142,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: prepare-homebrew-tap
     if: needs.prepare-homebrew-tap.outputs.changed == 'true'
-    environment:
-      name: homebrew-tap-deploy
-      url: https://github.com/caboose-ai/homebrew-tap
     steps:
       - name: Require tap token
         env:
@@ -181,21 +178,21 @@ jobs:
             exit 1
           fi
 
-      - name: Validate formula syntax after approval
+      - name: Validate formula syntax before deploy
         working-directory: tap
         run: |
           ruby -c Formula/caboose-homelab.rb
           ruby -c Formula/caboose-homelab-mcp.rb
 
-      - name: Set up uv after approval
+      - name: Set up uv before deploy
         uses: astral-sh/setup-uv@v8.1.0
         with:
           enable-cache: false
 
-      - name: Set up Homebrew after approval
+      - name: Set up Homebrew before deploy
         uses: Homebrew/actions/setup-homebrew@main
 
-      - name: Smoke test Homebrew formulae after approval
+      - name: Smoke test Homebrew formulae before deploy
         working-directory: source
         env:
           HOMEBREW_NO_ANALYTICS: "1"
@@ -217,5 +214,5 @@ jobs:
           git commit -m "chore: update caboose-ai.io to ${TAG}" \
             -m "Source archive: ${ARCHIVE_URL}" \
             -m "SHA256: ${SHA256}" \
-            -m "Approved and deployed from caboose-ai/caboose-ai.io workflow ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}."
+            -m "Deployed automatically from caboose-ai/caboose-ai.io workflow ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} after validation passed."
           git push origin HEAD:main

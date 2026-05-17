@@ -106,17 +106,17 @@ Releases are managed by Release Please from conventional commits after merges
 to `main`. The current release manifest starts at `v0.1.0`; future `fix:`
 commits produce patch releases, `feat:` commits produce minor releases, and
 breaking changes produce major releases. Release Please opens the version bump
-PR and publishes the GitHub release when that PR is merged. Published releases
-then trigger the Homebrew tap update workflow, which requires the
-`HOMEBREW_TAP_TOKEN` Actions secret, computes the tagged source archive SHA,
-updates both tap formulae, and installs and `brew test`s both updated formulae.
-If formulae changed, the workflow waits for approval in the
-`homebrew-tap-deploy` GitHub Environment in this repository. After approval it
-re-applies the tested formula patch to the latest tap checkout, reruns formula
-syntax and Homebrew smoke validation, then pushes the verified formula commit
-directly to `caboose-ai/homebrew-tap`. That keeps the human deployment approval
-in `caboose-ai.io` instead of requiring a second tap repository pull request.
-The tap update workflow can also be rerun manually with a release tag.
+PR. Once that PR's CI checks pass, `.github/workflows/release-please-automerge.yml`
+approves and squash-merges the Release Please PR with `RELEASE_PLEASE_TOKEN`, so
+the original feature PR merge is the only human interaction in the normal
+release path. Published releases then trigger the Homebrew tap update workflow,
+which requires the `HOMEBREW_TAP_TOKEN` Actions secret, computes the tagged
+source archive SHA, updates both tap formulae, and installs and `brew test`s
+both updated formulae. If formulae changed, it re-applies the tested formula
+patch to the latest tap checkout, reruns formula syntax and Homebrew smoke
+validation, then pushes the verified formula commit directly to
+`caboose-ai/homebrew-tap`. The tap update workflow can also be rerun manually
+with a release tag.
 
 ## Planning docs
 
