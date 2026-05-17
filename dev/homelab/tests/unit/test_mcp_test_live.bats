@@ -14,7 +14,7 @@ setup() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"unauth_status=\$(curl -sS"* ]]
   [[ "$output" == *"test \"\$unauth_status\" = 401"* ]]
-  [[ "$output" == *"go run ./cmd/mcp access token --credential-file $BATS_TEST_TMPDIR/credential.json"* ]]
+  [[ "$output" == *"homelab-mcp access token --credential-file $BATS_TEST_TMPDIR/credential.json"* ]]
   [[ "$output" == *"auth_status=\$(curl -sS"* ]]
   [[ "$output" == *"test \"\$auth_status\" = 200"* ]]
   [[ "$output" == *"grep -q"* ]]

@@ -6,6 +6,8 @@ compose_dir="${HOMELAB_COMPOSE_DIR:-/opt/homelab}"
 endpoint="${HOMELAB_MCP_EXTERNAL_URL:-https://mcp.caboose-ai.io}"
 name="${HOMELAB_MCP_ACCESS_NAME:-$(hostname) live client $(date -u +%Y%m%dT%H%M%SZ)}"
 credential_file="${HOMELAB_MCP_CREDENTIAL_FILE:-}"
+homelab_bin="${HOMELAB_BIN:-homelab}"
+homelab_mcp_bin="${HOMELAB_MCP_BIN:-homelab-mcp}"
 workdir="${HOMELAB_MCP_ACCESS_WORKDIR:-}"
 dry_run=false
 skip_setup=false
@@ -23,6 +25,8 @@ Flags:
   --endpoint URL           MCP endpoint (default: https://mcp.caboose-ai.io)
   --compose-dir DIR        Live compose directory (default: /opt/homelab)
   --credential-file PATH   Import credential to PATH instead of the default user config
+  --homelab-bin PATH       homelab binary to use (default: homelab)
+  --homelab-mcp-bin PATH   homelab-mcp binary to use (default: homelab-mcp)
   --workdir DIR            Use DIR for temporary request/release files
   --skip-setup             Skip homelab mcp access setup
   --keep-artifacts         Keep request/release/pending files
@@ -48,6 +52,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --credential-file)
       credential_file="${2:?--credential-file requires a value}"
+      shift 2
+      ;;
+    --homelab-bin)
+      homelab_bin="${2:?--homelab-bin requires a value}"
+      shift 2
+      ;;
+    --homelab-mcp-bin)
+      homelab_mcp_bin="${2:?--homelab-mcp-bin requires a value}"
       shift 2
       ;;
     --workdir)
@@ -157,25 +169,25 @@ fi
 cd "$repo_root"
 
 if [[ "$skip_setup" != "true" ]]; then
-  run_cmd go run ./cmd/homelab mcp --compose-dir "$compose_dir" access setup
+  run_cmd "$homelab_bin" mcp --compose-dir "$compose_dir" access setup
 fi
 
-run_cmd go run ./cmd/mcp access request \
+run_cmd "$homelab_mcp_bin" access request \
   --name "$name" \
   --endpoint "$endpoint" \
   --pending-dir "$pending_dir" \
   --out "$request_file"
 
-run_cmd go run ./cmd/homelab mcp --compose-dir "$compose_dir" access approve \
+run_cmd "$homelab_bin" mcp --compose-dir "$compose_dir" access approve \
   "$request_file" \
   --out "$release_file"
 
-run_cmd go run ./cmd/mcp access import \
+run_cmd "$homelab_mcp_bin" access import \
   --pending-dir "$pending_dir" \
   "${credential_args[@]}" \
   "$release_file"
 
-token_cmd=(go run ./cmd/mcp access token "${credential_args[@]}")
+token_cmd=("$homelab_mcp_bin" access token "${credential_args[@]}")
 if [[ "$dry_run" == "true" ]]; then
   print_cmd "${token_cmd[@]}"
   print_capture_cmd smoke_status curl -sS \

@@ -40,3 +40,46 @@ func TestRunMCPAccessClientRequestPrintsBlobAndStoresPendingKey(t *testing.T) {
 		t.Fatalf("stderr should not echo request blob: %q", stderr.String())
 	}
 }
+
+func TestRunMCPAccessClientStatusMissingCredentialExplainsStartupFix(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	var stdout, stderr bytes.Buffer
+
+	code := RunMCPAccessClient(context.Background(), &stdout, &stderr, []string{"status"}, MCPAccessClientOptions{})
+	if code == 0 {
+		t.Fatalf("exit code = 0, want failure")
+	}
+	message := stderr.String()
+	for _, want := range []string{
+		"No Homelab MCP access credential found",
+		"homelab mcp access setup",
+		"homelab-mcp access request",
+		"homelab-mcp access import",
+	} {
+		if !strings.Contains(message, want) {
+			t.Fatalf("stderr missing %q:\n%s", want, message)
+		}
+	}
+}
+
+func TestRunMCPAccessClientStatusMissingCredentialPreservesExplicitPath(t *testing.T) {
+	credentialPath := filepath.Join(t.TempDir(), "credential with space.json")
+	var stdout, stderr bytes.Buffer
+
+	code := RunMCPAccessClient(context.Background(), &stdout, &stderr, []string{
+		"status",
+		"--credential-file", credentialPath,
+	}, MCPAccessClientOptions{})
+	if code == 0 {
+		t.Fatalf("exit code = 0, want failure")
+	}
+	message := stderr.String()
+	for _, want := range []string{
+		`homelab-mcp access import --credential-file "` + credentialPath + `" mcp-release.json`,
+		`homelab-mcp access status --credential-file "` + credentialPath + `"`,
+	} {
+		if !strings.Contains(message, want) {
+			t.Fatalf("stderr missing %q:\n%s", want, message)
+		}
+	}
+}

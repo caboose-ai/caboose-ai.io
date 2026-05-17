@@ -16,14 +16,14 @@ setup() {
     --credential-file "$credential_file"
 
   [ "$status" -eq 0 ]
-  [[ "$output" == *"go run ./cmd/homelab mcp --compose-dir /opt/homelab access setup"* ]]
-  [[ "$output" == *"go run ./cmd/mcp access request"* ]]
+  [[ "$output" == *"homelab mcp --compose-dir /opt/homelab access setup"* ]]
+  [[ "$output" == *"homelab-mcp access request"* ]]
   [[ "$output" == *"--name ci\\ smoke"* ]]
   [[ "$output" == *"--endpoint https://mcp.caboose-ai.io"* ]]
-  [[ "$output" == *"go run ./cmd/homelab mcp --compose-dir /opt/homelab access approve"* ]]
-  [[ "$output" == *"go run ./cmd/mcp access import"* ]]
+  [[ "$output" == *"homelab mcp --compose-dir /opt/homelab access approve"* ]]
+  [[ "$output" == *"homelab-mcp access import"* ]]
   [[ "$output" == *"--credential-file $BATS_TEST_TMPDIR/path\\ with\\ space/credential.json"* ]]
-  [[ "$output" == *"go run ./cmd/mcp access token"* ]]
+  [[ "$output" == *"homelab-mcp access token"* ]]
   [[ "$output" == *"smoke_status=\$(curl -sS"* ]]
   [[ "$output" == *"-o /tmp/homelab-mcp-access.DRYRUN/smoke.body"* ]]
   [[ "$output" == *"test \"\$smoke_status\" = 200"* ]]
@@ -35,15 +35,22 @@ setup() {
   bin_dir="$BATS_TEST_TMPDIR/bin"
   mkdir -p "$bin_dir"
 
-  cat >"$bin_dir/go" <<'EOF'
+  cat >"$bin_dir/homelab" <<'EOF'
 #!/usr/bin/env bash
-printf 'go %s\n' "$*" >> "$GO_LOG"
+printf 'homelab %s\n' "$*" >> "$CMD_LOG"
+exit 0
+EOF
+  chmod +x "$bin_dir/homelab"
+
+  cat >"$bin_dir/homelab-mcp" <<'EOF'
+#!/usr/bin/env bash
+printf 'homelab-mcp %s\n' "$*" >> "$CMD_LOG"
 case "$*" in
-  *" access token"*) echo "stub-token" ;;
+  *"access token"*) echo "stub-token" ;;
 esac
 exit 0
 EOF
-  chmod +x "$bin_dir/go"
+  chmod +x "$bin_dir/homelab-mcp"
 
   cat >"$bin_dir/curl" <<'EOF'
 #!/usr/bin/env bash
@@ -64,11 +71,15 @@ done
 EOF
   chmod +x "$bin_dir/curl"
 
-  GO_LOG="$BATS_TEST_TMPDIR/go.log" PATH="$bin_dir:$PATH" run "$SCRIPT" \
+  export CMD_LOG="$BATS_TEST_TMPDIR/cmd.log"
+  export PATH="$bin_dir:$PATH"
+  run "$SCRIPT" \
     --skip-setup \
     --name "ci smoke" \
     --endpoint https://mcp.caboose-ai.io \
     --credential-file "$BATS_TEST_TMPDIR/credential.json" \
+    --homelab-bin "$bin_dir/homelab" \
+    --homelab-mcp-bin "$bin_dir/homelab-mcp" \
     --workdir "$BATS_TEST_TMPDIR/new-work"
 
   [ "$status" -eq 0 ]
@@ -77,25 +88,32 @@ EOF
   [ ! -e "$BATS_TEST_TMPDIR/new-work/request.json" ]
   [ ! -e "$BATS_TEST_TMPDIR/new-work/release.json" ]
   [[ "$output" == *"initialize=200 server=homelab"* ]]
-  [[ "$(cat "$BATS_TEST_TMPDIR/go.log")" == *"access request"* ]]
-  [[ "$(cat "$BATS_TEST_TMPDIR/go.log")" == *"access approve"* ]]
-  [[ "$(cat "$BATS_TEST_TMPDIR/go.log")" == *"access import"* ]]
-  [[ "$(cat "$BATS_TEST_TMPDIR/go.log")" == *"access token"* ]]
+  [[ "$(cat "$CMD_LOG")" == *"access request"* ]]
+  [[ "$(cat "$CMD_LOG")" == *"access approve"* ]]
+  [[ "$(cat "$CMD_LOG")" == *"access import"* ]]
+  [[ "$(cat "$CMD_LOG")" == *"access token"* ]]
 }
 
 @test "mcp access live print-token keeps stdout to export only" {
   bin_dir="$BATS_TEST_TMPDIR/bin"
   mkdir -p "$bin_dir"
 
-  cat >"$bin_dir/go" <<'EOF'
+  cat >"$bin_dir/homelab" <<'EOF'
+#!/usr/bin/env bash
+echo "progress from homelab"
+exit 0
+EOF
+  chmod +x "$bin_dir/homelab"
+
+  cat >"$bin_dir/homelab-mcp" <<'EOF'
 #!/usr/bin/env bash
 case "$*" in
-  *" access token"*) echo "stub-token" ;;
-  *) echo "progress from go" ;;
+  *"access token"*) echo "stub-token" ;;
+  *) echo "progress from homelab-mcp" ;;
 esac
 exit 0
 EOF
-  chmod +x "$bin_dir/go"
+  chmod +x "$bin_dir/homelab-mcp"
 
   cat >"$bin_dir/curl" <<'EOF'
 #!/usr/bin/env bash
@@ -118,16 +136,19 @@ EOF
 
   stdout="$BATS_TEST_TMPDIR/stdout"
   stderr="$BATS_TEST_TMPDIR/stderr"
-  PATH="$bin_dir:$PATH" "$SCRIPT" \
+  export PATH="$bin_dir:$PATH"
+  "$SCRIPT" \
     --skip-setup \
     --print-token \
     --name "ci smoke" \
     --endpoint https://mcp.caboose-ai.io \
     --credential-file "$BATS_TEST_TMPDIR/credential.json" \
+    --homelab-bin "$bin_dir/homelab" \
+    --homelab-mcp-bin "$bin_dir/homelab-mcp" \
     --workdir "$BATS_TEST_TMPDIR/print-token-work" \
     >"$stdout" 2>"$stderr"
 
   [ "$(cat "$stdout")" = "export HOMELAB_MCP_TOKEN=stub-token" ]
-  [[ "$(cat "$stderr")" == *"progress from go"* ]]
+  [[ "$(cat "$stderr")" == *"progress from homelab"* ]]
   [[ "$(cat "$stderr")" == *"initialize=200 server=homelab"* ]]
 }

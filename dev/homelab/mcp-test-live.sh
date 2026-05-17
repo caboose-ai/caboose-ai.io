@@ -4,6 +4,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 endpoint="${HOMELAB_MCP_EXTERNAL_URL:-https://mcp.caboose-ai.io}"
 credential_file="${HOMELAB_MCP_CREDENTIAL_FILE:-}"
+homelab_mcp_bin="${HOMELAB_MCP_BIN:-homelab-mcp}"
 timeout="${HOMELAB_MCP_TEST_TIMEOUT:-10}"
 dry_run=false
 verbose=false
@@ -15,11 +16,12 @@ Usage: dev/homelab/mcp-test-live.sh [flags]
 Smoke-test the live Homelab MCP endpoint using existing access.
 
 The script uses HOMELAB_MCP_TOKEN when set. Otherwise it runs
-`go run ./cmd/mcp access token`, optionally with --credential-file.
+`homelab-mcp access token`, optionally with --credential-file.
 
 Flags:
   --endpoint URL           MCP endpoint (default: https://mcp.caboose-ai.io)
   --credential-file PATH   Use a specific imported MCP credential file
+  --homelab-mcp-bin PATH   homelab-mcp binary to use (default: homelab-mcp)
   --timeout SECONDS        Per-request curl timeout (default: 10)
   --dry-run                Print commands without running them
   --verbose                Print response bodies on failure
@@ -35,6 +37,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --credential-file)
       credential_file="${2:?--credential-file requires a value}"
+      shift 2
+      ;;
+    --homelab-mcp-bin)
+      homelab_mcp_bin="${2:?--homelab-mcp-bin requires a value}"
       shift 2
       ;;
     --timeout)
@@ -68,7 +74,7 @@ credential_args=()
 if [[ -n "$credential_file" ]]; then
   credential_args=(--credential-file "$credential_file")
 fi
-token_cmd=(go run ./cmd/mcp access token "${credential_args[@]}")
+token_cmd=("$homelab_mcp_bin" access token "${credential_args[@]}")
 
 print_cmd() {
   printf '+'
