@@ -191,6 +191,8 @@ mise run mcp:probe
 mise run mcp:resolve
 mise run mcp:probe-external
 mise run mcp:setup-external
+mise run mcp:access-live
+mise run mcp:test-live
 
 # Homelab MCP access workflow
 homelab-mcp access request --name "codex on laptop" --out mcp-request.json
@@ -220,6 +222,9 @@ approved releases are encrypted to the requester's key and imported into a
 minting, and an authenticated initialize probe for live operator testing.
 `dev/homelab/mcp-test-live.sh` probes the live endpoint with an existing
 credential or `HOMELAB_MCP_TOKEN` without creating new access.
+The matching `mise run mcp:access-live` and `mise run mcp:test-live` tasks use
+the installed `homelab` and `homelab-mcp` binaries by default, so they exercise
+the same path a Homebrew-installed operator will use.
 Override variables inline when needed, for example:
 
 ```bash

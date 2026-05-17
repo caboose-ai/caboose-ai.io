@@ -219,6 +219,14 @@ run = "curl -i --max-time 10 \"$HOMELAB_MCP_EXTERNAL_URL/\""
 description = "Set up and verify the external homelab MCP DNS and Caddy route"
 run = "dev/homelab/setup-mcp-external.sh"
 
+[tasks."mcp:access-live"]
+description = "Create, approve, import, and smoke-test live Homelab MCP access"
+run = "dev/homelab/mcp-access-live.sh"
+
+[tasks."mcp:test-live"]
+description = "Smoke-test the live Homelab MCP endpoint with existing access"
+run = "dev/homelab/mcp-test-live.sh"
+
 [tasks.test]
 description = "Run all tests"
 run = "go test ./... -v"
