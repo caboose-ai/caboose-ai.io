@@ -85,7 +85,6 @@ services:
     container_name: mattermost
     ports:
       - "${HOMELAB_BIND_ADDRESS:-127.0.0.1}:8065:8065"
-      - "${HOMELAB_BIND_ADDRESS:-127.0.0.1}:8067:8067"
     environment:
       MM_SQLSETTINGS_DRIVERNAME: postgres
       MM_SQLSETTINGS_DATASOURCE: postgres://mattermost:${MATTERMOST_DB_PASS}@mattermost-db:5432/mattermost?sslmode=disable
@@ -93,8 +92,6 @@ services:
       MM_SERVICESETTINGS_LISTENADDRESS: ":8065"
       MM_SERVICESETTINGS_ENABLELOCALMODE: "true"
       MM_SERVICESETTINGS_LOCALMODESOCKETLOCATION: "/var/tmp/mattermost_local.socket"
-      MM_METRICSSETTINGS_ENABLE: "true"
-      MM_METRICSSETTINGS_LISTENADDRESS: ":8067"
     volumes:
       - mattermost_data:/mattermost/data
       - mattermost_config:/mattermost/config

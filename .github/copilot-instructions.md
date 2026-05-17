@@ -117,6 +117,8 @@ approves a runtime mutation.
 - Paperclip's public URL remains Authentik-gated; host-network Paperclip agents
   use `PAPERCLIP_API_URL=http://127.0.0.1:3100` for local API calls.
 - App-facing services join the `apps` network
+- Mattermost Team Edition must not be published or scraped as a Prometheus
+  metrics target; its profiling listener does not expose HTTP `/metrics`.
 - Homarr is pinned to `ghcr.io/homarr-labs/homarr:v1.61.0`, persists `/appdata`
   in `homarr_data`, and uses native Authentik OIDC for the root homepage.
 - Authentik mounts `authentik_data:/data` in both server and worker containers
