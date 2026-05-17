@@ -177,6 +177,40 @@ func (inst *Installer) WriteRuntimeEnv(ctx context.Context) error {
 	return env.Put(ctx, "HOMELAB_BIND_ADDRESS", inst.Config.BindAddress())
 }
 
+func (inst *Installer) StoreStaticEnv(ctx context.Context) error {
+	env := secrets.NewEnvFileStore(inst.Config.EnvPath())
+	for _, key := range secrets.StaticSecretKeys() {
+		value, err := env.Get(ctx, key)
+		if err != nil {
+			return fmt.Errorf("reading static env %s: %w", key, err)
+		}
+		if value == "" {
+			continue
+		}
+		if err := inst.Secrets.Put(ctx, key, value); err != nil {
+			return fmt.Errorf("storing static env %s: %w", key, err)
+		}
+	}
+	return nil
+}
+
+func (inst *Installer) RestoreStaticEnv(ctx context.Context) error {
+	env := secrets.NewEnvFileStore(inst.Config.EnvPath())
+	for _, key := range secrets.StaticSecretKeys() {
+		value, err := inst.Secrets.Get(ctx, key)
+		if err != nil {
+			return fmt.Errorf("loading static secret %s: %w", key, err)
+		}
+		if value == "" {
+			continue
+		}
+		if err := env.Put(ctx, key, value); err != nil {
+			return fmt.Errorf("writing static env %s: %w", key, err)
+		}
+	}
+	return nil
+}
+
 func (inst *Installer) WaitHealthy(ctx context.Context) <-chan health.Status {
 	urls := inst.Config.URLs()
 
@@ -230,6 +264,17 @@ func (inst *Installer) Reset(ctx context.Context, progressFn func(step, detail s
 		progressFn = func(string, string) {}
 	}
 
+	if inst.State.StoreStaticEnv {
+		progressFn("secrets", "ensuring 1Password vaults for static .env credentials")
+		if err := inst.EnsureVault(ctx); err != nil {
+			return err
+		}
+		progressFn("env", "storing static .env credentials in secret store")
+		if err := inst.StoreStaticEnv(ctx); err != nil {
+			return err
+		}
+	}
+
 	progressFn(inst.Backend.Name(), "stopping homelab resources")
 	if err := inst.Backend.Teardown(ctx); err != nil {
 		return fmt.Errorf("%s teardown: %w", inst.Backend.Name(), err)
@@ -251,6 +296,11 @@ func (inst *Installer) Reset(ctx context.Context, progressFn func(step, detail s
 
 	if inst.State.KeepEnv {
 		progressFn("env", "keeping .env file (--keep-env)")
+	} else if inst.State.StoreStaticEnv {
+		progressFn("env", "removing .env file; static credentials are in the secret store")
+		if err := os.Remove(inst.Config.EnvPath()); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("removing %s: %w", inst.Config.EnvPath(), err)
+		}
 	} else {
 		progressFn("env", "removing .env file while preserving static external credentials")
 		envPath := inst.Config.EnvPath()

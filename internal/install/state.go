@@ -67,13 +67,14 @@ type ServiceResult struct {
 }
 
 type State struct {
-	Phase      Phase
-	Domain     string
-	Email      string
-	ComposeDir string
-	DryRun     bool
-	Force      bool
-	KeepEnv    bool
+	Phase          Phase
+	Domain         string
+	Email          string
+	ComposeDir     string
+	DryRun         bool
+	Force          bool
+	KeepEnv        bool
+	StoreStaticEnv bool
 
 	AdminRecoveryLink string
 	AdminPassword     string

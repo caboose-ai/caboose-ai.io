@@ -284,6 +284,9 @@ func (m AppModel) runEnsureVault() tea.Cmd {
 		if err := m.installer.EnsureVault(context.Background()); err != nil {
 			return views.SecretsErrorMsg{Err: fmt.Errorf("vault setup failed: %w", err)}
 		}
+		if err := m.installer.RestoreStaticEnv(context.Background()); err != nil {
+			return views.SecretsErrorMsg{Err: fmt.Errorf("static credential restore failed: %w", err)}
+		}
 		return vaultReadyMsg{}
 	}
 }
