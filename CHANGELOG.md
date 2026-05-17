@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.2](https://github.com/caboose-ai/caboose-ai.io/compare/v0.8.1...v0.8.2) (2026-05-17)
+
+
+### Bug Fixes
+
+* **homelab:** remove unsupported mattermost metrics scrape ([#83](https://github.com/caboose-ai/caboose-ai.io/issues/83)) ([13d4a99](https://github.com/caboose-ai/caboose-ai.io/commit/13d4a9990300ee006a4b5c5fcca01965649726a7))
+
 ## [0.8.1](https://github.com/caboose-ai/caboose-ai.io/compare/v0.8.0...v0.8.1) (2026-05-17)
 
 
