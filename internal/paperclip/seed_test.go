@@ -149,6 +149,26 @@ func TestSoftwareShopPlanSeedsAgentControlRoutines(t *testing.T) {
 	}
 }
 
+func TestSoftwareShopPlanSeedsSelfImprovementKickoffIssue(t *testing.T) {
+	plan := SoftwareShopPlan("/repo")
+
+	issue := findIssue(t, plan, "Improve caboose-ai.io itself with the homelab software shop")
+	if issue.ProjectName != "Agent Control Plan" {
+		t.Fatalf("kickoff issue project = %q, want Agent Control Plan", issue.ProjectName)
+	}
+	if issue.AssigneeAgentName != "CEO/PM" {
+		t.Fatalf("kickoff issue assignee = %q, want CEO/PM", issue.AssigneeAgentName)
+	}
+	if issue.Status != "todo" {
+		t.Fatalf("kickoff issue status = %q, want todo", issue.Status)
+	}
+	for _, want := range []string{"highest leverage improvements", "child issues", "approval-gated"} {
+		if !strings.Contains(issue.Description, want) {
+			t.Fatalf("kickoff issue description missing %q: %s", want, issue.Description)
+		}
+	}
+}
+
 func TestSoftwareShopPlanDefaultsToPlanOnlyAuthority(t *testing.T) {
 	plan := SoftwareShopPlan("/repo")
 
@@ -172,6 +192,7 @@ func TestSeedCompanyIsIdempotent(t *testing.T) {
 	var createdAgents int
 	var createdProjects int
 	var createdRoutines int
+	var createdIssues int
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/companies", func(w http.ResponseWriter, r *http.Request) {
@@ -237,6 +258,30 @@ func TestSeedCompanyIsIdempotent(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(map[string]any{"id": "routine-new"})
 		}
 	})
+	mux.HandleFunc("/api/companies/company-1/issues", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode([]map[string]any{})
+		case http.MethodPost:
+			createdIssues++
+			var payload map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode issue seed: %v", err)
+			}
+			if payload["projectId"] != "project-new" {
+				t.Fatalf("issue projectId = %v, want project-new", payload["projectId"])
+			}
+			if payload["assigneeAgentId"] != "agent-1" {
+				t.Fatalf("issue assigneeAgentId = %v, want agent-1", payload["assigneeAgentId"])
+			}
+			if payload["status"] != "todo" {
+				t.Fatalf("issue status = %v, want todo", payload["status"])
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "issue-new"})
+		default:
+			t.Fatalf("unexpected method %s %s", r.Method, r.URL.Path)
+		}
+	})
 
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
@@ -250,11 +295,106 @@ func TestSeedCompanyIsIdempotent(t *testing.T) {
 	if createdCompanies != 0 {
 		t.Fatalf("createdCompanies = %d, want 0", createdCompanies)
 	}
-	if createdAgents == 0 || createdProjects == 0 || createdRoutines == 0 {
-		t.Fatalf("expected missing seed records to be created: agents=%d projects=%d routines=%d", createdAgents, createdProjects, createdRoutines)
+	if createdAgents == 0 || createdProjects == 0 || createdRoutines == 0 || createdIssues == 0 {
+		t.Fatalf("expected missing seed records to be created: agents=%d projects=%d routines=%d issues=%d", createdAgents, createdProjects, createdRoutines, createdIssues)
 	}
 	if report.CompanyID != "company-1" {
 		t.Fatalf("CompanyID = %q", report.CompanyID)
+	}
+}
+
+func TestSeedCompanyDoesNotRecreateExistingKickoffIssue(t *testing.T) {
+	var createdIssues int
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/companies", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("unexpected method %s %s", r.Method, r.URL.Path)
+		}
+		_ = json.NewEncoder(w).Encode([]map[string]any{{"id": "company-1", "name": "Caboose AI Software Shop"}})
+	})
+	mux.HandleFunc("/api/companies/company-1/goals", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode([]map[string]any{{"id": "goal-1", "title": SoftwareShopMission}})
+	})
+	mux.HandleFunc("/api/companies/company-1/projects", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode([]map[string]any{{"id": "project-1", "name": "Agent Control Plan"}})
+		case http.MethodPost:
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "project-new"})
+		default:
+			t.Fatalf("unexpected method %s %s", r.Method, r.URL.Path)
+		}
+	})
+	mux.HandleFunc("/api/projects/project-1", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "project-1", "name": "Agent Control Plan", "primaryWorkspace": map[string]any{"id": "workspace-1"}})
+		case http.MethodPatch:
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "project-1", "name": "Agent Control Plan"})
+		default:
+			t.Fatalf("unexpected method %s %s", r.Method, r.URL.Path)
+		}
+	})
+	mux.HandleFunc("/api/projects/project-1/workspaces/workspace-1", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPatch {
+			t.Fatalf("unexpected method %s %s", r.Method, r.URL.Path)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "workspace-1"})
+	})
+	mux.HandleFunc("/api/projects/project-1/workspaces", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("unexpected method %s %s", r.Method, r.URL.Path)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "workspace-1"})
+	})
+	mux.HandleFunc("/api/companies/company-1/agents", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode([]map[string]any{{"id": "agent-1", "name": "CEO/PM"}})
+		case http.MethodPost:
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "agent-new"})
+		default:
+			t.Fatalf("unexpected method %s %s", r.Method, r.URL.Path)
+		}
+	})
+	mux.HandleFunc("/api/agents/agent-1", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPatch {
+			t.Fatalf("unexpected method %s %s", r.Method, r.URL.Path)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "agent-1", "name": "CEO/PM"})
+	})
+	mux.HandleFunc("/api/companies/company-1/routines", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode([]map[string]any{{"id": "routine-1", "title": "Daily service health and log review"}})
+		case http.MethodPost:
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "routine-new"})
+		default:
+			t.Fatalf("unexpected method %s %s", r.Method, r.URL.Path)
+		}
+	})
+	mux.HandleFunc("/api/companies/company-1/issues", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode([]map[string]any{{"id": "issue-1", "title": "Improve caboose-ai.io itself with the homelab software shop"}})
+		case http.MethodPost:
+			createdIssues++
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "issue-new"})
+		default:
+			t.Fatalf("unexpected method %s %s", r.Method, r.URL.Path)
+		}
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "token", srv.Client())
+	if _, err := SeedSoftwareShop(context.Background(), client, "/repo"); err != nil {
+		t.Fatalf("SeedSoftwareShop: %v", err)
+	}
+	if createdIssues != 0 {
+		t.Fatalf("createdIssues = %d, want 0", createdIssues)
 	}
 }
 
@@ -339,6 +479,14 @@ func TestSeedCompanyUpdatesExistingDeliveryMetadata(t *testing.T) {
 			t.Fatalf("unexpected method %s %s", r.Method, r.URL.Path)
 		}
 	})
+	mux.HandleFunc("/api/companies/company-1/issues", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode([]map[string]any{{"id": "issue-1", "title": "Improve caboose-ai.io itself with the homelab software shop"}})
+		default:
+			t.Fatalf("unexpected method %s %s", r.Method, r.URL.Path)
+		}
+	})
 
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
@@ -402,4 +550,15 @@ func hasRoutine(plan SeedPlan, title string) bool {
 		}
 	}
 	return false
+}
+
+func findIssue(t *testing.T, plan SeedPlan, title string) IssueSeed {
+	t.Helper()
+	for _, issue := range plan.Issues {
+		if issue.Title == title {
+			return issue
+		}
+	}
+	t.Fatalf("missing issue %q", title)
+	return IssueSeed{}
 }

@@ -1,0 +1,26 @@
+{
+  "generated_at": "2026-05-18T03:03:00Z",
+  "generator": "dev/generate-technical-baseline-report.sh",
+  "snapshot": {
+    "go_version": "1.26.3",
+    "ci_go_versions": "go.mod (1.26.3)",
+    "cmd_main_entrypoints": 4,
+    "service_manifests": 18,
+    "go_test_files": 68,
+    "docs_markdown_files": 21,
+    "ci_workflows": 8,
+    "workflow_names": "cab-tier23-live-validation, ci, docs-check, golangci-lint, release-please, release-please-automerge, secret-scan, update-homebrew-tap"
+  },
+  "validation_gates": [
+    "go test ./...",
+    "go build ./...",
+    "mise run lint",
+    "mise run vulncheck",
+    "mise run sso:check-quick"
+  ],
+  "freshness_contract": {
+    "owner": "Architect (CAB-3)",
+    "update_cadence": "refresh on CAB technical-program heartbeat and before plan confirmations",
+    "stale_threshold_days": 7
+  }
+}

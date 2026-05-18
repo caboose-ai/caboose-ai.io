@@ -1,0 +1,145 @@
+name: CAB Tier 2/3 Live Validation
+
+on:
+  schedule:
+    - cron: '35 6 * * 1' # Mondays 06:35 UTC
+  workflow_dispatch:
+    inputs:
+      tier2_mode:
+        description: "Tier 2 mode"
+        required: true
+        default: "quick"
+        type: choice
+        options:
+          - quick
+          - full
+      changed_services:
+        description: "Comma-separated service slugs for Tier 3 targeted smoke"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  live-validation:
+    name: Tier 2/3 live validation lane
+    runs-on: ubuntu-latest
+    env:
+      AUTHENTIK_TOKEN: ${{ secrets.AUTHENTIK_TOKEN }}
+      AUTHENTIK_BOOTSTRAP_TOKEN: ${{ secrets.AUTHENTIK_BOOTSTRAP_TOKEN }}
+      CHANGED_SERVICES: ${{ github.event.inputs.changed_services || '' }}
+      TIER2_MODE: ${{ github.event.inputs.tier2_mode || 'quick' }}
+      HOMELAB_DOMAIN: ${{ vars.HOMELAB_DOMAIN || 'caboose-ai.io' }}
+      HOMELAB_COMPOSE_DIR: ${{ vars.HOMELAB_COMPOSE_DIR || '/opt/homelab' }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Download modules
+        run: go mod download
+
+      - name: Run Tier 2/3 lane and capture evidence
+        id: lane
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p artifacts
+          ts="$(date -u +%Y%m%dT%H%M%SZ)"
+          summary="artifacts/tier23-live-${ts}-summary.md"
+          log="artifacts/tier23-live-${ts}.log"
+          status_file="$(mktemp)"
+          trap 'rm -f "$status_file"' EXIT
+
+          run_cmd() {
+            local label="$1"
+            local cmd="$2"
+            echo "[$label] $cmd" | tee -a "$log"
+            set +e
+            bash -lc "$cmd" 2>&1 | tee -a "$log"
+            local rc=${PIPESTATUS[0]}
+            set -e
+            if [ $rc -eq 0 ]; then
+              echo "PASS|$label|$cmd" >> "$status_file"
+            else
+              echo "FAIL|$label|$cmd" >> "$status_file"
+            fi
+          }
+
+          if [ -z "${AUTHENTIK_TOKEN:-}" ] && [ -z "${AUTHENTIK_BOOTSTRAP_TOKEN:-}" ]; then
+            echo "SKIP|tier2|missing AUTHENTIK_TOKEN or AUTHENTIK_BOOTSTRAP_TOKEN" >> "$status_file"
+          else
+            if [ "${TIER2_MODE}" = "full" ]; then
+              run_cmd "tier2" "go test -tags integration ./internal/smoketest/ -v -timeout 5m"
+            else
+              run_cmd "tier2" "go test -tags integration ./internal/smoketest/ -run TestSSO_Config -v"
+            fi
+          fi
+
+          if [ -n "${CHANGED_SERVICES}" ]; then
+            IFS=',' read -r -a services <<< "$CHANGED_SERVICES"
+            for svc in "${services[@]}"; do
+              svc="$(echo "$svc" | xargs)"
+              [ -n "$svc" ] || continue
+              if [ -f "$HOMELAB_COMPOSE_DIR/docker-compose.yml" ]; then
+                run_cmd "tier3:${svc}" "go run ./cmd/homelab service --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" smoke $svc"
+              else
+                echo "SKIP|tier3:${svc}|missing homelab compose file at $HOMELAB_COMPOSE_DIR/docker-compose.yml" >> "$status_file"
+              fi
+            done
+          else
+            echo "SKIP|tier3-services|no changed services were provided" >> "$status_file"
+          fi
+
+          if [ -f "$HOMELAB_COMPOSE_DIR/docker-compose.yml" ]; then
+            run_cmd "tier3:paperclip" "go run ./cmd/homelab service --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" smoke paperclip"
+          else
+            echo "SKIP|tier3:paperclip|missing homelab compose file at $HOMELAB_COMPOSE_DIR/docker-compose.yml" >> "$status_file"
+          fi
+
+          {
+            echo "## Validation Evidence"
+            echo "- Commit: ${GITHUB_SHA}"
+            echo "- PR: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo "- Tier scope: T2, T3"
+            echo "- Environment: GitHub Actions (${RUNNER_NAME})"
+            echo "- Timestamp (UTC): $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo
+            echo "### Commands Executed"
+            awk -F'|' '$1 != "SKIP" {print "1. `" $3 "`"}' "$status_file"
+            echo
+            echo "### Results"
+            while IFS='|' read -r result label detail; do
+              if [ "$result" = "SKIP" ]; then
+                echo "- ${label}: SKIP (${detail})"
+              else
+                echo "- ${label}: ${result}"
+              fi
+            done < "$status_file"
+          } > "$summary"
+
+          echo "summary_path=${summary}" >> "$GITHUB_OUTPUT"
+          echo "log_path=${log}" >> "$GITHUB_OUTPUT"
+
+          if grep -q '^FAIL|' "$status_file"; then
+            echo "lane_result=fail" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          echo "lane_result=pass_or_skip" >> "$GITHUB_OUTPUT"
+
+      - name: Upload evidence artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cab-tier23-live-evidence-${{ github.run_id }}
+          path: |
+            ${{ steps.lane.outputs.summary_path }}
+            ${{ steps.lane.outputs.log_path }}
