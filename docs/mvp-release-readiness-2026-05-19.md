@@ -2,152 +2,233 @@
 
 ## Objective
 
-Assess whether a new user can install and run the homelab stack with a released
-binary plus baseline host dependencies, and identify what needs tightening
-before broader public release.
+Provide an implementation-ready, operator-facing release-readiness checklist for
+shipping the homelab MVP across three deployment profiles:
 
-## Executive Summary
+- `local`
+- `public`
+- `public+mcp-external`
 
-- **Current state:** close to MVP, with strong automation for bootstrap,
-  reconfigure, and smoke validation.
-- **Primary blocker for "one binary + Docker and go":** runtime has optional but
-  practically important dependency branches (1Password, Cloudflare, Caddy,
-  systemd user services) that are spread across README and scripts rather than
-  presented as a single operator matrix.
-- **Release recommendation:** ship as a **guided MVP** with explicit deployment
-  profiles (`local`, `public`, `public+mcp-external`) and profile-specific
-  prerequisites.
+This document is written to be executed directly by an operator and used as a
+release gate by maintainers.
 
-## What looks solid already
+## Scope and assumptions
 
-1. **Install/reinstall/reset workflows are explicit and scriptable** through
-   `homelab install`, `reset`, and `reinstall` task wrappers.
-2. **Service registry pattern is coherent** (`services/<slug>/service.yaml` +
-   shared `internal/service` contract), reducing drift risk.
-3. **Smoke testing paths exist** for both full and per-service checks, plus MCP
-   live checks.
-4. **Release path is automated** (Release Please + Homebrew tap update workflow).
+- Host OS: Linux
+- Operator can run Docker and Docker Compose v2
+- `homelab` binary is available in `PATH` (installed from release/Homebrew or
+  built from source)
+- For MCP external lifecycle management, `systemd --user` is available
+- Secrets are provided by **either** 1Password CLI **or** a pre-populated
+  compose `.env` strategy
 
-## Gaps to resolve before broad rollout
+---
 
-1. **Prerequisite discoverability is fragmented.**
-   - Runtime dependencies are mentioned, but not in one decision table a new
-     operator can execute top-to-bottom.
-2. **"Minimum viable install" vs "full public stack" not sharply separated.**
-   - New users need one short "start here" profile with defaults and expected
-     outcomes.
-3. **External integration dependencies are easy to miss.**
-   - MCP external setup and Turnstile automation require specific credentials,
-     DNS, and host privileges.
-4. **Post-install acceptance criteria are implied, not consolidated.**
-   - There should be one canonical "MVP is healthy" checklist.
+## Deployment profiles
 
-## Dependency matrix from-scratch
+### Profile definitions
 
-### Mandatory (all profiles)
+- **`local`**: single-host/private network evaluation, no public DNS exposure
+  required
+- **`public`**: domain-exposed services with reverse proxy and SSO/OAuth flows
+- **`public+mcp-external`**: `public` plus external MCP onboarding and approval
+  workflows
 
-- Docker Engine with Docker Compose v2 plugin
-- Linux host with permissions to run Docker and write compose directory
-- Homelab binary (`homelab`) installed from Homebrew or built from source
+### Prerequisite matrix (operator-ready)
 
-### Required for source-build workflow
+| Dependency / capability | `local` | `public` | `public+mcp-external` | Verification command | Pass criteria |
+|---|---|---|---|---|---|
+| Docker Engine | Required | Required | Required | `docker version` | Client and Server sections render without daemon error |
+| Docker Compose v2 plugin | Required | Required | Required | `docker compose version` | Version string prints and exits 0 |
+| `homelab` binary in `PATH` | Required | Required | Required | `homelab install --help` | Help output prints usage/flags and exits 0 |
+| Secrets strategy selected (`op` or `.env`) | Required | Required | Required | `op --version` (if 1Password mode) or `test -f .env` (if `.env` mode) | For chosen mode, command succeeds |
+| Domain + DNS control | Not required | Required | Required | `dig +short <your-domain>` | Returns expected record(s) for host exposure |
+| Caddy runtime (for host reverse proxy mode) | Not required | Required | Required | `caddy version` | Version string prints |
+| Cloudflare API credentials | Not required | Optional (Turnstile automation) | Required | `env | rg 'CLOUDFLARE_(API_TOKEN|ZONE_ID)'` | Required variables present for selected features |
+| `systemd --user` available | Not required | Not required | Required | `systemctl --user status` | Command connects to user manager (not “Failed to connect to bus”) |
 
-- Go toolchain matching repository contract (`go 1.26.x`)
-- `mise` (if using repository task wrappers)
+> Operator rule: do not begin installation until all rows marked “Required” for
+> your selected profile have passed.
 
-### Optional but strongly recommended
+---
 
-- 1Password CLI (`op`) for managed secret storage; otherwise a populated
-  compose `.env` fallback is needed
+## 15-minute local quickstart (`local` profile)
 
-### Required for public/external features
+Use this when validating first-run MVP experience on a clean-ish Linux host.
 
-- Caddy (for host reverse proxy modes)
-- Cloudflare account + `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ZONE_ID`
-  (Turnstile automation, MCP external DNS/route setup)
-- `systemd --user` availability for managed MCP service lifecycle
+### 0) Choose working directory and profile
 
-### Feature-specific dependencies
+```bash
+git clone https://github.com/caboose-ai/caboose-ai.io.git "$HOME/caboose-run"
+cd "$HOME/caboose-run"
+```
 
-- Homebrew (if consuming official formula distribution path)
-- Telegram bot token + allowlist values (Telegram agent bridge)
-- Local OpenClaw/Ollama runtime availability for gateway-dependent agent flows
+**Pass criteria:** `pwd` shows your intended working directory.
 
-## Is it "binary + one pass" ready?
+### 1) Verify mandatory runtime prerequisites
 
-**Answer:** *conditionally yes* for local/private profile; *not yet fully yes* for
-public profile unless prerequisites are made profile-explicit.
+```bash
+docker version
+docker compose version
+homelab install --help
+```
 
-- A technically fluent user can succeed today with existing docs.
-- A first-time operator is likely to stall on prerequisite sequencing,
-  especially secrets mode, external DNS/TLS, and MCP external route setup.
+**Pass criteria:** all commands return successfully and print normal version/help
+output.
 
-## Recommended MVP release paths
+### 2) Select and validate secrets strategy
 
-### Path A — Local-first MVP (recommended first public claim)
+Choose one path only:
 
-**Audience:** single-host evaluation users.
+- **Path A (1Password-backed):**
 
-1. Install Docker + Compose.
-2. Install `caboose-homelab` binary.
-3. Choose secrets mode:
-   - 1Password CLI, or
-   - pre-populated `.env`.
-4. Run non-interactive install.
-5. Run quick smoke checks and per-service status checks.
+  ```bash
+  op --version
+  ```
 
-**Release statement:** "Local/private homelab bootstrap in one command with
-service-level status and smoke coverage."
+  **Pass criteria:** version prints; operator can authenticate per environment
+  policy.
 
-### Path B — Public-domain MVP
+- **Path B (`.env`-backed):**
 
-**Audience:** operators exposing services on a real domain.
+  ```bash
+  test -f .env && echo ".env present"
+  ```
 
-Path A +:
+  **Pass criteria:** `.env present` is printed.
 
-1. Domain DNS and host reachability.
-2. Caddy deployment mode configuration.
-3. OAuth provider setup and callback verification.
-4. Optional Turnstile automation.
+  When using this path, add `--secrets-env-only` to `homelab` commands in the
+  remaining steps so install/runtime does not require 1Password.
 
-**Release statement:** "Public SSO-enabled deployment with guided OAuth setup."
+### 3) Install/bootstrap stack
 
-### Path C — External MCP MVP
+```bash
+# Path A (1Password-backed)
+homelab install --compose-dir dev/homelab
 
-**Audience:** operators enabling remote MCP clients.
+# Path B (.env-backed)
+homelab install --compose-dir dev/homelab --secrets-env-only
+```
 
-Path B +:
+**Pass criteria:** command exits successfully and reports completed bootstrap for
+configured services.
 
-1. Cloudflare DNS/API credentials.
-2. `mcp:setup-external` and probe checks.
-3. Access request/approve/import live flow.
+### 4) Validate service health and smoke readiness
 
-**Release statement:** "Admin-approved encrypted client onboarding for remote
-MCP access."
+```bash
+for slug in authentik forgejo gitea woodpecker; do
+  homelab service "$slug" status --compose-dir dev/homelab
+  homelab service "$slug" smoke --compose-dir dev/homelab
+done
+```
 
-## Pre-release hardening checklist
+**Pass criteria:**
 
-1. Add one top-level prerequisite table keyed by profile (A/B/C).
-2. Add one "15-minute first install" quickstart for Path A.
-3. Add one acceptance checklist with exact commands and expected pass signals.
-4. Ensure all docs reference one canonical secrets strategy decision point.
-5. Add a short "known environment assumptions" section (Linux host, systemd
-   user services for MCP, Docker permissions).
+- status output indicates services are up/healthy (no failed core services)
+- smoke command completes with passing checks (no failures)
 
-## Suggested immediate next docs updates
+### 5) Validate recovery path
 
-1. README: add profile-based prerequisites section.
-2. README: add an "MVP acceptance checks" block (status/smoke/probe commands).
-3. Operator runbook: add explicit branching for `local` vs `public` vs
-   `public+mcp-external`.
-4. Optional: publish this checklist in release notes template for each tag.
+```bash
+homelab reset --keep-env --yes --compose-dir dev/homelab
+homelab install --compose-dir dev/homelab
+for slug in authentik forgejo gitea woodpecker; do
+  homelab service "$slug" smoke --compose-dir dev/homelab
+done
+```
 
-## Proposed MVP release gate
+**Pass criteria:** reinstall and smoke checks pass after reset without manual
+undocumented edits.
 
-Recommend shipping when all of the following are true for at least one clean
-host run per profile:
+---
 
-- Install succeeds without manual file edits beyond documented `.env`/secrets.
-- `service:status` and representative `service:smoke` commands pass.
-- Recovery path (`reset --keep-env` + reinstall) succeeds.
-- For Path C, MCP external probe and access workflow succeed end-to-end.
+## Acceptance checks by profile (release gate)
+
+Run these checks on at least one clean host per profile before calling the MVP
+release ready.
+
+### A. `local` profile acceptance
+
+1. Prerequisite matrix: all `local` required rows pass.
+2. Fresh install completes (`homelab install --compose-dir dev/homelab`).
+3. Health/smoke passes:
+
+   ```bash
+   for slug in authentik forgejo gitea woodpecker; do
+     homelab service "$slug" status --compose-dir dev/homelab
+     homelab service "$slug" smoke --compose-dir dev/homelab
+   done
+   ```
+
+4. Recovery pass:
+
+   ```bash
+   homelab reset --keep-env --yes --compose-dir dev/homelab
+   homelab install --compose-dir dev/homelab
+   for slug in authentik forgejo gitea woodpecker; do
+     homelab service "$slug" smoke --compose-dir dev/homelab
+   done
+   ```
+
+**Release pass criteria (`local`):** all four checks pass with no undocumented
+manual intervention.
+
+### B. `public` profile acceptance
+
+1. All `local` acceptance checks pass.
+2. Public prerequisites verified (domain/DNS + Caddy + OAuth config).
+3. Public endpoints reachable over intended domain(s).
+4. SSO callback/authentication flow succeeds end-to-end.
+
+Suggested verification commands:
+
+```bash
+dig +short <your-domain>
+for slug in authentik forgejo gitea woodpecker; do
+  homelab service "$slug" status --compose-dir dev/homelab
+  homelab service "$slug" smoke --compose-dir dev/homelab
+done
+```
+
+**Release pass criteria (`public`):** public route + authentication success and
+no blocking smoke failures.
+
+### C. `public+mcp-external` profile acceptance
+
+1. All `public` acceptance checks pass.
+2. Cloudflare credentials exported and valid for target zone.
+3. External MCP setup/probe/access flow completes.
+
+Suggested verification commands:
+
+```bash
+env | rg 'CLOUDFLARE_(API_TOKEN|ZONE_ID)'
+homelab mcp access setup --compose-dir dev/homelab
+homelab-mcp access status
+```
+
+**Release pass criteria (`public+mcp-external`):** external setup completes,
+probe succeeds, and approval/import onboarding workflow works end-to-end.
+
+---
+
+## Operator run order (single-page checklist)
+
+1. Select profile: `local` / `public` / `public+mcp-external`.
+2. Execute prerequisite matrix and clear all required rows.
+3. Run install.
+4. Run profile acceptance checks.
+5. Run recovery check (`reset --keep-env --yes` + reinstall + per-service smoke).
+6. Record pass/fail outcome for release gate.
+
+---
+
+## Release decision
+
+Declare MVP release-ready only when:
+
+- `local` passes on a clean host, and
+- any additional advertised profiles (`public`, `public+mcp-external`) also
+  pass their full acceptance sections on clean hosts.
+
+If a profile is not yet passing, do not claim it in release messaging.
