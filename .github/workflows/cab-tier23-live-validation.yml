@@ -89,8 +89,12 @@ jobs:
             for svc in "${services[@]}"; do
               svc="$(echo "$svc" | xargs)"
               [ -n "$svc" ] || continue
+              if [[ ! "$svc" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
+                echo "SKIP|tier3:${svc}|invalid service slug in changed_services" >> "$status_file"
+                continue
+              fi
               if [ -f "$HOMELAB_COMPOSE_DIR/docker-compose.yml" ]; then
-                run_cmd "tier3:${svc}" "go run ./cmd/homelab service --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" smoke $svc"
+                run_cmd "tier3:${svc}" "go run ./cmd/homelab service --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" smoke -- \"$svc\""
               else
                 echo "SKIP|tier3:${svc}|missing homelab compose file at $HOMELAB_COMPOSE_DIR/docker-compose.yml" >> "$status_file"
               fi
