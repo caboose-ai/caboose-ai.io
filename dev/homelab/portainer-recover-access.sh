@@ -151,9 +151,31 @@ command -v curl >/dev/null 2>&1 || die "curl is required"
 command -v jq >/dev/null 2>&1 || die "jq is required"
 command -v docker >/dev/null 2>&1 || die "docker is required"
 
+parse_env_value() {
+  local raw="$1"
+
+  case "$raw" in
+    "'"*"'")
+      raw="${raw#\'}"
+      raw="${raw%\'}"
+      ;;
+    '"'*'"')
+      raw="${raw#\"}"
+      raw="${raw%\"}"
+      raw="${raw//\\\"/\"}"
+      raw="${raw//\\\\/\\}"
+      ;;
+  esac
+
+  printf '%s' "$raw"
+}
+
 read_env_key() {
-  local key="$1"
-  grep -m 1 "^${key}=" "$HOMELAB_ENV" 2>/dev/null | cut -d= -f2- || true
+  local key="$1" line value
+  line="$(grep -m 1 "^${key}=" "$HOMELAB_ENV" 2>/dev/null || true)"
+  [ -n "$line" ] || return 0
+  value="${line#*=}"
+  parse_env_value "$value"
 }
 
 admin_pass="${PORTAINER_ADMIN_PASSWORD:-${PORTAINER_ADMIN_PASS:-}}"
