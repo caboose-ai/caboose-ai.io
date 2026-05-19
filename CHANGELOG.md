@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.2](https://github.com/caboose-ai/caboose-ai.io/compare/v0.9.1...v0.9.2) (2026-05-19)
+
+
+### Bug Fixes
+
+* **paperclip:** make software-shop example manual ([#89](https://github.com/caboose-ai/caboose-ai.io/issues/89)) ([78f85eb](https://github.com/caboose-ai/caboose-ai.io/commit/78f85ebbbb0d9d287ed10c853c74f2400c1a82f1))
+
 ## [0.9.1](https://github.com/caboose-ai/caboose-ai.io/compare/v0.9.0...v0.9.1) (2026-05-19)
 
 
