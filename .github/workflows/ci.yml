@@ -40,6 +40,46 @@ jobs:
           echo "Actual: $PR_TITLE"
           exit 1
 
+  tier1-contract-safety:
+    name: Tier 1 contract safety
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Detect Tier 1 trigger paths
+        id: tier1_paths
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            tier1:
+              - 'services/**/service.yaml'
+              - 'internal/smoketest/**'
+              - 'internal/service/**'
+              - 'internal/install/**'
+
+      - name: Explain Tier 1 skip
+        if: steps.tier1_paths.outputs.tier1 != 'true'
+        run: |
+          echo "Tier 1 contract safety not required for this change set."
+          echo "Trigger paths: services/**/service.yaml, internal/smoketest/**, internal/service/**, internal/install/**"
+
+      - name: Set up Go
+        if: steps.tier1_paths.outputs.tier1 == 'true'
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Download modules
+        if: steps.tier1_paths.outputs.tier1 == 'true'
+        run: go mod download
+
+      - name: Verify smoke flow manifest contracts
+        if: steps.tier1_paths.outputs.tier1 == 'true'
+        run: go test ./internal/smoketest -run 'TestPaperclipSmokeFlowResolvesToProxyFlow|TestServiceManifestSmokeFlowsResolve|TestHealthOnlyServicesDoNotDeclareSmokeFlows' -v
+
   build:
     name: Test and build
     runs-on: ubuntu-latest
@@ -58,12 +98,15 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: "1.26.x"
+          go-version-file: go.mod
           check-latest: true
           cache: true
 
       - name: Download modules
         run: go mod download
+
+      - name: Verify Go toolchain contract
+        run: ./dev/check-go-toolchain.sh
 
       - name: Run unit tests
         run: go test ./...

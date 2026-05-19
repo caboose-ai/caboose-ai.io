@@ -31,6 +31,7 @@ Use `mise run <task>` for repeatable workflows:
 - `fmt`: format all Go packages.
 - `lint`: run golangci-lint with repository rules.
 - `vulncheck`: run govulncheck across all packages.
+- `go:check-toolchain`: assert local Go matches the `go.mod` contract.
 - `install`: run the verified non-interactive installer.
 - `homelab`: run the interactive TUI installer.
 - `reinstall`: reset then reinstall non-interactively.

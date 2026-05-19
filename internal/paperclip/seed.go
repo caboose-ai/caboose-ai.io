@@ -31,6 +31,7 @@ type SeedPlan struct {
 	Projects  []ProjectSeed
 	Agents    []AgentSeed
 	Routines  []RoutineSeed
+	Issues    []IssueSeed
 	Authority AuthoritySeed
 }
 
@@ -74,6 +75,24 @@ type RoutineSeed struct {
 	Title       string `json:"title"`
 	Description string `json:"description"`
 	Priority    string `json:"priority,omitempty"`
+}
+
+type IssueSeed struct {
+	ProjectName       string `json:"-"`
+	AssigneeAgentName string `json:"-"`
+	Title             string `json:"title"`
+	Description       string `json:"description"`
+	Status            string `json:"status"`
+	Priority          string `json:"priority,omitempty"`
+}
+
+type issueCreateSeed struct {
+	ProjectID       string `json:"projectId"`
+	AssigneeAgentID string `json:"assigneeAgentId,omitempty"`
+	Title           string `json:"title"`
+	Description     string `json:"description"`
+	Status          string `json:"status"`
+	Priority        string `json:"priority,omitempty"`
 }
 
 type AuthoritySeed struct {
@@ -174,6 +193,9 @@ func SoftwareShopPlanWithDelivery(repo string, delivery InternalDeliveryConfig) 
 			{Title: "Agent execution evidence review", Description: "Check PR links, command output, smoke results, Woodpecker status, and rollback notes before accepting execution.", Priority: "medium"},
 			{Title: "Agent follow-up task review", Description: "Convert unresolved findings into follow-up Paperclip tasks with owners, service scope, and approval requirements.", Priority: "medium"},
 		},
+		Issues: []IssueSeed{
+			selfImprovementKickoffIssue(repo),
+		},
 		Authority: AuthoritySeed{Policy: "Default mode is plan-only: agents may inspect, branch, test, commit, open PRs, query monitoring, and propose deploy actions. Direct infra execution remains approval-gated. Docker and Portainer mutations, installer, reset, production deploy, secret, firewall, destructive docker commands, and other destructive commands require explicit human approval. Recurring jobs must stay within budget and write audit trails."},
 	}
 }
@@ -222,6 +244,31 @@ func agentWithDelivery(name, role, title, reportsTo, capabilities, repo string, 
 			"delivery":     delivery.metadata(repo),
 		},
 		BudgetMonthlyCents: budget,
+	}
+}
+
+func selfImprovementKickoffIssue(repo string) IssueSeed {
+	return IssueSeed{
+		ProjectName:       "Agent Control Plan",
+		AssigneeAgentName: "CEO/PM",
+		Title:             "Improve caboose-ai.io itself with the homelab software shop",
+		Description: fmt.Sprintf(
+			"Start the operating loop for improving this repository and homelab project itself. Inspect current repo and live homelab state, identify the highest leverage improvements, and create child issues for the right seeded agents. Use the seeded resources: repo workspace at %s, service manifests, MCP tools, smoke tests, Forgejo, Woodpecker evidence, Grafana, Prometheus, Loki, Portainer inspection, and Authentik SSO contracts. Keep default mode plan-first and approval-gated. Do not mutate Docker, Portainer, secrets, firewall, deploys, resets, or production runtime without explicit human approval. First output should be a prioritized improvement plan and child issue graph that can unblock dependent work.",
+			repo,
+		),
+		Status:   "todo",
+		Priority: "high",
+	}
+}
+
+func issuePayload(seed IssueSeed, projectID, assigneeAgentID string) issueCreateSeed {
+	return issueCreateSeed{
+		ProjectID:       projectID,
+		AssigneeAgentID: assigneeAgentID,
+		Title:           seed.Title,
+		Description:     seed.Description,
+		Status:          seed.Status,
+		Priority:        seed.Priority,
 	}
 }
 
@@ -323,25 +370,51 @@ func SeedSoftwareShopWithDelivery(ctx context.Context, client *Client, repo stri
 		count(report, "goals", created)
 	}
 
+	projectsByName := map[string]apiEntity{}
 	for _, p := range plan.Projects {
-		if _, created, err := client.ensureProject(ctx, company.ID, p); err != nil {
+		project, created, err := client.ensureProject(ctx, company.ID, p)
+		if err != nil {
 			return nil, err
 		} else {
 			count(report, "projects", created)
 		}
+		projectsByName[p.Name] = project
 	}
+	agentsByName := map[string]apiEntity{}
 	for _, a := range plan.Agents {
-		if _, created, err := client.ensureByNameUpdating(ctx, fmt.Sprintf("/api/companies/%s/agents", company.ID), "/api/agents", a.Name, a); err != nil {
+		agent, created, err := client.ensureByNameUpdating(ctx, fmt.Sprintf("/api/companies/%s/agents", company.ID), "/api/agents", a.Name, a)
+		if err != nil {
 			return nil, err
 		} else {
 			count(report, "agents", created)
 		}
+		agentsByName[a.Name] = agent
 	}
 	for _, r := range plan.Routines {
 		if _, created, err := client.ensureByTitle(ctx, fmt.Sprintf("/api/companies/%s/routines", company.ID), r.Title, r); err != nil {
 			return nil, err
 		} else {
 			count(report, "routines", created)
+		}
+	}
+	for _, issue := range plan.Issues {
+		project, ok := projectsByName[issue.ProjectName]
+		if !ok || project.ID == "" {
+			return nil, fmt.Errorf("seeding issue %q: project %q not found", issue.Title, issue.ProjectName)
+		}
+		var assigneeID string
+		if issue.AssigneeAgentName != "" {
+			agent, ok := agentsByName[issue.AssigneeAgentName]
+			if !ok || agent.ID == "" {
+				return nil, fmt.Errorf("seeding issue %q: agent %q not found", issue.Title, issue.AssigneeAgentName)
+			}
+			assigneeID = agent.ID
+		}
+		payload := issuePayload(issue, project.ID, assigneeID)
+		if _, created, err := client.ensureByTitle(ctx, fmt.Sprintf("/api/companies/%s/issues", company.ID), issue.Title, payload); err != nil {
+			return nil, err
+		} else {
+			count(report, "issues", created)
 		}
 	}
 	return report, nil

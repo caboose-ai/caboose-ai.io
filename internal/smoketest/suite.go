@@ -46,23 +46,12 @@ func NewSuite(t *testing.T) *Suite {
 		domain = defaultDomain
 	}
 
-	token := os.Getenv("AUTHENTIK_TOKEN")
+	token, tokenErr := resolveAuthentikToken(context.Background(), recoverAuthentikTokenFromContainer)
 	if token == "" {
-		token = os.Getenv("AUTHENTIK_BOOTSTRAP_TOKEN")
-	}
-	if token == "" {
-		envPath := findEnvFile()
-		if envPath != "" {
-			store := secrets.NewEnvFileStore(envPath)
-			val, err := store.Get(context.Background(), "AUTHENTIK_BOOTSTRAP_TOKEN")
-			if err == nil && val != "" {
-				token = val
-			}
+		if tokenErr != nil {
+			t.Skipf("AUTHENTIK_TOKEN unavailable and recovery failed: %v", tokenErr)
 		}
-	}
-
-	if token == "" {
-		t.Skip("AUTHENTIK_TOKEN or AUTHENTIK_BOOTSTRAP_TOKEN not set (checked env and .env)")
+		t.Skip("AUTHENTIK_TOKEN or AUTHENTIK_BOOTSTRAP_TOKEN not set (checked env and .env); set SMOKETEST_RECOVER_AUTHENTIK_TOKEN=1 to recover from the live Authentik container")
 	}
 
 	urls := config.DeriveURLs(domain)
@@ -79,6 +68,18 @@ func NewSuite(t *testing.T) *Suite {
 
 	ak := authentik.NewClient(urls.Authentik, token, httpClient)
 	if !authentikTokenWorks(context.Background(), ak) {
+		if bootstrapToken := resolveAuthentikBootstrapTokenFromPath(context.Background(), findEnvFile()); bootstrapToken != "" && bootstrapToken != token {
+			bootstrapClient := authentik.NewClient(urls.Authentik, bootstrapToken, httpClient)
+			if authentikTokenWorks(context.Background(), bootstrapClient) {
+				token = bootstrapToken
+				ak = bootstrapClient
+			}
+		}
+	}
+	if !authentikTokenWorks(context.Background(), ak) {
+		if !authentikTokenRecoveryEnabled() {
+			t.Fatalf("AUTHENTIK_TOKEN is invalid; set SMOKETEST_RECOVER_AUTHENTIK_TOKEN=1 to recover from the live Authentik container")
+		}
 		recovered, err := recoverAuthentikTokenFromContainer(context.Background())
 		if err != nil {
 			t.Fatalf("AUTHENTIK_TOKEN is invalid and token recovery failed: %v", err)
@@ -94,6 +95,61 @@ func NewSuite(t *testing.T) *Suite {
 		URLs:   urls,
 		HTTP:   httpClient,
 	}
+}
+
+func resolveAuthentikToken(ctx context.Context, recoverFn func(context.Context) (string, error)) (string, error) {
+	return resolveAuthentikTokenFromPath(ctx, findEnvFile(), recoverFn)
+}
+
+func resolveAuthentikTokenFromPath(ctx context.Context, envPath string, recoverFn func(context.Context) (string, error)) (string, error) {
+	token := os.Getenv("AUTHENTIK_TOKEN")
+	if token != "" {
+		return token, nil
+	}
+	token = os.Getenv("AUTHENTIK_BOOTSTRAP_TOKEN")
+	if token != "" {
+		return token, nil
+	}
+
+	if envPath != "" {
+		store := secrets.NewEnvFileStore(envPath)
+		val, err := store.Get(ctx, "AUTHENTIK_TOKEN")
+		if err == nil && val != "" {
+			return val, nil
+		}
+		val, err = store.Get(ctx, "AUTHENTIK_BOOTSTRAP_TOKEN")
+		if err == nil && val != "" {
+			return val, nil
+		}
+	}
+
+	if recoverFn == nil || !authentikTokenRecoveryEnabled() {
+		return "", nil
+	}
+	recovered, err := recoverFn(ctx)
+	if err != nil {
+		return "", err
+	}
+	return recovered, nil
+}
+
+func resolveAuthentikBootstrapTokenFromPath(ctx context.Context, envPath string) string {
+	if token := os.Getenv("AUTHENTIK_BOOTSTRAP_TOKEN"); token != "" {
+		return token
+	}
+	if envPath == "" {
+		return ""
+	}
+	store := secrets.NewEnvFileStore(envPath)
+	token, err := store.Get(ctx, "AUTHENTIK_BOOTSTRAP_TOKEN")
+	if err != nil {
+		return ""
+	}
+	return token
+}
+
+func authentikTokenRecoveryEnabled() bool {
+	return os.Getenv("SMOKETEST_RECOVER_AUTHENTIK_TOKEN") == "1"
 }
 
 func authentikTokenWorks(ctx context.Context, ak *authentik.Client) bool {

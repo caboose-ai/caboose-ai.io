@@ -8,8 +8,11 @@ the only browser login prompt.
 
 The base installer provisions the Authentik and dashboard contract, starts the
 profile-gated `paperclip` and `paperclip-db` containers, and seeds the Caboose
-AI Software Shop workspace. Run `mise run paperclip:seed` after install only
-when repairing or refreshing the seed metadata.
+AI Software Shop workspace. The seed includes the first self-improvement
+kickoff issue in the Agent Control Plan project, assigned to the seeded CEO/PM,
+so a clean install can start the operating loop without manually creating a
+task. Run `mise run paperclip:seed` after install only when repairing or
+refreshing the seed metadata.
 
 ## Operations
 
@@ -40,10 +43,11 @@ Paperclip-managed agents use `PAPERCLIP_API_URL=http://127.0.0.1:3100` for
 internal API calls. Keep this separate from `PAPERCLIP_PUBLIC_URL`; the
 public URL is Authentik-gated and returns browser redirects to local agents.
 
-The seed path creates missing company, goal, project, agent, and routine
-records. It also refreshes existing project metadata, primary workspace
-delivery metadata, and agent adapter delivery config so guidance changes reach
-already-seeded Paperclip workspaces.
+The seed path creates missing company, goal, project, agent, routine, and
+kickoff issue records. It also refreshes existing project metadata, primary
+workspace delivery metadata, and agent adapter delivery config so guidance
+changes reach already-seeded Paperclip workspaces. Existing issues are not
+recreated or reset.
 
 ## Agent Control Plan v1
 
