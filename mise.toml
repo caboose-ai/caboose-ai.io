@@ -129,7 +129,7 @@ run = 'repo="${PAPERCLIP_FORGEJO_REPO_URL:-https://git.caboose-ai.io/caboose-ai/
 
 [tasks."paperclip:up"]
 description = "Start the Paperclip profile"
-run = "docker compose -f \"$HOMELAB_COMPOSE_DIR/docker-compose.yml\" --profile paperclip up -d paperclip paperclip-db"
+run = "docker compose -f \"$HOMELAB_COMPOSE_DIR/docker-compose.yml\" --profile paperclip up -d --wait paperclip paperclip-db"
 
 [tasks."paperclip:down"]
 description = "Stop the optional Paperclip profile"
