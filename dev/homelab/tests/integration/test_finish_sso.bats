@@ -47,10 +47,32 @@ skip_unless_authentik_token() {
 }
 
 portainer_token() {
+  local admin_pass payload
+  admin_pass="$(portainer_admin_password)"
+  payload=$(jq -cn --arg username "admin" --arg password "$admin_pass" '{Username:$username,Password:$password}')
   curl -sf -X POST "$PORTAINER_URL/api/auth" \
     -H "Content-Type: application/json" \
-    -d "{\"Username\":\"admin\",\"Password\":\"${PORTAINER_ADMIN_PASS}\"}" \
+    -d "$payload" \
     | jq -r '.jwt'
+}
+
+portainer_admin_password() {
+  local val="${PORTAINER_ADMIN_PASSWORD:-${PORTAINER_ADMIN_PASS:-}}"
+  if [[ -z "$val" ]]; then
+    val=$(grep "^PORTAINER_ADMIN_PASSWORD=" "$HOMELAB_ENV" 2>/dev/null | cut -d= -f2- || true)
+  fi
+  if [[ -z "$val" ]]; then
+    val=$(grep "^PORTAINER_ADMIN_PASS=" "$HOMELAB_ENV" 2>/dev/null | cut -d= -f2- || true)
+  fi
+  echo "$val"
+}
+
+skip_unless_portainer_admin_password() {
+  local val
+  val="$(portainer_admin_password)"
+  if [[ -z "$val" ]]; then
+    skip "requires PORTAINER_ADMIN_PASSWORD or PORTAINER_ADMIN_PASS to be set"
+  fi
 }
 
 forgejo_admin_username() {
@@ -195,7 +217,7 @@ forgejo_oauth_apps() {
 }
 
 @test "portainer: OAuth is configured (AuthenticationMethod=3)" {
-  skip_unless_env PORTAINER_ADMIN_PASS
+  skip_unless_portainer_admin_password
   token=$(portainer_token)
   [ -n "$token" ] && [ "$token" != "null" ] || skip "failed to get Portainer token"
   auth_method=$(curl -sf "$PORTAINER_URL/api/settings" \
@@ -204,7 +226,7 @@ forgejo_oauth_apps() {
 }
 
 @test "portainer: OAuth ClientID matches Authentik PORTAINER_OAUTH_CLIENT_ID" {
-  skip_unless_env PORTAINER_ADMIN_PASS
+  skip_unless_portainer_admin_password
   expected_client_id=$(grep "^PORTAINER_OAUTH_CLIENT_ID=" "$HOMELAB_ENV" | cut -d= -f2-)
   [ -n "$expected_client_id" ] || skip "PORTAINER_OAUTH_CLIENT_ID not in .env"
   token=$(portainer_token)
@@ -212,6 +234,25 @@ forgejo_oauth_apps() {
   configured_client=$(curl -sf "$PORTAINER_URL/api/settings" \
     -H "Authorization: Bearer $token" | jq -r '.OAuthSettings.ClientID')
   [ "$configured_client" = "$expected_client_id" ]
+}
+
+@test "portainer: OAuth maps users by email claim" {
+  skip_unless_portainer_admin_password
+  token=$(portainer_token)
+  [ -n "$token" ] && [ "$token" != "null" ] || skip "failed to get Portainer token"
+  user_identifier=$(curl -sf "$PORTAINER_URL/api/settings" \
+    -H "Authorization: Bearer $token" | jq -r '.OAuthSettings.UserIdentifier')
+  [ "$user_identifier" = "email" ]
+}
+
+@test "portainer: local Docker environment exists" {
+  skip_unless_portainer_admin_password
+  token=$(portainer_token)
+  [ -n "$token" ] && [ "$token" != "null" ] || skip "failed to get Portainer token"
+  local_endpoint=$(curl -sf "$PORTAINER_URL/api/endpoints" \
+    -H "Authorization: Bearer $token" \
+    | jq -r 'any(.[]; .Name == "local" and .Type == 1 and .URL == "unix:///var/run/docker.sock")')
+  [ "$local_endpoint" = "true" ]
 }
 
 # ── Authentik providers ───────────────────────────────────────────────────────

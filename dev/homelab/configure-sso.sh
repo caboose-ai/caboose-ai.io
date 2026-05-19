@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # configure-sso.sh — Wire up Portainer and Forgejo OAuth against Authentik
 # Requires: AUTHENTIK_TOKEN (API token from Authentik Admin → System → Tokens)
-#           PORTAINER_ADMIN_PASS
+#           PORTAINER_ADMIN_PASSWORD
 # Usage: bash configure-sso.sh
 set -euo pipefail
 
@@ -10,7 +10,9 @@ PORTAINER_URL="http://127.0.0.1:9000"
 FORGEJO_CONTAINER="forgejo"
 
 AUTHENTIK_TOKEN="${AUTHENTIK_TOKEN:?export AUTHENTIK_TOKEN=<your-authentik-api-token>}"
-PORTAINER_ADMIN_PASS="${PORTAINER_ADMIN_PASS:?export PORTAINER_ADMIN_PASS=<your-portainer-password>}"
+PORTAINER_ADMIN_PASS="${PORTAINER_ADMIN_PASSWORD:-${PORTAINER_ADMIN_PASS:-}}"
+: "${PORTAINER_ADMIN_PASS:?export PORTAINER_ADMIN_PASSWORD=<your-portainer-password>}"
+export PORTAINER_ADMIN_PASS
 
 # ── Helper: fetch OAuth2 provider credentials from Authentik by name ──────────
 get_provider() {
@@ -39,9 +41,10 @@ echo "   ✓ Forgejo  client_id: $FORGEJO_CLIENT_ID"
 # ── Portainer OAuth ───────────────────────────────────────────────────────────
 echo "==> Configuring Portainer OAuth..."
 
+PORTAINER_AUTH_PAYLOAD=$(jq -cn --arg username "admin" --arg password "$PORTAINER_ADMIN_PASS" '{Username:$username,Password:$password}')
 PORTAINER_TOKEN=$(curl -sf -X POST "$PORTAINER_URL/api/auth" \
   -H "Content-Type: application/json" \
-  -d "{\"Username\":\"admin\",\"Password\":\"$PORTAINER_ADMIN_PASS\"}" \
+  -d "$PORTAINER_AUTH_PAYLOAD" \
   | jq -r '.jwt')
 
 curl -sf -X PUT "$PORTAINER_URL/api/settings" \
@@ -56,9 +59,10 @@ curl -sf -X PUT "$PORTAINER_URL/api/settings" \
       \"AccessTokenURI\":       \"$AUTHENTIK_URL/application/o/token/\",
       \"ResourceURI\":          \"$AUTHENTIK_URL/application/o/userinfo/\",
       \"RedirectURI\":          \"https://docker.caboose-ai.io/\",
-      \"UserIdentifier\":       \"preferred_username\",
+      \"UserIdentifier\":       \"email\",
       \"Scopes\":               \"openid email profile\",
-      \"OAuthAutoCreateUsers\": true
+      \"OAuthAutoCreateUsers\": true,
+      \"SSO\":                  true
     }
   }" | jq .
 

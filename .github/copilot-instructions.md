@@ -99,6 +99,9 @@ approves a runtime mutation.
 - Run smoke tests: `mise run sso:check` (full) or `mise run sso:check-quick` (API only)
 - Run MCP endpoint checks: `mise run mcp:probe` locally and `mise run mcp:probe-external` publicly
 - Run MCP access setup via `homelab mcp access setup`, approve client blobs with `homelab mcp access approve`, and request/import/token from `homelab-mcp access`.
+- Diagnose Portainer admin-password drift with `mise run portainer:recover-access`;
+  only run `dev/homelab/portainer-recover-access.sh --yes` after explicit human
+  approval for the local Portainer reset path.
 
 ### Naming
 
@@ -209,6 +212,7 @@ go run ./cmd/homelab reset --yes --store-static-env --domain caboose-ai.io --com
 go run ./cmd/homelab install --domain caboose-ai.io --compose-dir dev/homelab
 go run ./cmd/homelab service --domain caboose-ai.io --compose-dir dev/homelab forgejo status
 mise run paperclip:seed
+mise run portainer:recover-access
 go run ./cmd/telegram-agent notify "task finished"
 go run ./cmd/mcp access request --name "codex on laptop" --out mcp-request.json
 go run ./cmd/homelab mcp access setup

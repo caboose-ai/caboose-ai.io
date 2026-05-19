@@ -139,6 +139,10 @@ run = "go run ./cmd/homelab service --domain \"$HOMELAB_DOMAIN\" --compose-dir \
 description = "Run the targeted Paperclip SSO smoke flow"
 run = "go run ./cmd/homelab service --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" paperclip smoke"
 
+[tasks."portainer:recover-access"]
+description = "Repair Portainer admin password drift and reapply endpoint/OAuth access"
+run = "dev/homelab/portainer-recover-access.sh --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
+
 [tasks."homelab:create-turnstile"]
 description = "Create or verify the Cloudflare Turnstile widget via API"
 run = "go run ./cmd/homelab oauth-setup --domain \"$HOMELAB_DOMAIN\" --create-turnstile"

@@ -24,6 +24,7 @@ go test ./internal/install/ -v    # test a specific package
 go run ./cmd/homelab oauth-setup --domain caboose-ai.io  # print external OAuth/Turnstile setup
 go run ./cmd/homelab reset --yes --store-static-env --domain caboose-ai.io --compose-dir /opt/homelab  # store static .env values in 1Password, then remove .env
 go run ./cmd/homelab service --domain caboose-ai.io forgejo status  # inspect one service
+dev/homelab/portainer-recover-access.sh --dry-run --yes  # preview Portainer admin-password drift repair
 go run ./cmd/telegram-agent notify "task finished"  # send a Telegram completion notice
 go run ./cmd/mcp access request --name "codex on laptop" --out mcp-request.json  # create MCP access request
 go run ./cmd/homelab mcp access setup  # create MCP OAuth provider/scope
@@ -195,6 +196,12 @@ container recreation.
   from `https://ci.caboose-ai.io`, and treat `https://docker.caboose-ai.io`
   Portainer access as inspection-only unless the human approves a runtime
   mutation.
+- Portainer environment access can be recovered with
+  `mise run portainer:recover-access` for diagnosis or
+  `dev/homelab/portainer-recover-access.sh --yes` for the guarded local repair;
+  the repair stops Portainer, uses the live `/data` mount with
+  `portainer/helper-reset-password`, restarts Portainer, then reapplies the
+  service configurator.
 - OpenClaw is an external runtime tracked by manifest, URL, Authentik proxy,
   dashboard, smoke, and health metadata; do not add a fake compose service for it.
 - Telegram Agent Bridge is an external runtime tracked by manifest and run on

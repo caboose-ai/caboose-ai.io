@@ -14,10 +14,11 @@ portainer_get_jwt() {
     return 1
   fi
 
-  local jwt
+  local jwt payload
+  payload=$(jq -cn --arg username "admin" --arg password "$admin_pass" '{Username:$username,Password:$password}')
   jwt=$(curl_api POST "${PORTAINER_URL}/api/auth" \
     -H "Content-Type: application/json" \
-    -d "{\"Username\":\"admin\",\"Password\":\"${admin_pass}\"}" \
+    -d "$payload" \
   ) || {
     log_error "Cannot authenticate with Portainer at ${PORTAINER_URL}. Check PORTAINER_ADMIN_PASSWORD."
     return 1
