@@ -186,6 +186,10 @@ mise run service:status -- forgejo
 mise run service:configure -- mattermost --dry-run
 mise run service:smoke -- forgejo
 
+# Portainer environment access recovery when the stored admin password drifted
+mise run portainer:recover-access
+dev/homelab/portainer-recover-access.sh --yes
+
 # Paperclip is started and seeded by install, including the first self-improvement
 # kickoff issue. These commands are useful for repair, verification, or
 # intentionally restarting the profile.
@@ -313,7 +317,8 @@ For CAB follow-up evidence capture, use `mise run cab:tier23-live` (or
   Portainer is Docker visibility plus approved operational handoff rather than
   an unchecked executor. `.woodpecker.yml` mirrors the GitHub docs, secret,
   release-helper, Go test, and build gates for repositories enabled in
-  Woodpecker.
+  Woodpecker. Use `mise run portainer:recover-access` to diagnose Portainer
+  admin password drift; the reset repair path requires explicit `--yes`.
 - **OpenClaw** external runtime — tracked for URL, Authentik proxy, dashboard,
   smoke, and health metadata without claiming a local compose service
 - **Telegram Agent Bridge** external runtime — host-run long-polling bot that

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # finish-sso.sh — Complete remaining SSO configuration for homelab
-# Requires: AUTHENTIK_TOKEN, PORTAINER_ADMIN_PASS
+# Requires: AUTHENTIK_TOKEN, PORTAINER_ADMIN_PASSWORD
 # Usage: bash finish-sso.sh
 set -euo pipefail
 
@@ -12,7 +12,9 @@ HOMELAB_ENV="${HOMELAB_ENV:-/opt/homelab/.env}"
 HOMELAB_COMPOSE="${HOMELAB_COMPOSE:-/opt/homelab/docker-compose.yml}"
 
 AUTHENTIK_TOKEN="${AUTHENTIK_TOKEN:?export AUTHENTIK_TOKEN=<api-token>}"
-PORTAINER_ADMIN_PASS="${PORTAINER_ADMIN_PASS:?export PORTAINER_ADMIN_PASS=<password>}"
+PORTAINER_ADMIN_PASS="${PORTAINER_ADMIN_PASSWORD:-${PORTAINER_ADMIN_PASS:-}}"
+: "${PORTAINER_ADMIN_PASS:?export PORTAINER_ADMIN_PASSWORD=<password>}"
+export PORTAINER_ADMIN_PASS
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -139,11 +141,12 @@ PYEOF
 
 step4_configure_portainer() {
   echo "==> Step 4: Configuring Portainer OAuth..."
-  local portainer_token client_id client_secret
+  local portainer_token client_id client_secret auth_payload
 
+  auth_payload=$(jq -cn --arg username "admin" --arg password "$PORTAINER_ADMIN_PASS" '{Username:$username,Password:$password}')
   portainer_token=$(curl -sf -X POST "$PORTAINER_URL/api/auth" \
     -H "Content-Type: application/json" \
-    -d "{\"Username\":\"admin\",\"Password\":\"$PORTAINER_ADMIN_PASS\"}" \
+    -d "$auth_payload" \
     | jq -r '.jwt')
 
   client_id=$(get_authentik_provider "portainer" "client_id")
@@ -163,9 +166,10 @@ step4_configure_portainer() {
         \"AccessTokenURI\":       \"$AUTHENTIK_URL/application/o/token/\",
         \"ResourceURI\":          \"$AUTHENTIK_URL/application/o/userinfo/\",
         \"RedirectURI\":          \"https://docker.caboose-ai.io/\",
-        \"UserIdentifier\":       \"preferred_username\",
+        \"UserIdentifier\":       \"email\",
         \"Scopes\":               \"openid email profile\",
-        \"OAuthAutoCreateUsers\": true
+        \"OAuthAutoCreateUsers\": true,
+        \"SSO\":                  true
       }
     }" | jq . > /dev/null
   echo "✓ Portainer OAuth configured"

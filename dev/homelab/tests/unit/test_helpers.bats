@@ -59,3 +59,32 @@ teardown() {
   result=$(get_forgejo_oauth_app_id "http://fake:3000" "user:pass" "Woodpecker CI")
   [ "$result" = "" ]
 }
+
+@test "step4_configure_portainer: uses email claim for Portainer OAuth users" {
+  calls="$TEST_ENV.calls"
+  curl() {
+    printf '%s\n' "$*" >> "$calls"
+    case "$*" in
+      *"/api/auth"*)
+        echo '{"jwt":"test-jwt"}'
+        ;;
+      *"/api/settings"*)
+        echo '{}'
+        ;;
+    esac
+  }
+  get_authentik_provider() {
+    case "$2" in
+      client_id) echo "pid123" ;;
+      client_secret) echo "psec456" ;;
+    esac
+  }
+  export -f curl get_authentik_provider
+
+  run step4_configure_portainer
+  [ "$status" -eq 0 ]
+  run grep -F '"UserIdentifier":       "email"' "$calls"
+  [ "$status" -eq 0 ]
+  run grep -F '"SSO":                  true' "$calls"
+  [ "$status" -eq 0 ]
+}
