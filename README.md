@@ -127,6 +127,7 @@ with a release tag.
 - [CAB-5 Operator UX and docs-flow audit (2026-05-18)](docs/cab-5-operator-ux-docs-flow-audit-2026-05-18.md) — operator journey audit across install, validation, MCP access, and troubleshooting navigation.
 - [CAB Technical Baseline Scorecard (Latest)](docs/cab-technical-baseline-latest.md) — generated architecture/quality snapshot; refresh with `mise run baseline:scorecard`.
 - [Homelab Service Documentation and Agent Control Plan](docs/homelab-agent-control-plan.md) — roadmap for documenting service capabilities, routing OpenClaw and Telegram agent workflows, minimizing outside token use, and supporting subagentic development.
+- [MVP Release Readiness Pass (2026-05-19)](docs/mvp-release-readiness-2026-05-19.md) — profile-based dependency matrix and release-path recommendations for local, public, and external-MCP rollouts.
 
 ## Service workspaces
 
