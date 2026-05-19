@@ -6,17 +6,16 @@ the Authentik forward-auth provider `paperclip-proxy`, and shown on Homarr.
 Paperclip itself runs in `local_trusted` mode on host loopback so Authentik is
 the only browser login prompt.
 
-The base installer provisions the Authentik and dashboard contract, starts the
-profile-gated `paperclip` and `paperclip-db` containers, and seeds the Caboose
-AI Software Shop workspace. The seed includes the first self-improvement
-kickoff issue in the Agent Control Plan project, assigned to the seeded CEO/PM,
-so a clean install can start the operating loop without manually creating a
-task. Run `mise run paperclip:seed` after install only when repairing or
-refreshing the seed metadata.
+The base installer provisions the Authentik and dashboard contract, but leaves
+the profile-gated `paperclip` and `paperclip-db` containers stopped. Run the
+example task only when you want the full Caboose AI Software Shop workspace
+created. The seed includes the first self-improvement kickoff issue in the
+Agent Control Plan project, assigned to the seeded CEO/PM.
 
 ## Operations
 
 ```bash
+mise run paperclip:example
 mise run paperclip:up
 mise run paperclip:status
 mise run paperclip:smoke
@@ -25,8 +24,8 @@ mise run paperclip:seed
 
 `paperclip:seed` uses `homelab paperclip seed-company --profile software-shop`
 and reads `PAPERCLIP_API_KEY` from the environment or configured secret store
-when the API requires bearer auth. The installer runs the same idempotent seed
-path after bringing the profile up.
+when the API requires bearer auth. `paperclip:example` starts the optional
+profile and then runs the same idempotent seed path.
 
 The Paperclip container bind-mounts `PAPERCLIP_WORKSPACE_ROOT`, defaulting to
 `/home/caboose/dev/caboose-ai.io`, at the same path inside the container. Keep
@@ -101,9 +100,10 @@ Paperclip task before asking for final human review.
 
 ### Trigger Runbook
 
-1. Verify Paperclip:
+1. Start and seed the example, then verify Paperclip:
 
    ```bash
+   mise run paperclip:example
    mise run paperclip:status
    mise run paperclip:smoke
    ```

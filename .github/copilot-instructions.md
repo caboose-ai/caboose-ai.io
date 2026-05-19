@@ -60,7 +60,9 @@ Seeded Paperclip workspaces carry concrete delivery metadata: `paperclip/*`
 branches go to the `forgejo` remote, review happens as Forgejo pull requests,
 Woodpecker at `https://ci.caboose-ai.io` is the CI evidence source, and
 Portainer at `https://docker.caboose-ai.io` is inspection-only unless a human
-approves a runtime mutation.
+approves a runtime mutation. Install provisions Paperclip's service contract
+but leaves the optional example stopped until `mise run paperclip:example` is
+run explicitly.
 
 ## Conventions
 
@@ -212,7 +214,7 @@ CLOUDFLARE_ACCOUNT_ID=... CLOUDFLARE_API_TOKEN=... go run ./cmd/homelab oauth-se
 go run ./cmd/homelab reset --yes --store-static-env --domain caboose-ai.io --compose-dir /opt/homelab
 go run ./cmd/homelab install --domain caboose-ai.io --compose-dir dev/homelab
 go run ./cmd/homelab service --domain caboose-ai.io --compose-dir dev/homelab forgejo status
-mise run paperclip:seed
+mise run paperclip:example
 mise run portainer:recover-access
 go run ./cmd/telegram-agent notify "task finished"
 go run ./cmd/mcp access request --name "codex on laptop" --out mcp-request.json
