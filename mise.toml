@@ -1,5 +1,5 @@
 [tools]
-go = "latest"
+go = "1.26.3"
 pnpm = "latest"
 
 [env]
@@ -243,6 +243,18 @@ run = "dev/homelab/mcp-test-live.sh"
 description = "Run all tests"
 run = "go test ./... -v"
 
+[tasks."go:check-toolchain"]
+description = "Assert installed Go matches go.mod toolchain contract"
+run = "dev/check-go-toolchain.sh"
+
+[tasks."cab:baseline-report"]
+description = "Generate the latest CAB technical baseline scorecard artifacts under docs/"
+run = "dev/generate-technical-baseline-report.sh"
+
+[tasks."baseline:scorecard"]
+description = "Generate markdown/json technical baseline scorecard artifacts"
+run = "dev/generate-technical-baseline-report.sh"
+
 [tasks.down]
 description = "Stop containers (keep data)"
 run = "docker compose -f \"$HOMELAB_COMPOSE_DIR/docker-compose.yml\" down"
@@ -258,6 +270,10 @@ run = "go test -tags integration ./internal/smoketest/ -run TestSSO_Config -v"
 [tasks."sso:e2e"]
 description = "Run browser SSO flows with click/input screenshot evidence"
 run = "SMOKETEST_EVIDENCE=1 go test -tags integration ./internal/smoketest/ -run TestSSO_BrowserFlows -v -timeout 10m"
+
+[tasks."cab:tier23-live"]
+description = "Run Tier 2/3 live validation lane and capture timestamped evidence under docs/evidence/cab-8"
+run = "dev/cab-tier23-live-validation.sh"
 
 [tasks."homelab:e2e-reset"]
 description = "Destructive reset, install, then browser SSO evidence test"

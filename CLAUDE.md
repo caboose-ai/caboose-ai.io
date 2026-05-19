@@ -37,6 +37,7 @@ go run ./cmd/pr-ready-watch --repo caboose-ai/caboose-ai.io --pr 48 --poll 1m --
 CLOUDFLARE_ACCOUNT_ID=... CLOUDFLARE_API_TOKEN=... go run ./cmd/homelab oauth-setup --domain caboose-ai.io --create-turnstile  # create Turnstile via API
 mise run sso:check                # full SSO smoke tests (requires live stack)
 mise run sso:check-quick          # API config checks only
+mise run cab:tier23-live          # Tier 2/3 live lane with timestamped CAB evidence artifacts
 ```
 
 Go binary is at `/home/caboose/.local/go/bin/go`. If `go` isn't on PATH, use `PATH="/home/caboose/.local/go/bin:$PATH"`.

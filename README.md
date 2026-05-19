@@ -36,6 +36,9 @@ workspace: local agents should push `paperclip/*` branches to the `forgejo`
 remote, open Forgejo pull requests, attach Woodpecker evidence from
 `https://ci.caboose-ai.io`, and keep Portainer at `https://docker.caboose-ai.io`
 inspection-only unless a human approves an ops mutation.
+It also seeds the `Improve caboose-ai.io itself with the homelab software shop`
+kickoff issue in the Agent Control Plan project, assigned to the seeded CEO/PM,
+so a clean install has an immediately runnable first task.
 
 The installer also completes first-run setup for services that expose a product
 setup or local-login boundary before they can participate in the SSO smoke
@@ -118,8 +121,11 @@ validation, then pushes the verified formula commit directly to
 `caboose-ai/homebrew-tap`. The tap update workflow can also be rerun manually
 with a release tag.
 
-## Planning docs
+## Operator docs
 
+- [Operator Runbook](docs/operator-runbook.md) — first-hour operator flow, MCP path selector, and troubleshooting ladder.
+- [CAB-5 Operator UX and docs-flow audit (2026-05-18)](docs/cab-5-operator-ux-docs-flow-audit-2026-05-18.md) — operator journey audit across install, validation, MCP access, and troubleshooting navigation.
+- [CAB Technical Baseline Scorecard (Latest)](docs/cab-technical-baseline-latest.md) — generated architecture/quality snapshot; refresh with `mise run baseline:scorecard`.
 - [Homelab Service Documentation and Agent Control Plan](docs/homelab-agent-control-plan.md) — roadmap for documenting service capabilities, routing OpenClaw and Telegram agent workflows, minimizing outside token use, and supporting subagentic development.
 
 ## Service workspaces
@@ -270,6 +276,7 @@ before being run against live state.
 
 ```bash
 go test ./...                       # unit tests
+mise run go:check-toolchain         # enforce Go version matches go.mod
 mise run lint                       # golangci-lint
 mise run vulncheck                  # govulncheck
 
@@ -277,6 +284,7 @@ mise run vulncheck                  # govulncheck
 mise run sso:check                  # full suite: config + endpoints + browser login
 mise run sso:check-quick            # API config checks only
 mise run sso:e2e                    # browser SSO with click/input screenshot evidence
+mise run cab:tier23-live            # CAB Tier 2/3 lane with timestamped evidence capture
 mise run homelab:e2e-reset          # destructive reset + install + E2E evidence
 ```
 
@@ -292,6 +300,9 @@ Homarr validates the native Authentik/OIDC dashboard login, while
 proxy-gated services such as Woodpecker, OpenClaw, and Paperclip are validated
 by reaching their protected landing URLs. Per-service smoke commands run the
 manifest-owned flow, for example `mise run paperclip:smoke`.
+For CAB follow-up evidence capture, use `mise run cab:tier23-live` (or
+`dev/cab-tier23-live-validation.sh "<svc1,svc2>"`) and attach the generated
+`docs/evidence/cab-8/*-summary.md` artifact.
 
 ## Infrastructure
 

@@ -233,13 +233,15 @@ tools are in place. Until then, Paperclip-triggered work should produce plans,
 PRs, and explicit handoffs for humans or confirmed agents to execute.
 
 A practical first implementation can work without new Paperclip runtime
-privileges. The installer starts and seeds Paperclip; after install:
+privileges. The installer starts and seeds Paperclip with the first Agent
+Control Plan kickoff issue, `Improve caboose-ai.io itself with the homelab
+software shop`, assigned to the seeded CEO/PM; after install:
 
 1. Verify Paperclip with `mise run paperclip:status` and
    `mise run paperclip:smoke`. Rerun `mise run paperclip:seed` only when
    repairing or refreshing the workspace metadata.
-2. Open the seeded Caboose AI Software Shop workspace in Paperclip.
-3. Create a task using this format:
+2. Open the seeded Caboose AI Software Shop workspace in Paperclip and start or
+   review the seeded kickoff issue. Use this format for follow-up tasks:
 
    ```text
    Goal: <what should change or be built>
@@ -251,18 +253,18 @@ privileges. The installer starts and seeds Paperclip; after install:
    Output: plan | branch | PR | runbook | service docs | deployment checklist
    ```
 
-4. Assign the task to the seeded CEO/PM, Architect, DevOps/SRE, Backend
+3. Assign follow-up tasks to the seeded CEO/PM, Architect, DevOps/SRE, Backend
    Engineer, QA Engineer, or Security Engineer role depending on the task.
-5. Have the agent produce a plan in Paperclip first. For write-capable work, the
+4. Have the agent produce a plan in Paperclip first. For write-capable work, the
    plan must include the exact commands or tools it intends to use, the files or
    services it expects to touch, rollback notes, and the confirmation phrase it
    needs from the human.
-6. After approval, execute through the safest available handoff:
+5. After approval, execute through the safest available handoff:
    - OpenClaw for supervised multi-step planning or coding sessions;
    - Telegram `/agent confirm ...` for short remote approvals;
    - Homelab MCP for typed status, logs, smoke, and agent invocation;
    - Homelab CLI or `mise` tasks for deterministic service operations.
-7. Paste or attach the resulting PR link, command output, smoke evidence, and
+6. Paste or attach the resulting PR link, command output, smoke evidence, and
    follow-up tasks back into Paperclip so it remains the durable audit record.
 
 ## Phase 3: Minimize Outside Token Use

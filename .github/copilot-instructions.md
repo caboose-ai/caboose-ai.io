@@ -97,6 +97,7 @@ approves a runtime mutation.
 - Run lint checks: `mise run lint`
 - Run vulnerability checks: `mise run vulncheck`
 - Run smoke tests: `mise run sso:check` (full) or `mise run sso:check-quick` (API only)
+- Run CAB Tier 2/3 lane: `mise run cab:tier23-live` (writes evidence under `docs/evidence/cab-8/`)
 - Run MCP endpoint checks: `mise run mcp:probe` locally and `mise run mcp:probe-external` publicly
 - Run MCP access setup via `homelab mcp access setup`, approve client blobs with `homelab mcp access approve`, and request/import/token from `homelab-mcp access`.
 - Diagnose Portainer admin-password drift with `mise run portainer:recover-access`;

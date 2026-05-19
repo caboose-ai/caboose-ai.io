@@ -82,6 +82,7 @@ jobs:
             --allowed-author "github-actions[bot]" \
             --allowed-author "release-please[bot]" \
             --expected-check "Conventional PR title" \
+            --expected-check "Tier 1 contract safety" \
             --expected-check "Test and build" \
             --expected-check "docs-check" \
             --expected-check "Gitleaks Secret Scan" \

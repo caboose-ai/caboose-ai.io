@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.0](https://github.com/caboose-ai/caboose-ai.io/compare/v0.8.2...v0.9.0) (2026-05-19)
+
+
+### Features
+
+* **paperclip:** seed self-improvement kickoff loop ([#85](https://github.com/caboose-ai/caboose-ai.io/issues/85)) ([780dd73](https://github.com/caboose-ai/caboose-ai.io/commit/780dd73b145032f4f93c448a324be65ddc995343))
+
 ## [0.8.2](https://github.com/caboose-ai/caboose-ai.io/compare/v0.8.1...v0.8.2) (2026-05-17)
 
 

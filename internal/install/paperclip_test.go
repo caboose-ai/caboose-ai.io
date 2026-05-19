@@ -33,6 +33,7 @@ func TestBootstrapPaperclipStartsProfileAndSeedsSoftwareShop(t *testing.T) {
 	var createdProjects int
 	var createdAgents int
 	var createdRoutines int
+	var createdIssues int
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
@@ -53,6 +54,7 @@ func TestBootstrapPaperclipStartsProfileAndSeedsSoftwareShop(t *testing.T) {
 	mux.HandleFunc("/api/companies/company-1/projects", collectionHandler(t, &createdProjects, "project"))
 	mux.HandleFunc("/api/companies/company-1/agents", collectionHandler(t, &createdAgents, "agent"))
 	mux.HandleFunc("/api/companies/company-1/routines", collectionHandler(t, &createdRoutines, "routine"))
+	mux.HandleFunc("/api/companies/company-1/issues", collectionHandler(t, &createdIssues, "issue"))
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
@@ -91,8 +93,8 @@ func TestBootstrapPaperclipStartsProfileAndSeedsSoftwareShop(t *testing.T) {
 	if report.CompanyID != "company-1" {
 		t.Fatalf("CompanyID = %q, want company-1", report.CompanyID)
 	}
-	if createdGoals != 1 || createdProjects != 6 || createdAgents != 9 || createdRoutines != 9 {
-		t.Fatalf("created goals/projects/agents/routines = %d/%d/%d/%d, want 1/6/9/9", createdGoals, createdProjects, createdAgents, createdRoutines)
+	if createdGoals != 1 || createdProjects != 6 || createdAgents != 9 || createdRoutines != 9 || createdIssues != 1 {
+		t.Fatalf("created goals/projects/agents/routines/issues = %d/%d/%d/%d/%d, want 1/6/9/9/1", createdGoals, createdProjects, createdAgents, createdRoutines, createdIssues)
 	}
 }
 
