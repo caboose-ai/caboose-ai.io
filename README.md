@@ -31,7 +31,7 @@ Portainer gives Docker visibility for approved operational handoffs. Paperclip
 is the planning and audit ledger; confirmed execution still routes through
 approved OpenClaw, Telegram, MCP, Homelab CLI, PR, or Portainer handoffs, and
 Docker mutations remain confirmation-gated.
-The `paperclip:seed` profile now stores that route in each Paperclip project
+The `paperclip:seed` task stores that route in each Paperclip project
 workspace: local agents should push `paperclip/*` branches to the `forgejo`
 remote, open Forgejo pull requests, attach Woodpecker evidence from
 `https://ci.caboose-ai.io`, and keep Portainer at `https://docker.caboose-ai.io`
@@ -190,9 +190,9 @@ mise run service:smoke -- forgejo
 mise run portainer:recover-access
 dev/homelab/portainer-recover-access.sh --yes
 
-# Paperclip is started and seeded by install, including the first self-improvement
-# kickoff issue. These commands are useful for repair, verification, or
-# intentionally restarting the profile.
+# Paperclip is provisioned as an optional example, but install leaves it stopped.
+# Start and seed the full software-shop example only when intentionally requested.
+mise run paperclip:example
 mise run paperclip:status
 mise run paperclip:smoke
 mise run paperclip:forgejo-remote

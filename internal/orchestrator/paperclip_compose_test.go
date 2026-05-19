@@ -166,6 +166,24 @@ func TestPaperclipSeedTaskUsesWorkspaceRoot(t *testing.T) {
 	}
 }
 
+func TestPaperclipExampleTaskStartsAndSeedsExplicitly(t *testing.T) {
+	data, err := os.ReadFile("../../mise.toml")
+	if err != nil {
+		t.Fatalf("read mise config: %v", err)
+	}
+	text := string(data)
+
+	for _, want := range []string{
+		`[tasks."paperclip:example"]`,
+		`description = "Start Paperclip and seed the software-shop example"`,
+		`run = "mise run paperclip:up && mise run paperclip:seed"`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("paperclip:example task missing %q", want)
+		}
+	}
+}
+
 func contains(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {

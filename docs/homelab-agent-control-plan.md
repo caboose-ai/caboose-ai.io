@@ -233,13 +233,16 @@ tools are in place. Until then, Paperclip-triggered work should produce plans,
 PRs, and explicit handoffs for humans or confirmed agents to execute.
 
 A practical first implementation can work without new Paperclip runtime
-privileges. The installer starts and seeds Paperclip with the first Agent
-Control Plan kickoff issue, `Improve caboose-ai.io itself with the homelab
-software shop`, assigned to the seeded CEO/PM; after install:
+privileges. Install provisions Paperclip's service contract but leaves the
+optional runtime stopped. Run `mise run paperclip:example` when you want the
+full software-shop example created; it starts and seeds Paperclip with the
+first Agent Control Plan kickoff issue, `Improve caboose-ai.io itself with the
+homelab software shop`, assigned to the seeded CEO/PM.
 
-1. Verify Paperclip with `mise run paperclip:status` and
-   `mise run paperclip:smoke`. Rerun `mise run paperclip:seed` only when
-   repairing or refreshing the workspace metadata.
+1. Run `mise run paperclip:example`, then verify Paperclip with
+   `mise run paperclip:status` and `mise run paperclip:smoke`. Rerun
+   `mise run paperclip:seed` only when repairing or refreshing the workspace
+   metadata.
 2. Open the seeded Caboose AI Software Shop workspace in Paperclip and start or
    review the seeded kickoff issue. Use this format for follow-up tasks:
 
