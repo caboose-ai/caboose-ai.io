@@ -190,8 +190,9 @@ mise run service:smoke -- forgejo
 mise run portainer:recover-access
 dev/homelab/portainer-recover-access.sh --yes
 
-# Paperclip is started and seeded by install. These commands are useful for
-# repair, verification, or intentionally restarting the profile.
+# Paperclip is started and seeded by install, including the first self-improvement
+# kickoff issue. These commands are useful for repair, verification, or
+# intentionally restarting the profile.
 mise run paperclip:status
 mise run paperclip:smoke
 mise run paperclip:forgejo-remote
