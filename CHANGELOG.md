@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.1](https://github.com/caboose-ai/caboose-ai.io/compare/v0.9.0...v0.9.1) (2026-05-19)
+
+
+### Bug Fixes
+
+* **portainer:** add guarded environment access recovery ([#86](https://github.com/caboose-ai/caboose-ai.io/issues/86)) ([ec15904](https://github.com/caboose-ai/caboose-ai.io/commit/ec15904af6d5634c3a0a2f60086f249478f919fa))
+
 ## [0.9.0](https://github.com/caboose-ai/caboose-ai.io/compare/v0.8.2...v0.9.0) (2026-05-19)
 
 
