@@ -40,7 +40,7 @@ release gate by maintainers.
 |---|---|---|---|---|---|
 | Docker Engine | Required | Required | Required | `docker version` | Client and Server sections render without daemon error |
 | Docker Compose v2 plugin | Required | Required | Required | `docker compose version` | Version string prints and exits 0 |
-| `homelab` binary in `PATH` | Required | Required | Required | `homelab --help` | Help output prints usage/commands |
+| `homelab` binary in `PATH` | Required | Required | Required | `homelab install --help` | Help output prints usage/flags and exits 0 |
 | Secrets strategy selected (`op` or `.env`) | Required | Required | Required | `op --version` (if 1Password mode) or `test -f .env` (if `.env` mode) | For chosen mode, command succeeds |
 | Domain + DNS control | Not required | Required | Required | `dig +short <your-domain>` | Returns expected record(s) for host exposure |
 | Caddy runtime (for host reverse proxy mode) | Not required | Required | Required | `caddy version` | Version string prints |
@@ -59,8 +59,8 @@ Use this when validating first-run MVP experience on a clean-ish Linux host.
 ### 0) Choose working directory and profile
 
 ```bash
-export CABOOSE_PROFILE=local
-mkdir -p "$HOME/caboose-run" && cd "$HOME/caboose-run"
+git clone https://github.com/caboose-ai/caboose-ai.io.git "$HOME/caboose-run"
+cd "$HOME/caboose-run"
 ```
 
 **Pass criteria:** `pwd` shows your intended working directory.
@@ -70,7 +70,7 @@ mkdir -p "$HOME/caboose-run" && cd "$HOME/caboose-run"
 ```bash
 docker version
 docker compose version
-homelab --help
+homelab install --help
 ```
 
 **Pass criteria:** all commands return successfully and print normal version/help
@@ -97,10 +97,17 @@ Choose one path only:
 
   **Pass criteria:** `.env present` is printed.
 
+  When using this path, add `--secrets-env-only` to `homelab` commands in the
+  remaining steps so install/runtime does not require 1Password.
+
 ### 3) Install/bootstrap stack
 
 ```bash
-homelab install
+# Path A (1Password-backed)
+homelab install --compose-dir dev/homelab
+
+# Path B (.env-backed)
+homelab install --compose-dir dev/homelab --secrets-env-only
 ```
 
 **Pass criteria:** command exits successfully and reports completed bootstrap for
@@ -109,8 +116,10 @@ configured services.
 ### 4) Validate service health and smoke readiness
 
 ```bash
-homelab service status
-homelab service smoke --all
+for slug in authentik forgejo gitea woodpecker; do
+  homelab service "$slug" status --compose-dir dev/homelab
+  homelab service "$slug" smoke --compose-dir dev/homelab
+done
 ```
 
 **Pass criteria:**
@@ -121,9 +130,11 @@ homelab service smoke --all
 ### 5) Validate recovery path
 
 ```bash
-homelab reset --keep-env
-homelab install
-homelab service smoke --all
+homelab reset --keep-env --yes --compose-dir dev/homelab
+homelab install --compose-dir dev/homelab
+for slug in authentik forgejo gitea woodpecker; do
+  homelab service "$slug" smoke --compose-dir dev/homelab
+done
 ```
 
 **Pass criteria:** reinstall and smoke checks pass after reset without manual
@@ -139,20 +150,24 @@ release ready.
 ### A. `local` profile acceptance
 
 1. Prerequisite matrix: all `local` required rows pass.
-2. Fresh install completes (`homelab install`).
+2. Fresh install completes (`homelab install --compose-dir dev/homelab`).
 3. Health/smoke passes:
 
    ```bash
-   homelab service status
-   homelab service smoke --all
+   for slug in authentik forgejo gitea woodpecker; do
+     homelab service "$slug" status --compose-dir dev/homelab
+     homelab service "$slug" smoke --compose-dir dev/homelab
+   done
    ```
 
 4. Recovery pass:
 
    ```bash
-   homelab reset --keep-env
-   homelab install
-   homelab service smoke --all
+   homelab reset --keep-env --yes --compose-dir dev/homelab
+   homelab install --compose-dir dev/homelab
+   for slug in authentik forgejo gitea woodpecker; do
+     homelab service "$slug" smoke --compose-dir dev/homelab
+   done
    ```
 
 **Release pass criteria (`local`):** all four checks pass with no undocumented
@@ -169,8 +184,10 @@ Suggested verification commands:
 
 ```bash
 dig +short <your-domain>
-homelab service status
-homelab service smoke --all
+for slug in authentik forgejo gitea woodpecker; do
+  homelab service "$slug" status --compose-dir dev/homelab
+  homelab service "$slug" smoke --compose-dir dev/homelab
+done
 ```
 
 **Release pass criteria (`public`):** public route + authentication success and
@@ -186,8 +203,8 @@ Suggested verification commands:
 
 ```bash
 env | rg 'CLOUDFLARE_(API_TOKEN|ZONE_ID)'
-homelab mcp setup-external
-homelab mcp probe
+homelab mcp access setup --compose-dir dev/homelab
+homelab-mcp access status
 ```
 
 **Release pass criteria (`public+mcp-external`):** external setup completes,
@@ -201,7 +218,7 @@ probe succeeds, and approval/import onboarding workflow works end-to-end.
 2. Execute prerequisite matrix and clear all required rows.
 3. Run install.
 4. Run profile acceptance checks.
-5. Run recovery check (`reset --keep-env` + reinstall + smoke).
+5. Run recovery check (`reset --keep-env --yes` + reinstall + per-service smoke).
 6. Record pass/fail outcome for release gate.
 
 ---
