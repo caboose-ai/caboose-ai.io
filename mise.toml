@@ -232,8 +232,16 @@ description = "Probe the external homelab MCP HTTPS endpoint"
 run = "curl -i --max-time 10 \"$HOMELAB_MCP_EXTERNAL_URL/\""
 
 [tasks."mcp:setup-external"]
-description = "Set up and verify the external homelab MCP DNS and Caddy route"
+description = "Legacy/static-IP path: set up and verify external homelab MCP DNS and Caddy route"
 run = "dev/homelab/setup-mcp-external.sh"
+
+[tasks."tunnel:config"]
+description = "Generate and validate the default Cloudflare Tunnel ingress config for public hosting"
+run = "dev/homelab/setup-cloudflare-tunnel.sh --config \"${HOMELAB_TUNNEL_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/cloudflared/homelab.yml}\" --validate"
+
+[tasks."tunnel:print"]
+description = "Print the default Cloudflare Tunnel ingress config"
+run = "dev/homelab/setup-cloudflare-tunnel.sh --print"
 
 [tasks."mcp:access-live"]
 description = "Create, approve, import, and smoke-test live Homelab MCP access"

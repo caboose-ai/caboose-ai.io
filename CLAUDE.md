@@ -30,7 +30,9 @@ go run ./cmd/mcp access request --name "codex on laptop" --out mcp-request.json 
 go run ./cmd/homelab mcp access setup  # create MCP OAuth provider/scope
 go run ./cmd/homelab mcp access approve mcp-request.json --out mcp-release.json  # approve MCP client access
 mise run mcp:probe-external       # verify the public Homelab MCP endpoint
-mise run mcp:setup-external       # upsert MCP DNS, install Caddy route, then verify
+mise run tunnel:print             # print default Cloudflare Tunnel ingress config
+mise run tunnel:config            # write and validate default Cloudflare Tunnel ingress config
+mise run mcp:setup-external       # legacy/static-IP MCP A-record and Caddy route path
 dev/homelab/mcp-access-live.sh --name "codex on laptop"  # create/import/smoke-test live MCP access
 dev/homelab/mcp-test-live.sh     # smoke-test the live MCP endpoint with existing access
 go run ./cmd/pr-ready-watch --repo caboose-ai/caboose-ai.io --pr 48 --poll 1m --timeout 10m  # watch a PR for human-review readiness
@@ -150,7 +152,9 @@ container recreation.
   so uploaded media and runtime-managed files survive container recreation.
 - Port exposure is configurable with `serve_mode` / `--serve-mode`:
   `public` binds host ports to `127.0.0.1` for Caddy, `local` binds to
-  `0.0.0.0` for LAN access.
+  `0.0.0.0` for LAN access. The default public exposure path fronts Caddy with
+  Cloudflare Tunnel so the stack does not require a static IP or inbound WAN
+  port forwarding.
 
 ### Authentik
 - OAuth2 and proxy providers must have matching Authentik applications.
@@ -183,7 +187,10 @@ container recreation.
 - Services: git, ci, docker, grafana, ai, sonar, chat, openclaw, blog, paperclip, telegram-agent, dash
 - Observability: Prometheus (metrics), Loki + Promtail (logs), Grafana (dashboards). Mattermost Team Edition is intentionally omitted from Prometheus scrapes because it does not expose HTTP `/metrics`.
 - Caddy reverse proxy on the host
-- Cloudflare tunnel for `chat` and `sonar` subdomains
+- Cloudflare Tunnel is the default public exposure path for browser-facing
+  hostnames; use `mise run tunnel:print` / `mise run tunnel:config` to generate
+  the locally managed ingress config. `mcp:setup-external` is the
+  legacy/static-IP A-record path.
 - Ollama on host for local LLM inference
 - Paperclip runs behind the compose `paperclip` profile with Authentik forward-auth provider `paperclip-proxy`; Paperclip itself uses `local_trusted` mode on host loopback so Authentik is the only browser login. Its container bind-mounts `PAPERCLIP_WORKSPACE_ROOT` at the same path inside the container for repo-aware agent runs, its DB publishes a loopback-only port for the host-network app, and agents use `PAPERCLIP_API_URL=http://127.0.0.1:3100` instead of the Authentik-gated public URL for API calls. Install provisions the service contract but leaves the optional profile stopped; run `mise run paperclip:example` to start and seed the software-shop example, then verify it with `mise run paperclip:smoke`.
 - Paperclip-driven agent control starts as a planner/audit ledger. Prefer the
