@@ -56,14 +56,14 @@ release gate by maintainers.
 
 Use this when validating first-run MVP experience on a clean-ish Linux host.
 
-### 0) Choose working directory and profile
+### 0) Choose working directory and set supported local profile input
 
 ```bash
 git clone https://github.com/caboose-ai/caboose-ai.io.git "$HOME/caboose-run"
 cd "$HOME/caboose-run"
 ```
 
-**Pass criteria:** `pwd` shows your intended working directory.
+**Pass criteria:** `pwd` shows your intended working directory, and subsequent `homelab` commands in this checklist include `--serve-mode local`.
 
 ### 1) Verify mandatory runtime prerequisites
 
@@ -104,10 +104,10 @@ Choose one path only:
 
 ```bash
 # Path A (1Password-backed)
-homelab install --compose-dir dev/homelab
+homelab install --compose-dir dev/homelab --serve-mode local
 
 # Path B (.env-backed)
-homelab install --compose-dir dev/homelab --secrets-env-only
+homelab install --compose-dir dev/homelab --serve-mode local --secrets-env-only
 ```
 
 **Pass criteria:** command exits successfully and reports completed bootstrap for
@@ -117,8 +117,8 @@ configured services.
 
 ```bash
 for slug in authentik forgejo gitea woodpecker; do
-  homelab service "$slug" status --compose-dir dev/homelab
-  homelab service "$slug" smoke --compose-dir dev/homelab
+  homelab service "$slug" status --compose-dir dev/homelab --serve-mode local
+  homelab service "$slug" smoke --compose-dir dev/homelab --serve-mode local
 done
 ```
 
@@ -130,10 +130,10 @@ done
 ### 5) Validate recovery path
 
 ```bash
-homelab reset --keep-env --yes --compose-dir dev/homelab
-homelab install --compose-dir dev/homelab
+homelab reset --keep-env --yes --compose-dir dev/homelab --serve-mode local
+homelab install --compose-dir dev/homelab --serve-mode local
 for slug in authentik forgejo gitea woodpecker; do
-  homelab service "$slug" smoke --compose-dir dev/homelab
+  homelab service "$slug" smoke --compose-dir dev/homelab --serve-mode local
 done
 ```
 
@@ -150,23 +150,23 @@ release ready.
 ### A. `local` profile acceptance
 
 1. Prerequisite matrix: all `local` required rows pass.
-2. Fresh install completes (`homelab install --compose-dir dev/homelab`).
+2. Fresh install completes (`homelab install --compose-dir dev/homelab --serve-mode local`).
 3. Health/smoke passes:
 
    ```bash
    for slug in authentik forgejo gitea woodpecker; do
-     homelab service "$slug" status --compose-dir dev/homelab
-     homelab service "$slug" smoke --compose-dir dev/homelab
+     homelab service "$slug" status --compose-dir dev/homelab --serve-mode local
+     homelab service "$slug" smoke --compose-dir dev/homelab --serve-mode local
    done
    ```
 
 4. Recovery pass:
 
    ```bash
-   homelab reset --keep-env --yes --compose-dir dev/homelab
-   homelab install --compose-dir dev/homelab
+   homelab reset --keep-env --yes --compose-dir dev/homelab --serve-mode local
+   homelab install --compose-dir dev/homelab --serve-mode local
    for slug in authentik forgejo gitea woodpecker; do
-     homelab service "$slug" smoke --compose-dir dev/homelab
+     homelab service "$slug" smoke --compose-dir dev/homelab --serve-mode local
    done
    ```
 
@@ -185,8 +185,8 @@ Suggested verification commands:
 ```bash
 dig +short <your-domain>
 for slug in authentik forgejo gitea woodpecker; do
-  homelab service "$slug" status --compose-dir dev/homelab
-  homelab service "$slug" smoke --compose-dir dev/homelab
+  homelab service "$slug" status --compose-dir dev/homelab --serve-mode public
+  homelab service "$slug" smoke --compose-dir dev/homelab --serve-mode public
 done
 ```
 
@@ -197,18 +197,18 @@ no blocking smoke failures.
 
 1. All `public` acceptance checks pass.
 2. Cloudflare credentials exported and valid for target zone.
-3. External MCP setup/probe/access flow completes.
+3. External MCP setup/approval/access flow completes.
 
 Suggested verification commands:
 
 ```bash
 env | rg 'CLOUDFLARE_(API_TOKEN|ZONE_ID)'
 homelab mcp access setup --compose-dir dev/homelab
-homelab-mcp access status
+homelab mcp access approve --compose-dir dev/homelab
 ```
 
-**Release pass criteria (`public+mcp-external`):** external setup completes,
-probe succeeds, and approval/import onboarding workflow works end-to-end.
+**Release pass criteria (`public+mcp-external`):** external setup and approval
+commands complete successfully, and onboarding workflow works end-to-end.
 
 ---
 
