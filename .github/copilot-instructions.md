@@ -131,7 +131,8 @@ run explicitly.
   so uploaded media and runtime-managed files survive container recreation.
 - Port exposure is configurable with `serve_mode` / `--serve-mode`:
   `public` binds host ports to `127.0.0.1` for Caddy reverse proxying,
-  `local` binds to `0.0.0.0` for LAN access.
+  `local` binds to `0.0.0.0` for LAN access. Public hosting should default to
+  Cloudflare Tunnel in front of Caddy, not a static public IP.
 
 ### Authentik
 
@@ -220,6 +221,8 @@ go run ./cmd/telegram-agent notify "task finished"
 go run ./cmd/mcp access request --name "codex on laptop" --out mcp-request.json
 go run ./cmd/homelab mcp access setup
 go run ./cmd/homelab mcp access approve mcp-request.json --out mcp-release.json
+mise run tunnel:print
+mise run tunnel:config
 mise run mcp:setup-external
 dev/homelab/mcp-access-live.sh --name "codex on laptop"
 dev/homelab/mcp-test-live.sh

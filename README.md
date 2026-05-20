@@ -93,9 +93,11 @@ dev/homelab/update-homelab-and-reset.sh --yes --store-static-env
 The formulae install `homelab` and `homelab-mcp`. Runtime prerequisites are
 intentionally documented instead of enforced as Homebrew dependencies: Docker
 with Compose for the stack itself, plus either the 1Password CLI or a populated
-compose `.env` fallback for secrets. Caddy and Cloudflare are only needed for
-deployment modes that use the host reverse proxy, TLS, tunnels, or Turnstile
-automation.
+compose `.env` fallback for secrets. Caddy and Cloudflare Tunnel are the
+default public exposure path: `public` mode keeps services on host loopback for
+Caddy, and `cloudflared` publishes the stable `*.caboose-ai.io` hostnames
+without requiring a static IP or inbound WAN port forwarding. Cloudflare API
+credentials are only needed for Turnstile or DNS/tunnel automation.
 
 ## Release automation
 
@@ -211,6 +213,8 @@ mise run mcp:status
 mise run mcp:probe
 mise run mcp:resolve
 mise run mcp:probe-external
+mise run tunnel:print
+mise run tunnel:config
 mise run mcp:setup-external
 mise run mcp:access-live
 mise run mcp:test-live
@@ -232,7 +236,17 @@ go run ./cmd/homelab migrate
 ```
 
 The homelab tasks default to `HOMELAB_DOMAIN=caboose-ai.io`, `HOMELAB_COMPOSE_DIR=/opt/homelab`, and `HOMELAB_SERVE_MODE=public`.
-`mise run mcp:setup-external` additionally requires `CLOUDFLARE_API_TOKEN` and
+`mise run tunnel:print` prints a locally managed Cloudflare Tunnel ingress
+config for the browser-facing service hostnames. `mise run tunnel:config`
+writes that config to `HOMELAB_TUNNEL_CONFIG` when set, otherwise
+`${XDG_CONFIG_HOME:-$HOME/.config}/cloudflared/homelab.yml`, and validates it
+with `cloudflared`; set `HOMELAB_TUNNEL_ID` and
+`HOMELAB_TUNNEL_CREDENTIALS_FILE` to make the generated config runnable. The
+credentials file must already exist for validation; this proves the local config
+is syntactically valid, while the endpoint smoke checks prove public
+reachability.
+`mise run mcp:setup-external` remains available as the legacy/static-IP path
+for the MCP A record and Caddy route. It requires `CLOUDFLARE_API_TOKEN` and
 `CLOUDFLARE_ZONE_ID` from the environment or `fnox`, plus sudo access to
 install and reload the Caddy route.
 `homelab mcp access setup` requires Authentik admin credentials through the
@@ -254,9 +268,10 @@ HOMELAB_SERVE_MODE=local mise run install
 ```
 
 `serve_mode` controls host port exposure. `public` binds compose ports to
-`127.0.0.1` for Caddy/TLS reverse proxying. `local` binds them to `0.0.0.0`
-for LAN access while keeping the same service URLs and Authentik callback
-configuration.
+`127.0.0.1` for Caddy/TLS reverse proxying; the default public deployment
+publishes those Caddy routes through Cloudflare Tunnel instead of a static IP.
+`local` binds them to `0.0.0.0` for LAN access while keeping the same service
+URLs and Authentik callback configuration.
 
 Direct `homelab reset` is destructive and requires `--yes` unless `--dry-run`
 is used. The recurring `mise` reset/reinstall tasks pass `--yes` explicitly so
@@ -309,6 +324,8 @@ For CAB follow-up evidence capture, use `mise run cab:tier23-live` (or
 ## Infrastructure
 
 - **Caddy** reverse proxy on the host — handles TLS and routes to containers in `public` serve mode
+- **Cloudflare Tunnel** — default public exposure path for stable service
+  hostnames without a static IP or inbound WAN port forwarding
 - **Docker Compose** at `dev/homelab/docker-compose.yml` — all services
 - **Homarr** homepage — pinned to `ghcr.io/homarr-labs/homarr:v1.61.0`, stores dashboard state in `homarr_data:/appdata`, and uses native Authentik OIDC for `caboose-ai.io`
 - **Authentik** state — `/data` is persisted in the `authentik_data` volume for uploaded media and runtime-managed files
@@ -327,7 +344,8 @@ For CAB follow-up evidence capture, use `mise run cab:tier23-live` (or
   CLI instead of a compose service or public route
 - **PR readiness watcher** external runtime — host-run `gh`/Telegram poller
   for Codex review completion, check state, and final human-review handoff
-- **Cloudflare tunnel** for `chat` and `sonar` subdomains
+- **Legacy direct DNS/Caddy exposure** — available for the MCP A-record path
+  through `mise run mcp:setup-external` when a stable public IP is intentional
 - **1Password** for secret storage (with `.env` fallback)
 - **Prometheus + Loki** for metrics and logs, visualized in Grafana. Mattermost
   Team Edition is omitted from Prometheus scrapes because it does not expose the

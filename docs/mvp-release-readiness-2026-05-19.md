@@ -30,7 +30,8 @@ release gate by maintainers.
 
 - **`local`**: single-host/private network evaluation, no public DNS exposure
   required
-- **`public`**: domain-exposed services with reverse proxy and SSO/OAuth flows
+- **`public`**: domain-exposed services with reverse proxy, SSO/OAuth flows,
+  and Cloudflare Tunnel as the default no-static-IP exposure path
 - **`public+mcp-external`**: `public` plus external MCP onboarding and approval
   workflows
 
@@ -42,9 +43,10 @@ release gate by maintainers.
 | Docker Compose v2 plugin | Required | Required | Required | `docker compose version` | Version string prints and exits 0 |
 | `homelab` binary in `PATH` | Required | Required | Required | `homelab install --help` | Help output prints usage/flags and exits 0 |
 | Secrets strategy selected (`op` or `.env`) | Required | Required | Required | `op --version` (if 1Password mode) or `test -f .env` (if `.env` mode) | For chosen mode, command succeeds |
-| Domain + DNS control | Not required | Required | Required | `dig +short <your-domain>` | Returns expected record(s) for host exposure |
+| Domain + DNS control | Not required | Required | Required | `dig +short <your-domain>` | Returns Cloudflare-routed records for tunnel-backed host exposure |
 | Caddy runtime (for host reverse proxy mode) | Not required | Required | Required | `caddy version` | Version string prints |
-| Cloudflare API credentials | Not required | Optional (Turnstile automation) | Required | `env | rg 'CLOUDFLARE_(API_TOKEN|ZONE_ID)'` | Required variables present for selected features |
+| Cloudflare Tunnel runtime | Not required | Required | Required | `cloudflared --version` | Version string prints |
+| Cloudflare API credentials | Not required | Optional (Turnstile/DNS automation) | Required only for automation | `env | rg 'CLOUDFLARE_(API_TOKEN|ZONE_ID)'` | Required variables present for selected features |
 | `systemd --user` available | Not required | Not required | Required | `systemctl --user status` | Command connects to user manager (not “Failed to connect to bus”) |
 
 > Operator rule: do not begin installation until all rows marked “Required” for
@@ -176,14 +178,18 @@ manual intervention.
 ### B. `public` profile acceptance
 
 1. All `local` acceptance checks pass.
-2. Public prerequisites verified (domain/DNS + Caddy + OAuth config).
-3. Public endpoints reachable over intended domain(s).
-4. SSO callback/authentication flow succeeds end-to-end.
+2. Public prerequisites verified (domain/DNS + Caddy + Cloudflare Tunnel + OAuth config).
+3. `mise run tunnel:config` writes the Cloudflare Tunnel ingress config, checks
+   that the configured credentials file exists, and syntax-validates the config
+   with `cloudflared`.
+4. Public endpoints reachable over intended domain(s).
+5. SSO callback/authentication flow succeeds end-to-end.
 
 Suggested verification commands:
 
 ```bash
 dig +short <your-domain>
+mise run tunnel:config
 for slug in authentik forgejo gitea woodpecker; do
   homelab service "$slug" status --compose-dir dev/homelab --serve-mode public
   homelab service "$slug" smoke --compose-dir dev/homelab --serve-mode public
@@ -196,7 +202,8 @@ no blocking smoke failures.
 ### C. `public+mcp-external` profile acceptance
 
 1. All `public` acceptance checks pass.
-2. Cloudflare credentials exported and valid for target zone.
+2. Cloudflare credentials exported and valid for target zone if DNS/tunnel
+   automation is being run.
 3. External MCP setup, approval, and client access flow completes.
 
 Suggested verification commands:

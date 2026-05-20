@@ -16,3 +16,14 @@ setup() {
   run grep -F 'dev/homelab/mcp-test-live.sh' "$MISE_FILE"
   [ "$status" -eq 0 ]
 }
+
+@test "mise exposes cloudflare tunnel config task as the public default path" {
+  run grep -F '[tasks."tunnel:config"]' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+  run grep -F '[tasks."tunnel:print"]' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+  run grep -F 'dev/homelab/setup-cloudflare-tunnel.sh' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+  run grep -F 'HOMELAB_TUNNEL_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/cloudflared/homelab.yml' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+}
