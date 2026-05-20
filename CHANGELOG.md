@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.0](https://github.com/caboose-ai/caboose-ai.io/compare/v0.9.2...v0.10.0) (2026-05-20)
+
+
+### Features
+
+* **homelab:** add cloudflare tunnel public default ([#94](https://github.com/caboose-ai/caboose-ai.io/issues/94)) ([af94cd4](https://github.com/caboose-ai/caboose-ai.io/commit/af94cd4b3854fd98aeda68741b4625cd25c65148))
+
 ## [0.9.2](https://github.com/caboose-ai/caboose-ai.io/compare/v0.9.1...v0.9.2) (2026-05-19)
 
 
