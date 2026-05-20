@@ -197,18 +197,21 @@ no blocking smoke failures.
 
 1. All `public` acceptance checks pass.
 2. Cloudflare credentials exported and valid for target zone.
-3. External MCP setup/approval/access flow completes.
+3. External MCP setup, approval, and client access flow completes.
 
 Suggested verification commands:
 
 ```bash
 env | rg 'CLOUDFLARE_(API_TOKEN|ZONE_ID)'
 homelab mcp access setup --compose-dir dev/homelab
-homelab mcp access approve --compose-dir dev/homelab
+homelab-mcp access request --name "$(hostname)" --out mcp-request.json
+homelab mcp access approve mcp-request.json --out mcp-release.json
+homelab-mcp access import mcp-release.json
+homelab-mcp access status
 ```
 
-**Release pass criteria (`public+mcp-external`):** external setup and approval
-commands complete successfully, and onboarding workflow works end-to-end.
+**Release pass criteria (`public+mcp-external`):** external setup, approval,
+import, and status checks all complete successfully end-to-end.
 
 ---
 
