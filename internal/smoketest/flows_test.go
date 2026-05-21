@@ -45,6 +45,25 @@ func TestTargetedProxyFlowsIncludePaperclip(t *testing.T) {
 	}
 }
 
+func TestWoodpeckerProxyFlowAcceptsUpstreamLoginAndChecksHealth(t *testing.T) {
+	urls := config.DeriveURLs("example.com")
+	flows := targetedProxyFlows(urls)
+
+	for _, flow := range flows {
+		if flow.Name != "woodpecker" {
+			continue
+		}
+		if !flow.AllowLoginLanding {
+			t.Fatal("woodpecker AllowLoginLanding = false, want true")
+		}
+		if flow.HealthURL != "http://127.0.0.1:8000/healthz" {
+			t.Fatalf("woodpecker HealthURL = %q, want local healthz", flow.HealthURL)
+		}
+		return
+	}
+	t.Fatal("woodpecker flow missing")
+}
+
 func hasServiceFlow(flows []ServiceFlow, name string) bool {
 	for _, flow := range flows {
 		if flow.Name == name {

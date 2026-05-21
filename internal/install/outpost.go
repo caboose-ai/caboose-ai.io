@@ -12,15 +12,16 @@ type ProxySpec struct {
 	Name         string
 	Slug         string
 	ExternalHost string
+	InternalHost string
 }
 
 func DefaultProxySpecs(urls config.URLs) []ProxySpec {
 	return []ProxySpec{
-		{Name: "dashboard", Slug: "dashboard", ExternalHost: urls.Dashboard},
-		{Name: "dashboard-alias", Slug: "dashboard-alias", ExternalHost: urls.DashAlias},
-		{Name: "ci-proxy", Slug: "ci-proxy", ExternalHost: urls.CI},
+		{Name: "dashboard", Slug: "dashboard", ExternalHost: urls.Dashboard, InternalHost: "http://homarr:7575"},
+		{Name: "dashboard-alias", Slug: "dashboard-alias", ExternalHost: urls.DashAlias, InternalHost: "http://homarr:7575"},
+		{Name: "ci-proxy", Slug: "ci-proxy", ExternalHost: urls.CI, InternalHost: "http://woodpecker-server:8000"},
 		{Name: "openclaw-proxy", Slug: "openclaw-proxy", ExternalHost: urls.OpenClaw},
-		{Name: "ghost-proxy", Slug: "ghost-proxy", ExternalHost: urls.Ghost},
+		{Name: "ghost-proxy", Slug: "ghost-proxy", ExternalHost: urls.Ghost, InternalHost: "http://ghost:2368"},
 		{Name: "paperclip-proxy", Slug: "paperclip-proxy", ExternalHost: urls.Paperclip},
 	}
 }
@@ -62,6 +63,14 @@ func (inst *Installer) ProvisionOutpost(ctx context.Context, progressFn func(Out
 			return fmt.Errorf("looking up proxy provider %q: %w", spec.Name, err)
 		}
 		if existing != nil {
+			if err := inst.AK.UpdateProxyProvider(ctx, existing.PK, authentik.UpdateProxyProviderParams{
+				Mode:         "forward_single",
+				ExternalHost: spec.ExternalHost,
+				InternalHost: spec.InternalHost,
+			}); err != nil {
+				progressFn(OutpostProgress{Name: spec.Name, Action: "error", Err: err})
+				return fmt.Errorf("updating proxy provider %q: %w", spec.Name, err)
+			}
 			if err := inst.ensureOpenApplication(ctx, spec.Name, spec.Slug, existing.PK); err != nil {
 				progressFn(OutpostProgress{Name: spec.Name, Action: "error", Err: err})
 				return err
@@ -79,6 +88,7 @@ func (inst *Installer) ProvisionOutpost(ctx context.Context, progressFn func(Out
 			InvalidationFlow:  flows.Invalidation.PK,
 			Mode:              "forward_single",
 			ExternalHost:      spec.ExternalHost,
+			InternalHost:      spec.InternalHost,
 		})
 		if err != nil {
 			progressFn(OutpostProgress{Name: spec.Name, Action: "error", Err: err})

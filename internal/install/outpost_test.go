@@ -10,11 +10,13 @@ func TestDefaultProxySpecsIncludePaperclip(t *testing.T) {
 	urls := config.DeriveURLs("example.com")
 
 	want := map[string]struct {
-		slug string
-		host string
+		slug         string
+		externalHost string
+		internalHost string
 	}{
-		"ghost-proxy":     {slug: "ghost-proxy", host: "https://blog.example.com"},
-		"paperclip-proxy": {slug: "paperclip-proxy", host: "https://paperclip.example.com"},
+		"ci-proxy":        {slug: "ci-proxy", externalHost: "https://ci.example.com", internalHost: "http://woodpecker-server:8000"},
+		"ghost-proxy":     {slug: "ghost-proxy", externalHost: "https://blog.example.com", internalHost: "http://ghost:2368"},
+		"paperclip-proxy": {slug: "paperclip-proxy", externalHost: "https://paperclip.example.com"},
 	}
 	found := map[string]bool{}
 	for _, spec := range DefaultProxySpecs(urls) {
@@ -23,8 +25,11 @@ func TestDefaultProxySpecsIncludePaperclip(t *testing.T) {
 			if spec.Slug != expected.slug {
 				t.Fatalf("%s Slug = %q, want %q", spec.Name, spec.Slug, expected.slug)
 			}
-			if spec.ExternalHost != expected.host {
-				t.Fatalf("%s ExternalHost = %q, want %q", spec.Name, spec.ExternalHost, expected.host)
+			if spec.ExternalHost != expected.externalHost {
+				t.Fatalf("%s ExternalHost = %q, want %q", spec.Name, spec.ExternalHost, expected.externalHost)
+			}
+			if spec.InternalHost != expected.internalHost {
+				t.Fatalf("%s InternalHost = %q, want %q", spec.Name, spec.InternalHost, expected.internalHost)
 			}
 		}
 	}

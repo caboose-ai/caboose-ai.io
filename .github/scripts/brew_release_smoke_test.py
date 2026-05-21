@@ -32,6 +32,20 @@ class BrewReleaseSmokeTest(unittest.TestCase):
                     ],
                     [
                         "brew",
+                        "style",
+                        str(formula_dir / "caboose-homelab.rb"),
+                        str(formula_dir / "caboose-homelab-mcp.rb"),
+                    ],
+                    [
+                        "brew",
+                        "audit",
+                        "--strict",
+                        "--online",
+                        "caboose-ai/test/caboose-homelab",
+                        "caboose-ai/test/caboose-homelab-mcp",
+                    ],
+                    [
+                        "brew",
                         "install",
                         "--build-from-source",
                         "caboose-ai/test/caboose-homelab",

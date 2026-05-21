@@ -11,6 +11,7 @@ type ProxyProvider struct {
 	Name         string `json:"name"`
 	Mode         string `json:"mode"`
 	ExternalHost string `json:"external_host"`
+	InternalHost string `json:"internal_host"`
 }
 
 type proxyProviderList struct {
@@ -23,11 +24,13 @@ type CreateProxyProviderParams struct {
 	InvalidationFlow  string `json:"invalidation_flow"`
 	Mode              string `json:"mode"`
 	ExternalHost      string `json:"external_host"`
+	InternalHost      string `json:"internal_host,omitempty"`
 }
 
 type UpdateProxyProviderParams struct {
 	Mode         string `json:"mode,omitempty"`
 	ExternalHost string `json:"external_host,omitempty"`
+	InternalHost string `json:"internal_host,omitempty"`
 }
 
 func (c *Client) GetProxyProvider(ctx context.Context, name string) (*ProxyProvider, error) {

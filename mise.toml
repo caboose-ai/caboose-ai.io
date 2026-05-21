@@ -4,7 +4,7 @@ pnpm = "latest"
 
 [env]
 HOMELAB_DOMAIN = "caboose-ai.io"
-HOMELAB_COMPOSE_DIR = "/opt/homelab"
+HOMELAB_COMPOSE_DIR = "{{ env.HOMELAB_COMPOSE_DIR | default(value='/opt/homelab') }}"
 HOMELAB_SERVE_MODE = "public"
 HOMELAB_MCP_CONFIG = "{{ env.XDG_CONFIG_HOME | default(value=env.HOME ~ '/.config') }}/homelab/homelab-mcp.yml"
 HOMELAB_MCP_HTTP_ADDR = "127.0.0.1:8090"
@@ -103,6 +103,10 @@ run = "dev/homelab/update-homelab-and-reset.sh --yes --domain \"$HOMELAB_DOMAIN\
 description = "Poll Homebrew until caboose-homelab has an update, then reset"
 run = "dev/homelab/update-homelab-and-reset.sh --yes --wait --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
 
+[tasks."release:mvp-local"]
+description = "Run the local MVP release-readiness gate"
+run = "HOMELAB_COMPOSE_DIR=\"${HOMELAB_MVP_COMPOSE_DIR:-dev/homelab}\" dev/homelab/mvp-local-readiness.sh"
+
 [tasks.recovery]
 description = "Generate an Authentik admin recovery URL"
 run = "go run ./cmd/homelab recovery --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
@@ -158,6 +162,10 @@ run = "go run ./cmd/homelab service --domain \"$HOMELAB_DOMAIN\" --compose-dir \
 [tasks."service:configure"]
 description = "Configure one registered service"
 run = "go run ./cmd/homelab service --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" configure"
+
+[tasks."service:logs"]
+description = "Show logs for one registered service"
+run = "go run ./cmd/homelab service --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" logs"
 
 [tasks."service:smoke"]
 description = "Run the smoke flow for one registered service"

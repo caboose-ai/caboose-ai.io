@@ -337,3 +337,75 @@ func TestSetIdentificationStageSourcesMakesLoginSourceOnly(t *testing.T) {
 		t.Fatalf("sources = %#v, want [google-pk]", patchBody["sources"])
 	}
 }
+
+func TestPatchIdentificationStageCanRestoreLocalLogin(t *testing.T) {
+	var patchBody map[string]any
+	client := &Client{
+		BaseURL: "http://localhost",
+		Token:   "test-token",
+		HTTP: &mockHTTPClient{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				if req.Method != http.MethodPatch {
+					t.Fatalf("method = %s, want PATCH", req.Method)
+				}
+				data, err := io.ReadAll(req.Body)
+				if err != nil {
+					t.Fatalf("reading request body: %v", err)
+				}
+				if err := json.Unmarshal(data, &patchBody); err != nil {
+					t.Fatalf("parsing request body: %v", err)
+				}
+				return mockResponse(200, `{}`), nil
+			},
+		},
+	}
+
+	err := client.PatchIdentificationStage(context.Background(), "stage-1", []string{}, []string{"username", "email"}, false)
+	if err != nil {
+		t.Fatalf("PatchIdentificationStage returned error: %v", err)
+	}
+
+	if got, ok := patchBody["show_source_labels"].(bool); !ok || got {
+		t.Fatalf("show_source_labels = %#v, want false", patchBody["show_source_labels"])
+	}
+	fields, ok := patchBody["user_fields"].([]any)
+	if !ok || len(fields) != 2 || fields[0] != "username" || fields[1] != "email" {
+		t.Fatalf("user_fields = %#v, want [username email]", patchBody["user_fields"])
+	}
+	sources, ok := patchBody["sources"].([]any)
+	if !ok || len(sources) != 0 {
+		t.Fatalf("sources = %#v, want empty", patchBody["sources"])
+	}
+}
+
+func TestPatchIdentificationStageSerializesNilSlicesAsArrays(t *testing.T) {
+	var patchBody map[string]any
+	client := &Client{
+		BaseURL: "http://localhost",
+		Token:   "test-token",
+		HTTP: &mockHTTPClient{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				data, err := io.ReadAll(req.Body)
+				if err != nil {
+					t.Fatalf("reading request body: %v", err)
+				}
+				if err := json.Unmarshal(data, &patchBody); err != nil {
+					t.Fatalf("parsing request body: %v", err)
+				}
+				return mockResponse(200, `{}`), nil
+			},
+		},
+	}
+
+	err := client.PatchIdentificationStage(context.Background(), "stage-1", nil, nil, true)
+	if err != nil {
+		t.Fatalf("PatchIdentificationStage returned error: %v", err)
+	}
+
+	if sources, ok := patchBody["sources"].([]any); !ok || len(sources) != 0 {
+		t.Fatalf("sources = %#v, want empty array", patchBody["sources"])
+	}
+	if fields, ok := patchBody["user_fields"].([]any); !ok || len(fields) != 0 {
+		t.Fatalf("user_fields = %#v, want empty array", patchBody["user_fields"])
+	}
+}

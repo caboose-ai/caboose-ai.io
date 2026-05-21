@@ -27,3 +27,17 @@ setup() {
   run grep -F 'HOMELAB_TUNNEL_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/cloudflared/homelab.yml' "$MISE_FILE"
   [ "$status" -eq 0 ]
 }
+
+@test "mise exposes local MVP release gate and per-service logs task" {
+  run grep -F '[tasks."release:mvp-local"]' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+  run grep -F 'dev/homelab/mvp-local-readiness.sh' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+  run grep -F 'HOMELAB_MVP_COMPOSE_DIR:-dev/homelab' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+
+  run grep -F '[tasks."service:logs"]' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+  run grep -F 'go run ./cmd/homelab service --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" logs' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+}

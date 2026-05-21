@@ -115,10 +115,20 @@ func (c *Client) GetIdentificationStage(ctx context.Context, flowSlug string) (*
 }
 
 func (c *Client) SetIdentificationStageSources(ctx context.Context, stagePK string, sourcePKs []string) error {
+	return c.PatchIdentificationStage(ctx, stagePK, sourcePKs, []string{}, true)
+}
+
+func (c *Client) PatchIdentificationStage(ctx context.Context, stagePK string, sourcePKs, userFields []string, showSourceLabels bool) error {
+	if sourcePKs == nil {
+		sourcePKs = []string{}
+	}
+	if userFields == nil {
+		userFields = []string{}
+	}
 	body := map[string]any{
 		"sources":            sourcePKs,
-		"show_source_labels": true,
-		"user_fields":        []string{},
+		"show_source_labels": showSourceLabels,
+		"user_fields":        userFields,
 	}
 	_, err := c.Patch(ctx, fmt.Sprintf("/api/v3/stages/identification/%s/", stagePK), body)
 	return err

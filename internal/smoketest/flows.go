@@ -24,6 +24,7 @@ type ProxyFlow struct {
 	HealthURL          string
 	HealthBodyContains []string
 	RejectText         []string
+	AllowLoginLanding  bool
 }
 
 type SmokeFlow struct {
@@ -91,7 +92,7 @@ func targetedProxyFlows(urls config.URLs) []ProxyFlow {
 	flows = append(flows,
 		ProxyFlow{Name: "authentik", URL: urls.Authentik, TargetHost: hostFromURL(urls.Authentik)},
 		ProxyFlow{Name: "social", URL: urls.Authentik, TargetHost: hostFromURL(urls.Authentik)},
-		ProxyFlow{Name: "woodpecker", URL: urls.CI, TargetHost: hostFromURL(urls.CI)},
+		ProxyFlow{Name: "woodpecker", URL: urls.CI, TargetHost: hostFromURL(urls.CI), HealthURL: "http://127.0.0.1:8000/healthz", AllowLoginLanding: true},
 		ProxyFlow{Name: "ghost", URL: urls.Ghost, TargetHost: hostFromURL(urls.Ghost)},
 		ProxyFlow{
 			Name:               "paperclip",

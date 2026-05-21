@@ -62,6 +62,16 @@ jobs:
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           path: tap
 
+      - name: Set up Go for actionlint
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: source/go.mod
+          cache: false
+
+      - name: Validate workflow syntax
+        working-directory: source
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@latest .github/workflows/*.yml
+
       - name: Set up uv
         uses: astral-sh/setup-uv@v8.1.0
         with:
@@ -128,7 +138,7 @@ jobs:
         if: steps.diff.outputs.changed == 'true'
         uses: Homebrew/actions/setup-homebrew@main
 
-      - name: Smoke test Homebrew formulae
+      - name: Style, audit, and smoke test Homebrew formulae
         if: steps.diff.outputs.changed == 'true'
         working-directory: source
         env:
@@ -140,6 +150,7 @@ jobs:
   deploy-homebrew-tap:
     name: Deploy tap formulae
     runs-on: ubuntu-latest
+    environment: homebrew-tap-deploy
     needs: prepare-homebrew-tap
     if: needs.prepare-homebrew-tap.outputs.changed == 'true'
     steps:
@@ -192,7 +203,7 @@ jobs:
       - name: Set up Homebrew before deploy
         uses: Homebrew/actions/setup-homebrew@main
 
-      - name: Smoke test Homebrew formulae before deploy
+      - name: Style, audit, and smoke test Homebrew formulae before deploy
         working-directory: source
         env:
           HOMEBREW_NO_ANALYTICS: "1"

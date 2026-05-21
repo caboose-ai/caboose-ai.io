@@ -157,6 +157,41 @@ func authentikTokenWorks(ctx context.Context, ak *authentik.Client) bool {
 	return err == nil
 }
 
+func (s *Suite) ForceLocalPasswordAuth(t *testing.T) {
+	t.Helper()
+	if os.Getenv("SMOKETEST_FORCE_LOCAL_AUTH") != "1" {
+		return
+	}
+
+	ctx := context.Background()
+	stage, err := s.AK.GetIdentificationStage(ctx, "default-authentication-flow")
+	if err != nil {
+		t.Fatalf("getting default authentication identification stage: %v", err)
+	}
+	if stage == nil {
+		t.Fatal("default authentication identification stage not found")
+	}
+
+	origSources := append([]string(nil), stage.Sources...)
+	origUserFields := append([]string(nil), stage.UserFields...)
+	origShowSourceLabels := stage.ShowSourceLabels
+
+	err = s.AK.PatchIdentificationStage(ctx, stage.PK, []string{}, []string{"username", "email"}, true)
+	if err != nil {
+		t.Fatalf("forcing local Authentik password login for smoke: %v", err)
+	}
+	t.Log("Forced Authentik identification stage to local username/email login")
+
+	t.Cleanup(func() {
+		err := s.AK.PatchIdentificationStage(context.Background(), stage.PK, origSources, origUserFields, origShowSourceLabels)
+		if err != nil {
+			t.Logf("warning: could not restore Authentik identification stage: %v", err)
+		} else {
+			t.Log("Restored Authentik identification stage")
+		}
+	})
+}
+
 func recoverAuthentikTokenFromContainer(ctx context.Context) (string, error) {
 	type recoveryResult struct {
 		Token string `json:"token"`
@@ -610,6 +645,12 @@ func (s *Suite) ScreenshotOnFailure(t *testing.T, page *rod.Page) {
 }
 
 func findEnvFile() string {
+	if envPath := os.Getenv("SMOKETEST_ENV_FILE"); envPath != "" {
+		if _, err := os.Stat(envPath); err == nil {
+			return envPath
+		}
+	}
+
 	_, thisFile, _, _ := runtime.Caller(0)
 	dir := filepath.Dir(thisFile)
 	for i := 0; i < 5; i++ {
