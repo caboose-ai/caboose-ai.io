@@ -103,6 +103,10 @@ run = "dev/homelab/update-homelab-and-reset.sh --yes --domain \"$HOMELAB_DOMAIN\
 description = "Poll Homebrew until caboose-homelab has an update, then reset"
 run = "dev/homelab/update-homelab-and-reset.sh --yes --wait --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
 
+[tasks."homelab:installed-binary-check"]
+description = "Validate an installed homelab binary against the configured compose directory"
+run = "dev/homelab/homebrew-stack-readiness.sh --homelab-bin \"${HOMELAB_BIN:-homelab}\" --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
+
 [tasks."release:mvp-local"]
 description = "Run the local MVP release-readiness gate"
 run = "HOMELAB_COMPOSE_DIR=\"${HOMELAB_MVP_COMPOSE_DIR:-dev/homelab}\" dev/homelab/mvp-local-readiness.sh"
@@ -232,7 +236,11 @@ description = "Tail logs for the live homelab MCP user service"
 run = "journalctl --user -u \"$HOMELAB_MCP_SERVICE\" -f"
 
 [tasks."mcp:probe"]
-description = "Probe the live homelab MCP HTTP endpoint"
+description = "Probe the local homelab MCP HTTP endpoint"
+run = "curl -i --max-time 5 \"http://$HOMELAB_MCP_HTTP_ADDR/\""
+
+[tasks."mcp:probe-local"]
+description = "Probe the local homelab MCP HTTP endpoint"
 run = "curl -i --max-time 5 \"http://$HOMELAB_MCP_HTTP_ADDR/\""
 
 [tasks."mcp:resolve"]
@@ -246,6 +254,10 @@ run = "curl -i --max-time 10 \"$HOMELAB_MCP_EXTERNAL_URL/\""
 [tasks."mcp:setup-external"]
 description = "Legacy/static-IP path: set up and verify external homelab MCP DNS and Caddy route"
 run = "dev/homelab/setup-mcp-external.sh"
+
+[tasks."mcp:external-readiness"]
+description = "Validate the supported Cloudflare Tunnel external MCP access lifecycle"
+run = "dev/homelab/mcp-external-readiness.sh"
 
 [tasks."tunnel:config"]
 description = "Generate and validate the default Cloudflare Tunnel ingress config for public hosting"

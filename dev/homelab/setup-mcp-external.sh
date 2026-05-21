@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Legacy/static-IP path. Prefer `mise run mcp:external-readiness`, which uses
+# Cloudflare Tunnel and does not require a static public IP.
 host="${HOMELAB_MCP_EXTERNAL_HOST:-mcp.caboose-ai.io}"
 target="${HOMELAB_MCP_TARGET:-localhost:8090}"
 public_ip="${HOMELAB_PUBLIC_IP:-104.153.31.50}"

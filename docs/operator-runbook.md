@@ -49,6 +49,15 @@ mise run service:configure -- <slug>
 mise run service:configure -- <slug> --dry-run
 ```
 
+### Validate Installed Homebrew Binary
+
+Homebrew installs the `homelab` binary, not the compose stack. Point the binary
+at a source checkout compose directory or deployed `/opt/homelab` directory:
+
+```bash
+HOMELAB_BIN=homelab HOMELAB_COMPOSE_DIR=/opt/homelab mise run homelab:installed-binary-check
+```
+
 ### Validate SSO Boundary
 
 ```bash
@@ -116,7 +125,8 @@ Use these only when validating the post-MVP external MCP profile.
 
 | Situation | Recommended path | Why |
 | --- | --- | --- |
-| You want a full live operator check | `mise run mcp:access-live` | Covers setup, request/approve/import, token mint, and initialize probe in one flow |
+| You want the supported external MCP acceptance gate | `mise run mcp:external-readiness` | Validates Cloudflare Tunnel config, access lifecycle, token mint, and external initialize probe |
+| You want only the access lifecycle check | `mise run mcp:access-live` | Covers setup, request/approve/import, token mint, and initialize probe in one flow |
 | You already have credentials and only need endpoint validation | `mise run mcp:test-live` | Reuses existing credential or `HOMELAB_MCP_TOKEN` without creating new access |
 | You need to debug one access step | Manual commands (`homelab-mcp access ...`, `homelab mcp access ...`) | Exposes each stage separately |
 | You need direct script control | `dev/homelab/mcp-access-live.sh` / `dev/homelab/mcp-test-live.sh` | Mirrors the `mise` tasks outside task-runner indirection |
@@ -130,6 +140,10 @@ homelab mcp access approve mcp-request.json --out mcp-release.json
 homelab-mcp access import mcp-release.json
 homelab-mcp access token
 ```
+
+The supported external profile uses Cloudflare Tunnel and does not require a
+static public IP. Use `mise run mcp:setup-external` only for the legacy direct
+DNS/Caddy path when a stable public IP is intentional.
 
 ## Safety Notes
 
