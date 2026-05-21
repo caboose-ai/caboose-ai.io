@@ -107,6 +107,10 @@ run = "dev/homelab/update-homelab-and-reset.sh --yes --wait --domain \"$HOMELAB_
 description = "Run the local MVP release-readiness gate"
 run = "HOMELAB_COMPOSE_DIR=\"${HOMELAB_MVP_COMPOSE_DIR:-dev/homelab}\" dev/homelab/mvp-local-readiness.sh"
 
+[tasks."release:public-profile"]
+description = "Run the public profile readiness gate"
+run = "HOMELAB_COMPOSE_DIR=\"${HOMELAB_PUBLIC_COMPOSE_DIR:-dev/homelab}\" dev/homelab/public-readiness.sh"
+
 [tasks.recovery]
 description = "Generate an Authentik admin recovery URL"
 run = "go run ./cmd/homelab recovery --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""

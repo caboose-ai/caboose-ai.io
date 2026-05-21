@@ -155,15 +155,24 @@ Declare the MVP ready only when:
 Do not claim public DNS, Cloudflare Tunnel, Caddy exposure, or external MCP as
 MVP-ready unless their appendix checks have also passed separately.
 
-## Appendix A: Public Profile (Post-MVP)
+## Supported Post-MVP Public Profile
 
-The public profile adds Caddy and Cloudflare Tunnel to the local profile.
-
-Suggested checks:
+The public profile adds Caddy and Cloudflare Tunnel to the local profile. It is
+not required for the local MVP decision, but it has a supported acceptance gate:
 
 ```bash
-dig +short <your-domain>
-cloudflared --version
+mise run release:public-profile -- --dry-run
+mise run release:public-profile
+```
+
+The task calls `dev/homelab/public-readiness.sh`. It forces `serve-mode public`,
+validates the configured Caddy file, generates and validates the Cloudflare
+Tunnel ingress config through `dev/homelab/setup-cloudflare-tunnel.sh`, and runs
+public-mode status and smoke checks for the MVP browser services.
+
+Equivalent manual checks:
+
+```bash
 mise run tunnel:config
 
 for slug in authentik forgejo woodpecker homarr; do
@@ -174,6 +183,7 @@ done
 
 Pass criteria: the tunnel config validates, public hostnames route through the
 intended Caddy origin, and browser-facing authentication succeeds end to end.
+No static public IP or inbound WAN port forwarding is required.
 
 ## Appendix B: Public Plus External MCP (Post-MVP)
 

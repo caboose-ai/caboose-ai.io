@@ -56,6 +56,20 @@ mise run sso:check-quick
 mise run sso:check
 ```
 
+### Validate Public Profile
+
+Use this after the local MVP gate passes and the host has Caddy plus Cloudflare
+Tunnel credentials configured:
+
+```bash
+mise run release:public-profile -- --dry-run
+mise run release:public-profile
+```
+
+The public profile passes only when `serve-mode public` install succeeds, the
+Caddy config validates, the Cloudflare Tunnel ingress config validates, and the
+MVP browser services pass public-mode status and smoke checks.
+
 ## Troubleshooting Ladder
 
 Escalate in this order, and stop when a step identifies the cause.

@@ -41,3 +41,12 @@ setup() {
   run grep -F 'go run ./cmd/homelab service --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" logs' "$MISE_FILE"
   [ "$status" -eq 0 ]
 }
+
+@test "mise exposes public profile release gate" {
+  run grep -F '[tasks."release:public-profile"]' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+  run grep -F 'dev/homelab/public-readiness.sh' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+  run grep -F 'HOMELAB_PUBLIC_COMPOSE_DIR:-dev/homelab' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+}
