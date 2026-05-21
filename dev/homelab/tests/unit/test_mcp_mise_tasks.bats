@@ -17,6 +17,19 @@ setup() {
   [ "$status" -eq 0 ]
 }
 
+@test "mise separates local and external mcp readiness tasks" {
+  run grep -F '[tasks."mcp:probe-local"]' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+  run grep -F 'http://$HOMELAB_MCP_HTTP_ADDR/' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+  run grep -F '[tasks."mcp:external-readiness"]' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+  run grep -F 'dev/homelab/mcp-external-readiness.sh' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+  run grep -F 'Legacy/static-IP path' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+}
+
 @test "mise exposes cloudflare tunnel config task as the public default path" {
   run grep -F '[tasks."tunnel:config"]' "$MISE_FILE"
   [ "$status" -eq 0 ]

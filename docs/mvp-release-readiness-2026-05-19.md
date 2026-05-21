@@ -178,12 +178,20 @@ intended Caddy origin, and browser-facing authentication succeeds end to end.
 ## Appendix B: Public Plus External MCP (Post-MVP)
 
 The external MCP profile adds client request, admin approval, credential import,
-and authenticated endpoint probing.
+token lookup, and authenticated endpoint probing. The supported path is
+Cloudflare Tunnel-compatible and does not require a static public IP.
 
-Suggested checks:
+Acceptance command:
 
 ```bash
-env | rg 'CLOUDFLARE_(API_TOKEN|ZONE_ID)'
+mise run mcp:external-readiness -- --dry-run
+mise run mcp:external-readiness
+```
+
+Equivalent manual checks:
+
+```bash
+mise run tunnel:config
 homelab mcp access setup --compose-dir dev/homelab
 homelab-mcp access request --name "$(hostname)" --out mcp-request.json
 homelab mcp access approve mcp-request.json --out mcp-release.json
@@ -194,3 +202,6 @@ mise run mcp:test-live
 
 Pass criteria: setup, approval, import, token lookup, and authenticated endpoint
 probe all complete without manual undocumented edits.
+
+`dev/homelab/setup-mcp-external.sh` is retained only for the legacy static-IP
+DNS/Caddy route and is not the supported external MCP readiness path.

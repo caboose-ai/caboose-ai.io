@@ -225,11 +225,12 @@ mise run telegram-agent:notify -- "Homelab task finished."
 
 # Homelab MCP server
 mise run mcp:status
-mise run mcp:probe
+mise run mcp:probe-local
 mise run mcp:resolve
 mise run mcp:probe-external
 mise run tunnel:print
 mise run tunnel:config
+mise run mcp:external-readiness
 mise run mcp:setup-external
 mise run mcp:access-live
 mise run mcp:test-live
@@ -260,9 +261,12 @@ with `cloudflared`; set `HOMELAB_TUNNEL_ID` and
 credentials file must already exist for validation; this proves the local config
 is syntactically valid, while the endpoint smoke checks prove public
 reachability.
-`mise run mcp:setup-external` remains available as the legacy/static-IP path
-for the MCP A record and Caddy route. It requires `CLOUDFLARE_API_TOKEN` and
-`CLOUDFLARE_ZONE_ID` from the environment or `fnox`, plus sudo access to
+`mise run mcp:external-readiness` is the supported external MCP acceptance
+command. It validates the Cloudflare Tunnel ingress config, then runs the
+request, approval, import, token, and authenticated external probe workflow.
+`mise run mcp:setup-external` remains available only as the legacy/static-IP
+path for the MCP A record and Caddy route. It requires `CLOUDFLARE_API_TOKEN`
+and `CLOUDFLARE_ZONE_ID` from the environment or `fnox`, plus sudo access to
 install and reload the Caddy route.
 `homelab mcp access setup` requires Authentik admin credentials through the
 configured secret store. Access requests are client-generated JSON blobs;
