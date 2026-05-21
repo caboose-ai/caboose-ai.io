@@ -3,10 +3,12 @@
 # run the homelab reset path.
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FORMULA="${HOMELAB_BREW_FORMULA:-caboose-homelab}"
 HOMELAB_BIN="${HOMELAB_BIN:-homelab}"
 DOMAIN="${HOMELAB_DOMAIN:-caboose-ai.io}"
 COMPOSE_DIR="${HOMELAB_COMPOSE_DIR:-/opt/homelab}"
+READINESS_SCRIPT="${HOMELAB_STACK_READINESS_SCRIPT:-${SCRIPT_DIR}/homebrew-stack-readiness.sh}"
 INTERVAL="${HOMELAB_UPDATE_POLL_INTERVAL:-300}"
 WAIT=false
 DRY_RUN=false
@@ -20,6 +22,7 @@ Usage: $0 --yes [options]
 Checks Homebrew for an update to caboose-homelab, upgrades only that formula,
 then runs:
   homelab reset --yes --keep-env --domain <domain> --compose-dir <dir>
+  dev/homelab/homebrew-stack-readiness.sh --skip-service-status
 
 Pass --store-static-env to run reset with --store-static-env instead of
 --keep-env, which requires 1Password access and removes .env after copying
@@ -141,6 +144,7 @@ if "$DRY_RUN"; then
     reset_env_args=(--store-static-env)
   fi
   would_run "$HOMELAB_BIN" reset --yes "${reset_env_args[@]}" --domain "$DOMAIN" --compose-dir "$COMPOSE_DIR"
+  would_run "$READINESS_SCRIPT" --homelab-bin "$HOMELAB_BIN" --compose-dir "$COMPOSE_DIR" --domain "$DOMAIN" --skip-service-status --dry-run
   exit 0
 fi
 
@@ -180,3 +184,4 @@ if "$STORE_STATIC_ENV"; then
   reset_env_args=(--store-static-env)
 fi
 run_cmd "$HOMELAB_BIN" reset --yes "${reset_env_args[@]}" --domain "$DOMAIN" --compose-dir "$COMPOSE_DIR"
+run_cmd "$READINESS_SCRIPT" --homelab-bin "$HOMELAB_BIN" --compose-dir "$COMPOSE_DIR" --domain "$DOMAIN" --skip-service-status

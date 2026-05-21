@@ -13,6 +13,9 @@ setup() {
   export HOMELAB_COMPOSE_DIR="$TEST_ROOT/compose"
   SCRIPT="$(dirname "$BATS_TEST_FILENAME")/../../update-homelab-and-reset.sh"
 
+  mkdir -p "$HOMELAB_COMPOSE_DIR"
+  touch "$HOMELAB_COMPOSE_DIR/docker-compose.yml"
+
   cat > "$BIN_DIR/brew" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -85,6 +88,10 @@ teardown() {
   [ "$status" -eq 0 ]
   run grep -F "homelab reset --yes --keep-env --domain test.example.com --compose-dir $HOMELAB_COMPOSE_DIR" "$CALL_LOG"
   [ "$status" -eq 0 ]
+  run grep -F "homelab install --help" "$CALL_LOG"
+  [ "$status" -eq 0 ]
+  run grep -F "homelab reset --help" "$CALL_LOG"
+  [ "$status" -eq 0 ]
 }
 
 @test "does not reset when caboose-homelab is already current" {
@@ -122,6 +129,8 @@ teardown() {
   [ "$status" -eq 0 ]
   run grep -F "homelab reset --yes --keep-env --domain test.example.com --compose-dir $HOMELAB_COMPOSE_DIR" "$CALL_LOG"
   [ "$status" -eq 0 ]
+  run grep -F "homelab install --help" "$CALL_LOG"
+  [ "$status" -eq 0 ]
 }
 
 @test "can store static env in secret store before reset after upgrade" {
@@ -134,6 +143,10 @@ teardown() {
   [ "$status" -eq 0 ]
   run grep -F "homelab reset --yes --store-static-env --domain test.example.com --compose-dir $HOMELAB_COMPOSE_DIR" "$CALL_LOG"
   [ "$status" -eq 0 ]
+  run grep -F "homelab install --help" "$CALL_LOG"
+  [ "$status" -eq 0 ]
+  run grep -F "homelab reset --help" "$CALL_LOG"
+  [ "$status" -eq 0 ]
 }
 
 @test "dry-run prints planned actions without executing brew or homelab" {
@@ -143,5 +156,6 @@ teardown() {
   [[ "$output" == *"brew update"* ]]
   [[ "$output" == *"brew upgrade caboose-homelab"* ]]
   [[ "$output" == *"homelab reset --yes --keep-env"* ]]
+  [[ "$output" == *"homebrew-stack-readiness.sh --homelab-bin homelab --compose-dir $HOMELAB_COMPOSE_DIR --domain test.example.com --skip-service-status --dry-run"* ]]
   [ ! -f "$CALL_LOG" ]
 }

@@ -41,3 +41,12 @@ setup() {
   run grep -F 'go run ./cmd/homelab service --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" logs' "$MISE_FILE"
   [ "$status" -eq 0 ]
 }
+
+@test "mise exposes installed Homebrew binary compose-dir guard" {
+  run grep -F '[tasks."homelab:installed-binary-check"]' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+  run grep -F 'dev/homelab/homebrew-stack-readiness.sh' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+  run grep -F '${HOMELAB_BIN:-homelab}' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+}

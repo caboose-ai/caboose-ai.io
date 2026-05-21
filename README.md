@@ -78,8 +78,18 @@ brew test caboose-ai/tap/caboose-homelab-mcp
 homelab-mcp -help
 ```
 
+The formulae install binaries only: `homelab` and `homelab-mcp`. They do not
+install a packaged Docker Compose stack. Local stack install/update still needs
+a valid compose directory such as a source checkout's `dev/homelab` directory
+or a deployed `/opt/homelab` directory. Validate that operator shape with:
+
+```bash
+HOMELAB_BIN=homelab HOMELAB_COMPOSE_DIR=/opt/homelab mise run homelab:installed-binary-check
+```
+
 After a new `caboose-homelab` release reaches the tap, the update/reset helper
-upgrades only that formula and then runs `homelab reset --yes --keep-env`:
+upgrades only that formula, runs `homelab reset --yes --keep-env`, and then
+reruns the installed-binary/compose-dir guard without live service status:
 
 ```bash
 mise run homelab:update-reset
@@ -94,13 +104,9 @@ dev/homelab/update-homelab-and-reset.sh --dry-run
 dev/homelab/update-homelab-and-reset.sh --yes --store-static-env
 ```
 
-The formulae install binaries only: `homelab` and `homelab-mcp`. They do not
-install a packaged Docker Compose stack. Local stack install/update still needs
-a valid compose directory such as a source checkout's `dev/homelab` directory
-or a deployed `/opt/homelab` directory. Runtime prerequisites are intentionally
-documented instead of enforced as Homebrew dependencies: Docker with Compose for
-the stack itself, plus either the 1Password CLI or a populated compose `.env`
-fallback for secrets.
+Runtime prerequisites are intentionally documented instead of enforced as
+Homebrew dependencies: Docker with Compose for the stack itself, plus either the
+1Password CLI or a populated compose `.env` fallback for secrets.
 
 Caddy and Cloudflare Tunnel are the default public exposure path: `public` mode
 keeps services on host loopback for Caddy, and `cloudflared` publishes the
@@ -187,6 +193,9 @@ mise run homelab:vault-reinstall
 
 # Upgrade only caboose-homelab from Homebrew when available, then reset
 mise run homelab:update-reset
+
+# Validate installed Homebrew binary plus deployed compose directory
+HOMELAB_BIN=homelab HOMELAB_COMPOSE_DIR=/opt/homelab mise run homelab:installed-binary-check
 
 # Run the local MVP release-readiness gate
 mise run release:mvp-local
