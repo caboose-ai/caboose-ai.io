@@ -122,12 +122,16 @@ Verify a Homebrew-installed operator path with:
 brew tap caboose-ai/tap
 brew install caboose-homelab
 brew test caboose-ai/tap/caboose-homelab
-homelab install --help
+HOMELAB_BIN=homelab HOMELAB_COMPOSE_DIR=/opt/homelab mise run homelab:installed-binary-check
 
 brew install caboose-homelab-mcp
 brew test caboose-ai/tap/caboose-homelab-mcp
 homelab-mcp -help
 ```
+
+This readiness path is binary-plus-compose-dir. The Homebrew formulae do not
+package `dev/homelab` or deploy `/opt/homelab`; operators must provide a source
+checkout compose directory or a deployed compose directory separately.
 
 The tap deploy workflow must keep these guardrails before pushing formula
 updates:
@@ -138,6 +142,7 @@ updates:
 - run Ruby syntax checks
 - run Homebrew style and audit checks
 - install and `brew test` both formulae
+- verify the installed `homelab` binary against a valid compose directory
 - pause on the `homebrew-tap-deploy` environment before direct tap push
 - re-check out the tap, re-apply the tested patch, and rerun validation before
   pushing
@@ -149,7 +154,7 @@ Declare the MVP ready only when:
 - `mise run release:mvp-local` passes on at least one clean local host
 - `mise run release:mvp-local -- --dry-run` shows the expected command order
 - Homebrew binary install and `brew test` verification are documented and
-  guarded in the tap workflow
+  guarded in the tap workflow, including installed-binary/compose-dir validation
 - any failure has a tracked fix or explicit release note
 
 Do not claim public DNS, Cloudflare Tunnel, Caddy exposure, or external MCP as

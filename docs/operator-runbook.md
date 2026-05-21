@@ -49,6 +49,15 @@ mise run service:configure -- <slug>
 mise run service:configure -- <slug> --dry-run
 ```
 
+### Validate Installed Homebrew Binary
+
+Homebrew installs the `homelab` binary, not the compose stack. Point the binary
+at a source checkout compose directory or deployed `/opt/homelab` directory:
+
+```bash
+HOMELAB_BIN=homelab HOMELAB_COMPOSE_DIR=/opt/homelab mise run homelab:installed-binary-check
+```
+
 ### Validate SSO Boundary
 
 ```bash
