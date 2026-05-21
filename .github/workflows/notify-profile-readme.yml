@@ -1,0 +1,25 @@
+name: Notify profile README
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  notify-profile:
+    if: github.repository != 'caboose-ai/.github'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch profile README refresh
+        env:
+          GH_TOKEN: ${{ secrets.PROFILE_README_DISPATCH_TOKEN }}
+          TARGET_REPOSITORY: caboose-ai/.github
+        run: |
+          gh api \
+            --method POST \
+            "/repos/$TARGET_REPOSITORY/dispatches" \
+            -f event_type=repo-main-updated \
+            -f client_payload[repository][full_name]="${{ github.repository }}" \
+            -f client_payload[repository][default_branch]="${{ github.event.repository.default_branch }}" \
+            -f client_payload[after]="${{ github.sha }}" \
+            -f client_payload[pusher]="${{ github.actor }}"
