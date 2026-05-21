@@ -67,7 +67,7 @@ jobs:
             bash -lc "$cmd" 2>&1 | tee -a "$log"
             local rc=${PIPESTATUS[0]}
             set -e
-            if [ $rc -eq 0 ]; then
+            if [ "$rc" -eq 0 ]; then
               echo "PASS|$label|$cmd" >> "$status_file"
             else
               echo "FAIL|$label|$cmd" >> "$status_file"
