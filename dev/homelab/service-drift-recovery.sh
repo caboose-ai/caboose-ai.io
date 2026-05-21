@@ -104,6 +104,18 @@ homelab_cmd() {
   fi
 }
 
+wait_for_sonarqube_ready() {
+  local attempts=0 max_attempts=60
+  while [ "$attempts" -lt "$max_attempts" ]; do
+    if run_cmd docker exec sonarqube wget -q --spider http://127.0.0.1:9000/api/system/status; then
+      return 0
+    fi
+    attempts=$((attempts + 1))
+    run_cmd sleep 2
+  done
+  die "timed out waiting for SonarQube readiness"
+}
+
 recover_postgres_password() {
   local env_key="$1" db_container="$2" db_user="$3" db_name="$4" app_container="$5"
   if "$YES"; then
@@ -124,14 +136,34 @@ recover_sonarqube_admin_password() {
   # SonarSource-documented PostgreSQL reset for the built-in admin account.
   reset_sql="update users set crypted_password='100000\$t2h8AtNs1AlCHuLobDjHQTn9XppwTIx88UjqUm4s8RsfTuXQHSd/fpFexAnewwPsO6jGFQUv/24DnO55hY6Xew==', salt='k9x9eN127/3e/hf38iNiKwVfaVk=', hash_method='PBKDF2', reset_password='true', user_local='true', active='true' where login='admin';"
 
-  run_cmd docker stop sonarqube
-  run_cmd docker exec sonarqube-db psql -v ON_ERROR_STOP=1 -U sonar -d sonar -c "$reset_sql"
-  run_cmd docker start sonarqube
-
   local -a cmd=()
   while IFS= read -r -d '' arg; do
     cmd+=("$arg")
   done < <(homelab_cmd)
+  (cd "$REPO_ROOT" && run_cmd "${cmd[@]}" --help >/dev/null)
+
+  if "$YES"; then
+    local sonarqube_stopped=false
+    cleanup_sonarqube_restart() {
+      if "$sonarqube_stopped"; then
+        run_cmd docker start sonarqube
+      fi
+    }
+    trap cleanup_sonarqube_restart RETURN
+
+    run_cmd docker stop sonarqube
+    sonarqube_stopped=true
+    run_cmd docker exec sonarqube-db psql -v ON_ERROR_STOP=1 -U sonar -d sonar -c "$reset_sql"
+    run_cmd docker start sonarqube
+    sonarqube_stopped=false
+    wait_for_sonarqube_ready
+  else
+    run_cmd docker stop sonarqube
+    run_cmd docker exec sonarqube-db psql -v ON_ERROR_STOP=1 -U sonar -d sonar -c "$reset_sql"
+    run_cmd docker start sonarqube
+    wait_for_sonarqube_ready
+  fi
+
   (cd "$REPO_ROOT" && run_cmd "${cmd[@]}" service --domain "$HOMELAB_DOMAIN" --compose-dir "$HOMELAB_COMPOSE_DIR" sonarqube configure --force)
 }
 

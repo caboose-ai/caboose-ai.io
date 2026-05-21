@@ -91,6 +91,10 @@ teardown() {
   [ "$status" -eq 0 ]
   run grep -F "docker start sonarqube" "$CALL_LOG"
   [ "$status" -eq 0 ]
+  run grep -F "docker exec sonarqube wget -q --spider http://127.0.0.1:9000/api/system/status" "$CALL_LOG"
+  [ "$status" -eq 0 ]
+  run grep -F "go run ./cmd/homelab --help" "$CALL_LOG"
+  [ "$status" -eq 0 ]
   run grep -F "go run ./cmd/homelab service --domain test.example.com --compose-dir $COMPOSE_DIR sonarqube configure --force" "$CALL_LOG"
   [ "$status" -eq 0 ]
   run grep -F 'admin$sonar' "$CALL_LOG"
