@@ -151,6 +151,18 @@ run = "go run ./cmd/homelab service --domain \"$HOMELAB_DOMAIN\" --compose-dir \
 description = "Repair Portainer admin password drift and reapply endpoint/OAuth access"
 run = "dev/homelab/portainer-recover-access.sh --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
 
+[tasks."sonarqube:recover-db-password"]
+description = "Repair SonarQube Postgres password drift; dry-run unless --yes is passed"
+run = "dev/homelab/service-drift-recovery.sh sonarqube-db-password --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
+
+[tasks."sonarqube:recover-admin-password"]
+description = "Repair SonarQube built-in admin password drift; dry-run unless --yes is passed"
+run = "dev/homelab/service-drift-recovery.sh sonarqube-admin-password --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
+
+[tasks."mattermost:recover-db-password"]
+description = "Repair Mattermost Postgres password drift; dry-run unless --yes is passed"
+run = "dev/homelab/service-drift-recovery.sh mattermost-db-password --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
+
 [tasks."homelab:create-turnstile"]
 description = "Create or verify the Cloudflare Turnstile widget via API"
 run = "go run ./cmd/homelab oauth-setup --domain \"$HOMELAB_DOMAIN\" --create-turnstile"

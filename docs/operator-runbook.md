@@ -123,6 +123,12 @@ homelab-mcp access token
 - Use `mise run release:mvp-local -- --with-recovery` only when reset/reinstall
   recovery is intentionally in scope.
 - Prefer `--dry-run` variants where available before write-capable operations.
+- Use `mise run sonarqube:recover-db-password`,
+  `mise run mattermost:recover-db-password`, or
+  `mise run sonarqube:recover-admin-password` only for known persistent-state
+  drift after `.env` or secret-store values no longer match initialized service
+  state. These tasks are dry-run by default; append `-- --yes` only after the
+  printed Docker/psql plan matches the intended repair.
 - Leave `SMOKETEST_RECOVER_AUTHENTIK_TOKEN` unset for read-only smoke checks;
   setting it to `1` lets smoke tests recover a bootstrap API token from the live
   Authentik container.
