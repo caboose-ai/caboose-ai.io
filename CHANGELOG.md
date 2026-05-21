@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.0](https://github.com/caboose-ai/caboose-ai.io/compare/v0.10.0...v0.11.0) (2026-05-21)
+
+
+### Features
+
+* **homelab:** add local MVP release readiness gate ([#96](https://github.com/caboose-ai/caboose-ai.io/issues/96)) ([92c2c81](https://github.com/caboose-ai/caboose-ai.io/commit/92c2c8126b85a4404bae052dd4b1d3db3f43db77))
+
 ## [0.10.0](https://github.com/caboose-ai/caboose-ai.io/compare/v0.9.2...v0.10.0) (2026-05-20)
 
 
