@@ -19,7 +19,7 @@ jobs:
             --method POST \
             "/repos/$TARGET_REPOSITORY/dispatches" \
             -f event_type=repo-main-updated \
-            -f client_payload[repository][full_name]="${{ github.repository }}" \
-            -f client_payload[repository][default_branch]="${{ github.event.repository.default_branch }}" \
-            -f client_payload[after]="${{ github.sha }}" \
-            -f client_payload[pusher]="${{ github.actor }}"
+            -f "client_payload[repository][full_name]=${{ github.repository }}" \
+            -f "client_payload[repository][default_branch]=${{ github.event.repository.default_branch }}" \
+            -f "client_payload[after]=${{ github.sha }}" \
+            -f "client_payload[pusher]=${{ github.actor }}"
