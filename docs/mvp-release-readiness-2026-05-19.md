@@ -2,243 +2,221 @@
 
 ## Objective
 
-Provide an implementation-ready, operator-facing release-readiness checklist for
-shipping the homelab MVP across three deployment profiles:
+Ship the MVP when the **local profile passes** and the **Homebrew binary
+install/update path is documented and guarded**.
 
-- `local`
-- `public`
-- `public+mcp-external`
+Public tunnel exposure and external MCP lifecycle management are post-MVP
+profiles. They stay documented in the appendix so the next release lane has a
+clear path, but they are not required to declare this MVP ready.
 
-This document is written to be executed directly by an operator and used as a
-release gate by maintainers.
-
-## Scope and assumptions
+## MVP Scope
 
 - Host OS: Linux
-- Operator can run Docker and Docker Compose v2
-- `homelab` binary is available in `PATH` (installed from release/Homebrew or
-  built from source)
-- For MCP external lifecycle management, `systemd --user` is available
-- Secrets are provided by **either** 1Password CLI **or** a pre-populated
-  compose `.env` strategy
+- Runtime: Docker Engine plus Docker Compose v2
+- Stack source: a compose directory from a source checkout such as
+  `dev/homelab`, or a deployed directory such as `/opt/homelab`
+- Secrets: either 1Password CLI or a pre-populated compose `.env`
+- Serve mode: forced to `local`
+- Local smoke set: `authentik`, `forgejo`, `woodpecker`, `homarr`
+- Recovery reset: optional and explicit with `--with-recovery`
 
----
+Homebrew formulae install the `homelab` and `homelab-mcp` binaries. They do not
+install a packaged compose stack, so Homebrew readiness proves binary delivery,
+not standalone stack provisioning.
 
-## Deployment profiles
+## Primary Acceptance Command
 
-### Profile definitions
-
-- **`local`**: single-host/private network evaluation, no public DNS exposure
-  required
-- **`public`**: domain-exposed services with reverse proxy, SSO/OAuth flows,
-  and Cloudflare Tunnel as the default no-static-IP exposure path
-- **`public+mcp-external`**: `public` plus external MCP onboarding and approval
-  workflows
-
-### Prerequisite matrix (operator-ready)
-
-| Dependency / capability | `local` | `public` | `public+mcp-external` | Verification command | Pass criteria |
-|---|---|---|---|---|---|
-| Docker Engine | Required | Required | Required | `docker version` | Client and Server sections render without daemon error |
-| Docker Compose v2 plugin | Required | Required | Required | `docker compose version` | Version string prints and exits 0 |
-| `homelab` binary in `PATH` | Required | Required | Required | `homelab install --help` | Help output prints usage/flags and exits 0 |
-| Secrets strategy selected (`op` or `.env`) | Required | Required | Required | `op --version` (if 1Password mode) or `test -f .env` (if `.env` mode) | For chosen mode, command succeeds |
-| Domain + DNS control | Not required | Required | Required | `dig +short <your-domain>` | Returns Cloudflare-routed records for tunnel-backed host exposure |
-| Caddy runtime (for host reverse proxy mode) | Not required | Required | Required | `caddy version` | Version string prints |
-| Cloudflare Tunnel runtime | Not required | Required | Required | `cloudflared --version` | Version string prints |
-| Cloudflare API credentials | Not required | Optional (Turnstile/DNS automation) | Required only for automation | `env | rg 'CLOUDFLARE_(API_TOKEN|ZONE_ID)'` | Required variables present for selected features |
-| `systemd --user` available | Not required | Not required | Required | `systemctl --user status` | Command connects to user manager (not “Failed to connect to bus”) |
-
-> Operator rule: do not begin installation until all rows marked “Required” for
-> your selected profile have passed.
-
----
-
-## 15-minute local quickstart (`local` profile)
-
-Use this when validating first-run MVP experience on a clean-ish Linux host.
-
-### 0) Choose working directory and set supported local profile input
+Preview the local gate:
 
 ```bash
-git clone https://github.com/caboose-ai/caboose-ai.io.git "$HOME/caboose-run"
-cd "$HOME/caboose-run"
+mise run release:mvp-local -- --dry-run
 ```
 
-**Pass criteria:** `pwd` shows your intended working directory, and subsequent `homelab` commands in this checklist include `--serve-mode local`.
-
-### 1) Verify mandatory runtime prerequisites
+Run the gate with 1Password-backed secrets:
 
 ```bash
-docker version
-docker compose version
-homelab install --help
+mise run release:mvp-local
 ```
 
-**Pass criteria:** all commands return successfully and print normal version/help
-output.
-
-### 2) Select and validate secrets strategy
-
-Choose one path only:
-
-- **Path A (1Password-backed):**
-
-  ```bash
-  op --version
-  ```
-
-  **Pass criteria:** version prints; operator can authenticate per environment
-  policy.
-
-- **Path B (`.env`-backed):**
-
-  ```bash
-  test -f .env && echo ".env present"
-  ```
-
-  **Pass criteria:** `.env present` is printed.
-
-  When using this path, add `--secrets-env-only` to `homelab` commands in the
-  remaining steps so install/runtime does not require 1Password.
-
-### 3) Install/bootstrap stack
+Run the gate with a compose `.env` only:
 
 ```bash
-# Path A (1Password-backed)
-homelab install --compose-dir dev/homelab --serve-mode local
-
-# Path B (.env-backed)
-homelab install --compose-dir dev/homelab --serve-mode local --secrets-env-only
+mise run release:mvp-local -- --secrets-env-only
 ```
 
-**Pass criteria:** command exits successfully and reports completed bootstrap for
-configured services.
-
-### 4) Validate service health and smoke readiness
+Run the destructive recovery pass only when intentionally requested:
 
 ```bash
-for slug in authentik forgejo gitea woodpecker; do
-  homelab service "$slug" status --compose-dir dev/homelab --serve-mode local
-  homelab service "$slug" smoke --compose-dir dev/homelab --serve-mode local
+mise run release:mvp-local -- --with-recovery
+```
+
+The task calls `dev/homelab/mvp-local-readiness.sh`. The script defaults to:
+
+```bash
+HOMELAB_DOMAIN=caboose-ai.io
+HOMELAB_COMPOSE_DIR=dev/homelab
+HOMELAB_BIN=<unset, uses go run ./cmd/homelab>
+```
+
+The `mise` task intentionally defaults to the source checkout's compose
+directory and source-built CLI even though other homelab tasks default to
+`/opt/homelab` and installed binaries. Override the compose directory when
+validating a deployed host:
+
+```bash
+HOMELAB_MVP_COMPOSE_DIR=/opt/homelab mise run release:mvp-local
+```
+
+Override `HOMELAB_BIN=homelab` only when the goal is to validate an installed
+Homebrew binary against a deployed compose directory.
+
+## Local Prerequisites
+
+| Capability | Verification | Pass criteria |
+| --- | --- | --- |
+| Docker Engine | `docker version` | Client and Server sections render without daemon error |
+| Docker Compose v2 | `docker compose version` | Version prints and exits 0 |
+| Homelab binary | `homelab install --help` | Help output prints usage and exits 0 |
+| 1Password mode | `op --version` | Version prints and operator can sign in |
+| `.env` mode | `test -f dev/homelab/.env` | The compose env file exists |
+
+The local gate runs these checks before install. With `--secrets-env-only`, it
+checks the compose `.env` path instead of requiring `op`.
+
+## Local Gate Details
+
+The gate runs install in local mode:
+
+```bash
+homelab install --non-interactive \
+  --domain caboose-ai.io \
+  --compose-dir dev/homelab \
+  --serve-mode local
+```
+
+Then it validates the MVP service set with slug-first service commands:
+
+```bash
+for slug in authentik forgejo woodpecker homarr; do
+  homelab service --domain caboose-ai.io --compose-dir dev/homelab --serve-mode local "$slug" status
+  homelab service --domain caboose-ai.io --compose-dir dev/homelab --serve-mode local "$slug" smoke
 done
 ```
 
-**Pass criteria:**
-
-- status output indicates services are up/healthy (no failed core services)
-- smoke command completes with passing checks (no failures)
-
-### 5) Validate recovery path
+With `--with-recovery`, it also runs:
 
 ```bash
-homelab reset --keep-env --yes --compose-dir dev/homelab --serve-mode local
-homelab install --compose-dir dev/homelab --serve-mode local
-for slug in authentik forgejo gitea woodpecker; do
-  homelab service "$slug" smoke --compose-dir dev/homelab --serve-mode local
-done
+homelab reset --keep-env --yes \
+  --domain caboose-ai.io \
+  --compose-dir dev/homelab \
+  --serve-mode local
 ```
 
-**Pass criteria:** reinstall and smoke checks pass after reset without manual
-undocumented edits.
+Then it reinstalls and repeats the status/smoke loop.
 
----
+## Homebrew Readiness
 
-## Acceptance checks by profile (release gate)
-
-Run these checks on at least one clean host per profile before calling the MVP
-release ready.
-
-### A. `local` profile acceptance
-
-1. Prerequisite matrix: all `local` required rows pass.
-2. Fresh install completes (`homelab install --compose-dir dev/homelab --serve-mode local`).
-3. Health/smoke passes:
-
-   ```bash
-   for slug in authentik forgejo gitea woodpecker; do
-     homelab service "$slug" status --compose-dir dev/homelab --serve-mode local
-     homelab service "$slug" smoke --compose-dir dev/homelab --serve-mode local
-   done
-   ```
-
-4. Recovery pass:
-
-   ```bash
-   homelab reset --keep-env --yes --compose-dir dev/homelab --serve-mode local
-   homelab install --compose-dir dev/homelab --serve-mode local
-   for slug in authentik forgejo gitea woodpecker; do
-     homelab service "$slug" smoke --compose-dir dev/homelab --serve-mode local
-   done
-   ```
-
-**Release pass criteria (`local`):** all four checks pass with no undocumented
-manual intervention.
-
-### B. `public` profile acceptance
-
-1. All `local` acceptance checks pass.
-2. Public prerequisites verified (domain/DNS + Caddy + Cloudflare Tunnel + OAuth config).
-3. `mise run tunnel:config` writes the Cloudflare Tunnel ingress config, checks
-   that the configured credentials file exists, and syntax-validates the config
-   with `cloudflared`.
-4. Public endpoints reachable over intended domain(s).
-5. SSO callback/authentication flow succeeds end-to-end.
-
-Suggested verification commands:
+Verify a Homebrew-installed operator path with:
 
 ```bash
-dig +short <your-domain>
+brew tap caboose-ai/tap
+brew install caboose-homelab
+brew test caboose-ai/tap/caboose-homelab
+HOMELAB_BIN=homelab HOMELAB_COMPOSE_DIR=/opt/homelab mise run homelab:installed-binary-check
+
+brew install caboose-homelab-mcp
+brew test caboose-ai/tap/caboose-homelab-mcp
+homelab-mcp -help
+```
+
+This readiness path is binary-plus-compose-dir. The Homebrew formulae do not
+package `dev/homelab` or deploy `/opt/homelab`; operators must provide a source
+checkout compose directory or a deployed compose directory separately.
+
+The tap deploy workflow must keep these guardrails before pushing formula
+updates:
+
+- resolve and validate the release tag
+- compute the tagged source archive SHA
+- update both formulae
+- run Ruby syntax checks
+- run Homebrew style and audit checks
+- install and `brew test` both formulae
+- verify the installed `homelab` binary against a valid compose directory
+- pause on the `homebrew-tap-deploy` environment before direct tap push
+- re-check out the tap, re-apply the tested patch, and rerun validation before
+  pushing
+
+## Release Decision
+
+Declare the MVP ready only when:
+
+- `mise run release:mvp-local` passes on at least one clean local host
+- `mise run release:mvp-local -- --dry-run` shows the expected command order
+- Homebrew binary install and `brew test` verification are documented and
+  guarded in the tap workflow, including installed-binary/compose-dir validation
+- any failure has a tracked fix or explicit release note
+
+Do not claim public DNS, Cloudflare Tunnel, Caddy exposure, or external MCP as
+MVP-ready unless their appendix checks have also passed separately.
+
+## Supported Post-MVP Public Profile
+
+The public profile adds Caddy and Cloudflare Tunnel to the local profile. It is
+not required for the local MVP decision, but it has a supported acceptance gate:
+
+```bash
+mise run release:public-profile -- --dry-run
+mise run release:public-profile
+```
+
+The task calls `dev/homelab/public-readiness.sh`. It forces `serve-mode public`,
+validates the configured Caddy file, generates and validates the Cloudflare
+Tunnel ingress config through `dev/homelab/setup-cloudflare-tunnel.sh`, and runs
+public-mode status and smoke checks for the MVP browser services.
+
+Equivalent manual checks:
+
+```bash
 mise run tunnel:config
-for slug in authentik forgejo gitea woodpecker; do
-  homelab service "$slug" status --compose-dir dev/homelab --serve-mode public
-  homelab service "$slug" smoke --compose-dir dev/homelab --serve-mode public
+
+for slug in authentik forgejo woodpecker homarr; do
+  homelab service --domain caboose-ai.io --compose-dir dev/homelab --serve-mode public "$slug" status
+  homelab service --domain caboose-ai.io --compose-dir dev/homelab --serve-mode public "$slug" smoke
 done
 ```
 
-**Release pass criteria (`public`):** public route + authentication success and
-no blocking smoke failures.
+Pass criteria: the tunnel config validates, public hostnames route through the
+intended Caddy origin, and browser-facing authentication succeeds end to end.
+No static public IP or inbound WAN port forwarding is required.
 
-### C. `public+mcp-external` profile acceptance
+## Appendix B: Public Plus External MCP (Post-MVP)
 
-1. All `public` acceptance checks pass.
-2. Cloudflare credentials exported and valid for target zone if DNS/tunnel
-   automation is being run.
-3. External MCP setup, approval, and client access flow completes.
+The external MCP profile adds client request, admin approval, credential import,
+token lookup, and authenticated endpoint probing. The supported path is
+Cloudflare Tunnel-compatible and does not require a static public IP.
 
-Suggested verification commands:
+Acceptance command:
 
 ```bash
-env | rg 'CLOUDFLARE_(API_TOKEN|ZONE_ID)'
+mise run mcp:external-readiness -- --dry-run
+mise run mcp:external-readiness
+```
+
+Equivalent manual checks:
+
+```bash
+mise run tunnel:config
 homelab mcp access setup --compose-dir dev/homelab
 homelab-mcp access request --name "$(hostname)" --out mcp-request.json
 homelab mcp access approve mcp-request.json --out mcp-release.json
 homelab-mcp access import mcp-release.json
 homelab-mcp access status
+mise run mcp:test-live
 ```
 
-**Release pass criteria (`public+mcp-external`):** external setup, approval,
-import, and status checks all complete successfully end-to-end.
+Pass criteria: setup, approval, import, token lookup, and authenticated endpoint
+probe all complete without manual undocumented edits.
 
----
-
-## Operator run order (single-page checklist)
-
-1. Select profile: `local` / `public` / `public+mcp-external`.
-2. Execute prerequisite matrix and clear all required rows.
-3. Run install.
-4. Run profile acceptance checks.
-5. Run recovery check (`reset --keep-env --yes` + reinstall + per-service smoke).
-6. Record pass/fail outcome for release gate.
-
----
-
-## Release decision
-
-Declare MVP release-ready only when:
-
-- `local` passes on a clean host, and
-- any additional advertised profiles (`public`, `public+mcp-external`) also
-  pass their full acceptance sections on clean hosts.
-
-If a profile is not yet passing, do not claim it in release messaging.
+`dev/homelab/setup-mcp-external.sh` is retained only for the legacy static-IP
+DNS/Caddy route and is not the supported external MCP readiness path.

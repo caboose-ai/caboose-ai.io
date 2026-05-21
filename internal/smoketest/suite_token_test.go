@@ -100,3 +100,15 @@ func TestResolveAuthentikToken_RecoversWhenEnabled(t *testing.T) {
 		t.Fatalf("token = %q, want %q", token, "recovered-token")
 	}
 }
+
+func TestFindEnvFileHonorsSmokeTestEnvFile(t *testing.T) {
+	envPath := filepath.Join(t.TempDir(), ".env")
+	if err := os.WriteFile(envPath, []byte("AUTHENTIK_BOOTSTRAP_TOKEN=file-token\n"), 0600); err != nil {
+		t.Fatalf("writing env file: %v", err)
+	}
+	t.Setenv("SMOKETEST_ENV_FILE", envPath)
+
+	if got := findEnvFile(); got != envPath {
+		t.Fatalf("findEnvFile() = %q, want %q", got, envPath)
+	}
+}

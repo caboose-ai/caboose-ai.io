@@ -18,6 +18,7 @@ var smokeFlowName = flag.String("smoke-flow", "", "target one SSO smoke flow by 
 
 func TestSSO_BrowserFlows(t *testing.T) {
 	s := NewSuite(t)
+	s.ForceLocalPasswordAuth(t)
 	skipIfNoBrowser(t)
 	s.InitBrowser(t)
 	s.SetupAdminPassword(t)
@@ -45,6 +46,7 @@ func TestSSO_ServiceSmoke(t *testing.T) {
 	}
 
 	s := NewSuite(t)
+	s.ForceLocalPasswordAuth(t)
 	skipIfNoBrowser(t)
 	s.InitBrowser(t)
 	s.SetupAdminPassword(t)
@@ -346,6 +348,15 @@ func testProxyFlow(t *testing.T, s *Suite, svc ProxyFlow) {
 		t.Errorf("expected to reach %s, got %s", svc.TargetHost, currentURL)
 	}
 	if !isLoggedInURL(currentURL, svc.TargetHost) {
+		if svc.AllowLoginLanding && strings.Contains(currentURL, "/login") {
+			rejectProxyErrorPage(t, page, svc)
+			if svc.HealthURL != "" {
+				checkProxyFlowHealth(t, s, svc)
+			}
+			s.Record(t, page, "reached-upstream-login", svc.Name, map[string]string{"url": currentURL})
+			t.Logf("%s: reached upstream login page at %s", svc.Name, currentURL)
+			return
+		}
 		t.Errorf("expected %s to finish logged in, got %s", svc.Name, currentURL)
 	}
 	rejectProxyErrorPage(t, page, svc)

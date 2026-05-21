@@ -107,7 +107,8 @@ container recreation.
 - PR titles to `main` should follow Conventional Commits because CI validates
   the title and Release Please uses conventional commits for semver releases;
   legacy `[type] description` titles are accepted during transition.
-- Release Please starts from `v0.1.0`: `fix:` creates patch releases, `feat:`
+- Release Please tracks the current root package version in
+  `.release-please-manifest.json`: `fix:` creates patch releases, `feat:`
   creates minor releases, and `!` or `BREAKING CHANGE:` creates major releases.
 - `.github/workflows/release-please-automerge.yml` approves and squash-merges
   Release Please PRs after `Conventional PR title`, `Test and build`,
@@ -116,9 +117,10 @@ container recreation.
   triggered by a normal token-backed push.
 - Published releases trigger `.github/workflows/update-homebrew-tap.yml`, which
   uses the `HOMEBREW_TAP_TOKEN` Actions secret to update
-  `caboose-ai/homebrew-tap` formulae, install and `brew test` both updated
-  formulae, rerun formula validation before deploy, and push the verified
-  formula commit directly to the tap.
+  `caboose-ai/homebrew-tap` formulae, run actionlint plus Homebrew
+  style/audit/install/`brew test` validation, wait for the
+  `homebrew-tap-deploy` environment before deploy, rerun the same formula
+  validation, and push the verified formula commit directly to the tap.
 - CI builds both release binaries with `go build -buildvcs=false` to avoid
   Go VCS stamping failures in linked worktrees or source archive contexts.
 - Direct `homelab reset` requires `--yes` unless `--dry-run`; live Docker,

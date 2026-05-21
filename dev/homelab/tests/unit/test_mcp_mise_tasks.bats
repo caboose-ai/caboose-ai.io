@@ -17,6 +17,19 @@ setup() {
   [ "$status" -eq 0 ]
 }
 
+@test "mise separates local and external mcp readiness tasks" {
+  run grep -F '[tasks."mcp:probe-local"]' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+  run grep -F 'http://$HOMELAB_MCP_HTTP_ADDR/' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+  run grep -F '[tasks."mcp:external-readiness"]' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+  run grep -F 'dev/homelab/mcp-external-readiness.sh' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+  run grep -F 'Legacy/static-IP path' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+}
+
 @test "mise exposes cloudflare tunnel config task as the public default path" {
   run grep -F '[tasks."tunnel:config"]' "$MISE_FILE"
   [ "$status" -eq 0 ]
@@ -25,5 +38,55 @@ setup() {
   run grep -F 'dev/homelab/setup-cloudflare-tunnel.sh' "$MISE_FILE"
   [ "$status" -eq 0 ]
   run grep -F 'HOMELAB_TUNNEL_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/cloudflared/homelab.yml' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+}
+
+@test "mise exposes local MVP release gate and per-service logs task" {
+  run grep -F '[tasks."release:mvp-local"]' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+  run grep -F 'dev/homelab/mvp-local-readiness.sh' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+  run grep -F 'HOMELAB_MVP_COMPOSE_DIR:-dev/homelab' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+
+  run grep -F '[tasks."service:logs"]' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+  run grep -F 'go run ./cmd/homelab service --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" logs' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+}
+
+@test "mise exposes public profile release gate" {
+  run grep -F '[tasks."release:public-profile"]' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+  run grep -F 'dev/homelab/public-readiness.sh' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+  run grep -F 'HOMELAB_PUBLIC_COMPOSE_DIR:-dev/homelab' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+}
+
+@test "mise exposes installed Homebrew binary compose-dir guard" {
+  run grep -F '[tasks."homelab:installed-binary-check"]' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+  run grep -F 'dev/homelab/homebrew-stack-readiness.sh' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+  run grep -F '${HOMELAB_BIN:-homelab}' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+}
+
+@test "mise exposes guarded service drift recovery tasks" {
+  for task in \
+    '[tasks."sonarqube:recover-db-password"]' \
+    '[tasks."sonarqube:recover-admin-password"]' \
+    '[tasks."mattermost:recover-db-password"]'
+  do
+    run grep -F "$task" "$MISE_FILE"
+    [ "$status" -eq 0 ]
+  done
+
+  run grep -F 'dev/homelab/service-drift-recovery.sh sonarqube-db-password' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+  run grep -F 'dev/homelab/service-drift-recovery.sh sonarqube-admin-password' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+  run grep -F 'dev/homelab/service-drift-recovery.sh mattermost-db-password' "$MISE_FILE"
   [ "$status" -eq 0 ]
 }

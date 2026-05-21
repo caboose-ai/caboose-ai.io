@@ -28,12 +28,21 @@ def validate_formulae(tap_dir: Path) -> None:
 
 def brew_smoke_commands(tap_dir: Path, tap_name: str = "caboose-ai/tap") -> list[list[str]]:
     validate_formulae(tap_dir)
+    formula_paths = [
+        tap_dir / "Formula" / f"{formula}.rb"
+        for formula in FORMULAE
+    ]
+    formula_names = [
+        f"{tap_name}/{formula}"
+        for formula in FORMULAE
+    ]
 
     commands: list[list[str]] = [
         ["brew", "tap", "--custom-remote", tap_name, tap_dir.resolve().as_uri()],
+        ["brew", "style", *(str(path) for path in formula_paths)],
+        ["brew", "audit", "--strict", "--online", *formula_names],
     ]
-    for formula in FORMULAE:
-        name = f"{tap_name}/{formula}"
+    for name in formula_names:
         commands.append(["brew", "install", "--build-from-source", name])
         commands.append(["brew", "test", name])
     return commands
@@ -49,7 +58,7 @@ def run_commands(commands: Sequence[Sequence[str]], runner: Runner | None = None
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Install and brew-test both caboose-ai Homebrew formulae.",
+        description="Style, audit, install, and brew-test both caboose-ai Homebrew formulae.",
     )
     parser.add_argument("--tap-dir", type=Path, required=True)
     parser.add_argument("--tap-name", default="caboose-ai/tap")

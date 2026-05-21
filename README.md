@@ -63,19 +63,33 @@ container recreation.
 
 ## Homebrew
 
-The first public distribution path is source-built Homebrew formulae from tagged
-GitHub releases:
+The public binary distribution path is source-built Homebrew formulae from
+tagged GitHub releases:
 
 ```bash
 brew tap caboose-ai/tap
 brew install caboose-homelab
+brew test caboose-ai/tap/caboose-homelab
+homelab install --help
 
 # Optional MCP server binary
 brew install caboose-homelab-mcp
+brew test caboose-ai/tap/caboose-homelab-mcp
+homelab-mcp -help
+```
+
+The formulae install binaries only: `homelab` and `homelab-mcp`. They do not
+install a packaged Docker Compose stack. Local stack install/update still needs
+a valid compose directory such as a source checkout's `dev/homelab` directory
+or a deployed `/opt/homelab` directory. Validate that operator shape with:
+
+```bash
+HOMELAB_BIN=homelab HOMELAB_COMPOSE_DIR=/opt/homelab mise run homelab:installed-binary-check
 ```
 
 After a new `caboose-homelab` release reaches the tap, the update/reset helper
-upgrades only that formula and then runs `homelab reset --yes --keep-env`:
+upgrades only that formula, runs `homelab reset --yes --keep-env`, and then
+reruns the installed-binary/compose-dir guard without live service status:
 
 ```bash
 mise run homelab:update-reset
@@ -90,14 +104,17 @@ dev/homelab/update-homelab-and-reset.sh --dry-run
 dev/homelab/update-homelab-and-reset.sh --yes --store-static-env
 ```
 
-The formulae install `homelab` and `homelab-mcp`. Runtime prerequisites are
-intentionally documented instead of enforced as Homebrew dependencies: Docker
-with Compose for the stack itself, plus either the 1Password CLI or a populated
-compose `.env` fallback for secrets. Caddy and Cloudflare Tunnel are the
-default public exposure path: `public` mode keeps services on host loopback for
-Caddy, and `cloudflared` publishes the stable `*.caboose-ai.io` hostnames
-without requiring a static IP or inbound WAN port forwarding. Cloudflare API
-credentials are only needed for Turnstile or DNS/tunnel automation.
+Runtime prerequisites are intentionally documented instead of enforced as
+Homebrew dependencies: Docker with Compose for the stack itself, plus either the
+1Password CLI or a populated compose `.env` fallback for secrets.
+
+Caddy and Cloudflare Tunnel are the default public exposure path: `public` mode
+keeps services on host loopback for Caddy, and `cloudflared` publishes the
+stable `*.caboose-ai.io` hostnames without requiring a static IP or inbound WAN
+port forwarding. Cloudflare API credentials are only needed for Turnstile or
+DNS/tunnel automation. Validate the supported public profile with
+`mise run release:public-profile -- --dry-run` first, then run it live once
+Caddy and Cloudflare Tunnel credentials are present.
 
 ## Release automation
 
@@ -108,20 +125,21 @@ transition, then runs unit tests and builds both release binaries on every PR
 and push to `main`.
 
 Releases are managed by Release Please from conventional commits after merges
-to `main`. The current release manifest starts at `v0.1.0`; future `fix:`
-commits produce patch releases, `feat:` commits produce minor releases, and
-breaking changes produce major releases. Release Please opens the version bump
-PR. Once that PR's CI checks pass, `.github/workflows/release-please-automerge.yml`
-approves and squash-merges the Release Please PR with `RELEASE_PLEASE_TOKEN`, so
-the original feature PR merge is the only human interaction in the normal
-release path. Published releases then trigger the Homebrew tap update workflow,
-which requires the `HOMEBREW_TAP_TOKEN` Actions secret, computes the tagged
-source archive SHA, updates both tap formulae, and installs and `brew test`s
-both updated formulae. If formulae changed, it re-applies the tested formula
-patch to the latest tap checkout, reruns formula syntax and Homebrew smoke
-validation, then pushes the verified formula commit directly to
-`caboose-ai/homebrew-tap`. The tap update workflow can also be rerun manually
-with a release tag.
+to `main`. The current root package version is tracked in
+`.release-please-manifest.json`; future `fix:` commits produce patch releases,
+`feat:` commits produce minor releases, and breaking changes produce major
+releases. Release Please opens the version bump PR. Once that PR's CI checks
+pass, `.github/workflows/release-please-automerge.yml` approves and
+squash-merges the Release Please PR with `RELEASE_PLEASE_TOKEN`, so the original
+feature PR merge is the only human interaction in the normal release path.
+Published releases then trigger the Homebrew tap update workflow, which
+requires the `HOMEBREW_TAP_TOKEN` Actions secret, computes the tagged source
+archive SHA, updates both tap formulae, and runs formula syntax, Homebrew
+style/audit, install, and `brew test` validation. If formulae changed, it
+re-applies the tested formula patch to the latest tap checkout after the
+`homebrew-tap-deploy` environment approval, reruns the same validation, then
+pushes the verified formula commit directly to `caboose-ai/homebrew-tap`. The
+tap update workflow can also be rerun manually with a release tag.
 
 ## Operator docs
 
@@ -129,7 +147,7 @@ with a release tag.
 - [CAB-5 Operator UX and docs-flow audit (2026-05-18)](docs/cab-5-operator-ux-docs-flow-audit-2026-05-18.md) — operator journey audit across install, validation, MCP access, and troubleshooting navigation.
 - [CAB Technical Baseline Scorecard (Latest)](docs/cab-technical-baseline-latest.md) — generated architecture/quality snapshot; refresh with `mise run baseline:scorecard`.
 - [Homelab Service Documentation and Agent Control Plan](docs/homelab-agent-control-plan.md) — roadmap for documenting service capabilities, routing OpenClaw and Telegram agent workflows, minimizing outside token use, and supporting subagentic development.
-- [MVP Release Readiness Pass (2026-05-19)](docs/mvp-release-readiness-2026-05-19.md) — profile-based dependency matrix and release-path recommendations for local, public, and external-MCP rollouts.
+- [MVP Release Readiness Pass (2026-05-19)](docs/mvp-release-readiness-2026-05-19.md) — local MVP acceptance gate plus Homebrew binary-readiness guardrails; public and external-MCP profiles are post-MVP appendices.
 
 ## Service workspaces
 
@@ -178,6 +196,17 @@ mise run homelab:vault-reinstall
 # Upgrade only caboose-homelab from Homebrew when available, then reset
 mise run homelab:update-reset
 
+# Validate installed Homebrew binary plus deployed compose directory
+HOMELAB_BIN=homelab HOMELAB_COMPOSE_DIR=/opt/homelab mise run homelab:installed-binary-check
+
+# Run the local MVP release-readiness gate
+mise run release:mvp-local
+mise run release:mvp-local -- --dry-run
+
+# Run the supported post-MVP public profile gate
+mise run release:public-profile -- --dry-run
+mise run release:public-profile
+
 # Print GitHub, Google, and Turnstile setup URLs/callbacks
 mise run homelab:oauth-setup
 
@@ -187,11 +216,18 @@ mise run homelab:create-turnstile
 # Per-service operations
 mise run service:status -- forgejo
 mise run service:configure -- mattermost --dry-run
+mise run service:logs -- forgejo
 mise run service:smoke -- forgejo
 
 # Portainer environment access recovery when the stored admin password drifted
 mise run portainer:recover-access
 dev/homelab/portainer-recover-access.sh --yes
+
+# Known persistent-state drift recoveries; dry-run unless --yes is passed
+mise run sonarqube:recover-db-password
+mise run sonarqube:recover-db-password -- --yes
+mise run sonarqube:recover-admin-password
+mise run mattermost:recover-db-password
 
 # Paperclip is provisioned as an optional example, but install leaves it stopped.
 # Start and seed the full software-shop example only when intentionally requested.
@@ -210,11 +246,12 @@ mise run telegram-agent:notify -- "Homelab task finished."
 
 # Homelab MCP server
 mise run mcp:status
-mise run mcp:probe
+mise run mcp:probe-local
 mise run mcp:resolve
 mise run mcp:probe-external
 mise run tunnel:print
 mise run tunnel:config
+mise run mcp:external-readiness
 mise run mcp:setup-external
 mise run mcp:access-live
 mise run mcp:test-live
@@ -245,9 +282,18 @@ with `cloudflared`; set `HOMELAB_TUNNEL_ID` and
 credentials file must already exist for validation; this proves the local config
 is syntactically valid, while the endpoint smoke checks prove public
 reachability.
-`mise run mcp:setup-external` remains available as the legacy/static-IP path
-for the MCP A record and Caddy route. It requires `CLOUDFLARE_API_TOKEN` and
-`CLOUDFLARE_ZONE_ID` from the environment or `fnox`, plus sudo access to
+`mise run release:public-profile` is the concrete public acceptance command. It
+forces `serve-mode public`, validates the configured Caddy file, validates the
+Cloudflare Tunnel ingress config generated by
+`dev/homelab/setup-cloudflare-tunnel.sh`, and runs public-mode status and smoke
+checks for the MVP browser services. Pass means all of those checks complete
+without requiring a static public IP or inbound WAN port forwarding.
+`mise run mcp:external-readiness` is the supported external MCP acceptance
+command. It validates the Cloudflare Tunnel ingress config, then runs the
+request, approval, import, token, and authenticated external probe workflow.
+`mise run mcp:setup-external` remains available only as the legacy/static-IP
+path for the MCP A record and Caddy route. It requires `CLOUDFLARE_API_TOKEN`
+and `CLOUDFLARE_ZONE_ID` from the environment or `fnox`, plus sudo access to
 install and reload the Caddy route.
 `homelab mcp access setup` requires Authentik admin credentials through the
 configured secret store. Access requests are client-generated JSON blobs;
@@ -264,6 +310,7 @@ Override variables inline when needed, for example:
 
 ```bash
 HOMELAB_COMPOSE_DIR=dev/homelab mise run install
+HOMELAB_MVP_COMPOSE_DIR=/opt/homelab mise run release:mvp-local
 HOMELAB_SERVE_MODE=local mise run install
 ```
 
@@ -337,6 +384,11 @@ For CAB follow-up evidence capture, use `mise run cab:tier23-live` (or
   release-helper, Go test, and build gates for repositories enabled in
   Woodpecker. Use `mise run portainer:recover-access` to diagnose Portainer
   admin password drift; the reset repair path requires explicit `--yes`.
+- **Known service drift recovery** — SonarQube DB password, Mattermost DB
+  password, and SonarQube built-in admin password repairs are repo-owned through
+  guarded `sonarqube:recover-*` and `mattermost:recover-*` tasks. They dry-run
+  by default, require `--yes` for mutation, and log env var names rather than
+  secret values.
 - **OpenClaw** external runtime — tracked for URL, Authentik proxy, dashboard,
   smoke, and health metadata without claiming a local compose service
 - **Telegram Agent Bridge** external runtime — host-run long-polling bot that

@@ -4,7 +4,7 @@ pnpm = "latest"
 
 [env]
 HOMELAB_DOMAIN = "caboose-ai.io"
-HOMELAB_COMPOSE_DIR = "/opt/homelab"
+HOMELAB_COMPOSE_DIR = "{{ env.HOMELAB_COMPOSE_DIR | default(value='/opt/homelab') }}"
 HOMELAB_SERVE_MODE = "public"
 HOMELAB_MCP_CONFIG = "{{ env.XDG_CONFIG_HOME | default(value=env.HOME ~ '/.config') }}/homelab/homelab-mcp.yml"
 HOMELAB_MCP_HTTP_ADDR = "127.0.0.1:8090"
@@ -103,6 +103,18 @@ run = "dev/homelab/update-homelab-and-reset.sh --yes --domain \"$HOMELAB_DOMAIN\
 description = "Poll Homebrew until caboose-homelab has an update, then reset"
 run = "dev/homelab/update-homelab-and-reset.sh --yes --wait --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
 
+[tasks."homelab:installed-binary-check"]
+description = "Validate an installed homelab binary against the configured compose directory"
+run = "dev/homelab/homebrew-stack-readiness.sh --homelab-bin \"${HOMELAB_BIN:-homelab}\" --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
+
+[tasks."release:mvp-local"]
+description = "Run the local MVP release-readiness gate"
+run = "HOMELAB_COMPOSE_DIR=\"${HOMELAB_MVP_COMPOSE_DIR:-dev/homelab}\" dev/homelab/mvp-local-readiness.sh"
+
+[tasks."release:public-profile"]
+description = "Run the public profile readiness gate"
+run = "HOMELAB_COMPOSE_DIR=\"${HOMELAB_PUBLIC_COMPOSE_DIR:-dev/homelab}\" dev/homelab/public-readiness.sh"
+
 [tasks.recovery]
 description = "Generate an Authentik admin recovery URL"
 run = "go run ./cmd/homelab recovery --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
@@ -147,6 +159,18 @@ run = "go run ./cmd/homelab service --domain \"$HOMELAB_DOMAIN\" --compose-dir \
 description = "Repair Portainer admin password drift and reapply endpoint/OAuth access"
 run = "dev/homelab/portainer-recover-access.sh --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
 
+[tasks."sonarqube:recover-db-password"]
+description = "Repair SonarQube Postgres password drift; dry-run unless --yes is passed"
+run = "dev/homelab/service-drift-recovery.sh sonarqube-db-password --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
+
+[tasks."sonarqube:recover-admin-password"]
+description = "Repair SonarQube built-in admin password drift; dry-run unless --yes is passed"
+run = "dev/homelab/service-drift-recovery.sh sonarqube-admin-password --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
+
+[tasks."mattermost:recover-db-password"]
+description = "Repair Mattermost Postgres password drift; dry-run unless --yes is passed"
+run = "dev/homelab/service-drift-recovery.sh mattermost-db-password --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\""
+
 [tasks."homelab:create-turnstile"]
 description = "Create or verify the Cloudflare Turnstile widget via API"
 run = "go run ./cmd/homelab oauth-setup --domain \"$HOMELAB_DOMAIN\" --create-turnstile"
@@ -158,6 +182,10 @@ run = "go run ./cmd/homelab service --domain \"$HOMELAB_DOMAIN\" --compose-dir \
 [tasks."service:configure"]
 description = "Configure one registered service"
 run = "go run ./cmd/homelab service --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" configure"
+
+[tasks."service:logs"]
+description = "Show logs for one registered service"
+run = "go run ./cmd/homelab service --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" logs"
 
 [tasks."service:smoke"]
 description = "Run the smoke flow for one registered service"
@@ -220,7 +248,11 @@ description = "Tail logs for the live homelab MCP user service"
 run = "journalctl --user -u \"$HOMELAB_MCP_SERVICE\" -f"
 
 [tasks."mcp:probe"]
-description = "Probe the live homelab MCP HTTP endpoint"
+description = "Probe the local homelab MCP HTTP endpoint"
+run = "curl -i --max-time 5 \"http://$HOMELAB_MCP_HTTP_ADDR/\""
+
+[tasks."mcp:probe-local"]
+description = "Probe the local homelab MCP HTTP endpoint"
 run = "curl -i --max-time 5 \"http://$HOMELAB_MCP_HTTP_ADDR/\""
 
 [tasks."mcp:resolve"]
@@ -234,6 +266,10 @@ run = "curl -i --max-time 10 \"$HOMELAB_MCP_EXTERNAL_URL/\""
 [tasks."mcp:setup-external"]
 description = "Legacy/static-IP path: set up and verify external homelab MCP DNS and Caddy route"
 run = "dev/homelab/setup-mcp-external.sh"
+
+[tasks."mcp:external-readiness"]
+description = "Validate the supported Cloudflare Tunnel external MCP access lifecycle"
+run = "dev/homelab/mcp-external-readiness.sh"
 
 [tasks."tunnel:config"]
 description = "Generate and validate the default Cloudflare Tunnel ingress config for public hosting"

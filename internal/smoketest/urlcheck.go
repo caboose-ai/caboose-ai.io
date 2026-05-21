@@ -10,6 +10,10 @@ func isLoggedInURL(currentURL, host string) bool {
 	if err != nil || u.Hostname() != host {
 		return false
 	}
+	location := u.EscapedPath()
+	if u.Fragment != "" {
+		location += "#" + u.EscapedFragment()
+	}
 	failMarkers := []string{
 		"/login",
 		"/auth",
@@ -18,7 +22,7 @@ func isLoggedInURL(currentURL, host string) bool {
 		"#!/auth",
 	}
 	for _, marker := range failMarkers {
-		if strings.Contains(currentURL, marker) {
+		if strings.Contains(location, marker) {
 			return false
 		}
 	}

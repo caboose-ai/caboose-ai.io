@@ -58,6 +58,9 @@ func TestSSO_Config(t *testing.T) {
 					t.Fatalf("proxy provider %q not found", spec.Name)
 				}
 				t.Logf("proxy provider %q: pk=%d mode=%s", spec.Name, proxy.PK, proxy.Mode)
+				if spec.InternalHost != "" && proxy.InternalHost != spec.InternalHost {
+					t.Errorf("proxy provider %q internal_host=%q, want %q", spec.Name, proxy.InternalHost, spec.InternalHost)
+				}
 
 				app, err := s.AK.GetApplication(ctx, spec.Slug)
 				if err != nil {
