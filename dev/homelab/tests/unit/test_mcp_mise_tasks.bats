@@ -72,3 +72,21 @@ setup() {
   run grep -F '${HOMELAB_BIN:-homelab}' "$MISE_FILE"
   [ "$status" -eq 0 ]
 }
+
+@test "mise exposes guarded service drift recovery tasks" {
+  for task in \
+    '[tasks."sonarqube:recover-db-password"]' \
+    '[tasks."sonarqube:recover-admin-password"]' \
+    '[tasks."mattermost:recover-db-password"]'
+  do
+    run grep -F "$task" "$MISE_FILE"
+    [ "$status" -eq 0 ]
+  done
+
+  run grep -F 'dev/homelab/service-drift-recovery.sh sonarqube-db-password' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+  run grep -F 'dev/homelab/service-drift-recovery.sh sonarqube-admin-password' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+  run grep -F 'dev/homelab/service-drift-recovery.sh mattermost-db-password' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+}

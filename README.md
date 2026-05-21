@@ -223,6 +223,12 @@ mise run service:smoke -- forgejo
 mise run portainer:recover-access
 dev/homelab/portainer-recover-access.sh --yes
 
+# Known persistent-state drift recoveries; dry-run unless --yes is passed
+mise run sonarqube:recover-db-password
+mise run sonarqube:recover-db-password -- --yes
+mise run sonarqube:recover-admin-password
+mise run mattermost:recover-db-password
+
 # Paperclip is provisioned as an optional example, but install leaves it stopped.
 # Start and seed the full software-shop example only when intentionally requested.
 mise run paperclip:example
@@ -378,6 +384,11 @@ For CAB follow-up evidence capture, use `mise run cab:tier23-live` (or
   release-helper, Go test, and build gates for repositories enabled in
   Woodpecker. Use `mise run portainer:recover-access` to diagnose Portainer
   admin password drift; the reset repair path requires explicit `--yes`.
+- **Known service drift recovery** — SonarQube DB password, Mattermost DB
+  password, and SonarQube built-in admin password repairs are repo-owned through
+  guarded `sonarqube:recover-*` and `mattermost:recover-*` tasks. They dry-run
+  by default, require `--yes` for mutation, and log env var names rather than
+  secret values.
 - **OpenClaw** external runtime — tracked for URL, Authentik proxy, dashboard,
   smoke, and health metadata without claiming a local compose service
 - **Telegram Agent Bridge** external runtime — host-run long-polling bot that
