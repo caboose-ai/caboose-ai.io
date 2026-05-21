@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.1](https://github.com/caboose-ai/caboose-ai.io/compare/v0.11.0...v0.11.1) (2026-05-21)
+
+
+### Bug Fixes
+
+* **ci:** quote workflow shell arguments ([#103](https://github.com/caboose-ai/caboose-ai.io/issues/103)) ([f96fc3a](https://github.com/caboose-ai/caboose-ai.io/commit/f96fc3a2a7c600b885d42aa6e1222fef5e2db95a))
+
 ## [0.11.0](https://github.com/caboose-ai/caboose-ai.io/compare/v0.10.0...v0.11.0) (2026-05-21)
 
 
