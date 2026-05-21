@@ -17,6 +17,19 @@ setup() {
   [ "$status" -eq 0 ]
 }
 
+@test "mise separates local and external mcp readiness tasks" {
+  run grep -F '[tasks."mcp:probe-local"]' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+  run grep -F 'http://$HOMELAB_MCP_HTTP_ADDR/' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+  run grep -F '[tasks."mcp:external-readiness"]' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+  run grep -F 'dev/homelab/mcp-external-readiness.sh' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+  run grep -F 'Legacy/static-IP path' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+}
+
 @test "mise exposes cloudflare tunnel config task as the public default path" {
   run grep -F '[tasks."tunnel:config"]' "$MISE_FILE"
   [ "$status" -eq 0 ]
@@ -39,6 +52,24 @@ setup() {
   run grep -F '[tasks."service:logs"]' "$MISE_FILE"
   [ "$status" -eq 0 ]
   run grep -F 'go run ./cmd/homelab service --domain \"$HOMELAB_DOMAIN\" --compose-dir \"$HOMELAB_COMPOSE_DIR\" logs' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+}
+
+@test "mise exposes public profile release gate" {
+  run grep -F '[tasks."release:public-profile"]' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+  run grep -F 'dev/homelab/public-readiness.sh' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+  run grep -F 'HOMELAB_PUBLIC_COMPOSE_DIR:-dev/homelab' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+}
+
+@test "mise exposes installed Homebrew binary compose-dir guard" {
+  run grep -F '[tasks."homelab:installed-binary-check"]' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+  run grep -F 'dev/homelab/homebrew-stack-readiness.sh' "$MISE_FILE"
+  [ "$status" -eq 0 ]
+  run grep -F '${HOMELAB_BIN:-homelab}' "$MISE_FILE"
   [ "$status" -eq 0 ]
 }
 

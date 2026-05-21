@@ -122,12 +122,16 @@ Verify a Homebrew-installed operator path with:
 brew tap caboose-ai/tap
 brew install caboose-homelab
 brew test caboose-ai/tap/caboose-homelab
-homelab install --help
+HOMELAB_BIN=homelab HOMELAB_COMPOSE_DIR=/opt/homelab mise run homelab:installed-binary-check
 
 brew install caboose-homelab-mcp
 brew test caboose-ai/tap/caboose-homelab-mcp
 homelab-mcp -help
 ```
+
+This readiness path is binary-plus-compose-dir. The Homebrew formulae do not
+package `dev/homelab` or deploy `/opt/homelab`; operators must provide a source
+checkout compose directory or a deployed compose directory separately.
 
 The tap deploy workflow must keep these guardrails before pushing formula
 updates:
@@ -138,6 +142,7 @@ updates:
 - run Ruby syntax checks
 - run Homebrew style and audit checks
 - install and `brew test` both formulae
+- verify the installed `homelab` binary against a valid compose directory
 - pause on the `homebrew-tap-deploy` environment before direct tap push
 - re-check out the tap, re-apply the tested patch, and rerun validation before
   pushing
@@ -149,21 +154,30 @@ Declare the MVP ready only when:
 - `mise run release:mvp-local` passes on at least one clean local host
 - `mise run release:mvp-local -- --dry-run` shows the expected command order
 - Homebrew binary install and `brew test` verification are documented and
-  guarded in the tap workflow
+  guarded in the tap workflow, including installed-binary/compose-dir validation
 - any failure has a tracked fix or explicit release note
 
 Do not claim public DNS, Cloudflare Tunnel, Caddy exposure, or external MCP as
 MVP-ready unless their appendix checks have also passed separately.
 
-## Appendix A: Public Profile (Post-MVP)
+## Supported Post-MVP Public Profile
 
-The public profile adds Caddy and Cloudflare Tunnel to the local profile.
-
-Suggested checks:
+The public profile adds Caddy and Cloudflare Tunnel to the local profile. It is
+not required for the local MVP decision, but it has a supported acceptance gate:
 
 ```bash
-dig +short <your-domain>
-cloudflared --version
+mise run release:public-profile -- --dry-run
+mise run release:public-profile
+```
+
+The task calls `dev/homelab/public-readiness.sh`. It forces `serve-mode public`,
+validates the configured Caddy file, generates and validates the Cloudflare
+Tunnel ingress config through `dev/homelab/setup-cloudflare-tunnel.sh`, and runs
+public-mode status and smoke checks for the MVP browser services.
+
+Equivalent manual checks:
+
+```bash
 mise run tunnel:config
 
 for slug in authentik forgejo woodpecker homarr; do
@@ -174,16 +188,25 @@ done
 
 Pass criteria: the tunnel config validates, public hostnames route through the
 intended Caddy origin, and browser-facing authentication succeeds end to end.
+No static public IP or inbound WAN port forwarding is required.
 
 ## Appendix B: Public Plus External MCP (Post-MVP)
 
 The external MCP profile adds client request, admin approval, credential import,
-and authenticated endpoint probing.
+token lookup, and authenticated endpoint probing. The supported path is
+Cloudflare Tunnel-compatible and does not require a static public IP.
 
-Suggested checks:
+Acceptance command:
 
 ```bash
-env | rg 'CLOUDFLARE_(API_TOKEN|ZONE_ID)'
+mise run mcp:external-readiness -- --dry-run
+mise run mcp:external-readiness
+```
+
+Equivalent manual checks:
+
+```bash
+mise run tunnel:config
 homelab mcp access setup --compose-dir dev/homelab
 homelab-mcp access request --name "$(hostname)" --out mcp-request.json
 homelab mcp access approve mcp-request.json --out mcp-release.json
@@ -194,3 +217,6 @@ mise run mcp:test-live
 
 Pass criteria: setup, approval, import, token lookup, and authenticated endpoint
 probe all complete without manual undocumented edits.
+
+`dev/homelab/setup-mcp-external.sh` is retained only for the legacy static-IP
+DNS/Caddy route and is not the supported external MCP readiness path.
