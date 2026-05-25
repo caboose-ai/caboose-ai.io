@@ -94,6 +94,9 @@ run explicitly.
   landing checks for Woodpecker, OpenClaw, and Paperclip.
 - `homelab service <slug> smoke` runs the manifest-owned `smoke_flow`; leave
   health-only services without a flow.
+- `TestSSO_ServiceSmoke` is targeted-only: it skips without `-smoke-flow` so
+  full-suite smoke runs can execute the package while service commands select a
+  single manifest-owned flow.
 - Run tests: `go test ./...`
 - Run format checks: `mise run fmt`
 - Run lint checks: `mise run lint`

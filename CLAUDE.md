@@ -99,6 +99,9 @@ container recreation.
 - `homelab service <slug> smoke` runs the manifest-owned `smoke_flow`; do not
   declare a `smoke_flow` unless `internal/smoketest` has an executable flow with
   that exact name.
+- `TestSSO_ServiceSmoke` is targeted-only: it skips without `-smoke-flow` so
+  `mise run sso:check` can run the full package while per-service smoke commands
+  select a single manifest-owned flow.
 
 ### Git
 - Never commit to main. Always branch first.
