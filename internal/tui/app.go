@@ -438,6 +438,19 @@ func (m AppModel) runInitAndRename() tea.Cmd {
 			}
 			return views.SecretsErrorMsg{Err: fmt.Errorf("configuring brand: %w", err)}
 		}
+		if err := m.installer.ConfigureLogoutFlows(ctx); err != nil {
+			if install.IsAuthentikTokenError(err) {
+				if recoverErr := m.installer.RecoverAuthentikBootstrapToken(ctx); recoverErr != nil {
+					return views.SecretsErrorMsg{Err: fmt.Errorf("recovering Authentik bootstrap token: %w", recoverErr)}
+				}
+				if retryErr := m.installer.ConfigureLogoutFlows(ctx); retryErr == nil {
+					return adminInitDoneMsg{}
+				} else {
+					err = retryErr
+				}
+			}
+			return views.SecretsErrorMsg{Err: fmt.Errorf("configuring logout flows: %w", err)}
+		}
 		return adminInitDoneMsg{}
 	}
 }
