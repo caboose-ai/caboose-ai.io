@@ -363,7 +363,9 @@ Mattermost follows the browser handoff and uses the managed local admin account,
 Homarr validates the native Authentik/OIDC dashboard login, while
 proxy-gated services such as Woodpecker, OpenClaw, and Paperclip are validated
 by reaching their protected landing URLs. Per-service smoke commands run the
-manifest-owned flow, for example `mise run paperclip:smoke`.
+manifest-owned flow, for example `mise run paperclip:smoke`; the targeted
+service smoke test skips during full-suite runs unless `-smoke-flow` selects one
+of those manifest flows.
 For CAB follow-up evidence capture, use `mise run cab:tier23-live` (or
 `dev/cab-tier23-live-validation.sh "<svc1,svc2>"`) and attach the generated
 `docs/evidence/cab-8/*-summary.md` artifact.

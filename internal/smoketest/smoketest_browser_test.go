@@ -42,7 +42,7 @@ func TestSSO_BrowserFlows(t *testing.T) {
 
 func TestSSO_ServiceSmoke(t *testing.T) {
 	if *smokeFlowName == "" {
-		t.Fatal("-smoke-flow is required")
+		t.Skip("-smoke-flow is required")
 	}
 
 	s := NewSuite(t)
