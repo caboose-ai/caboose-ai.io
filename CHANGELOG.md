@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.0](https://github.com/caboose-ai/caboose-ai.io/compare/v0.11.1...v0.12.0) (2026-05-25)
+
+
+### Features
+
+* add v0.1.0-beta.1 release checklist and post-release hardening backlog ([#105](https://github.com/caboose-ai/caboose-ai.io/issues/105)) ([6e9db52](https://github.com/caboose-ai/caboose-ai.io/commit/6e9db52dde290602f8b1d6e62cdece8c8872cd11))
+
 ## [0.11.1](https://github.com/caboose-ai/caboose-ai.io/compare/v0.11.0...v0.11.1) (2026-05-21)
 
 
