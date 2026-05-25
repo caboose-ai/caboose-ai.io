@@ -46,7 +46,9 @@ suite. SonarQube and Mattermost are configured with managed admin
 credentials from 1Password or the compose `.env` fallback, and Mattermost local
 mode is enabled in compose for repeatable bootstrap checks. Woodpecker keeps its
 server data under `/var/lib/woodpecker` so OAuth/session setup survives
-container recreation.
+container recreation. Grafana allows OAuth email lookup so the managed
+`auth-admin` account can keep logging in after Authentik token recovery or user
+repair changes the upstream OAuth subject while preserving the admin email.
 
 ## Binaries
 

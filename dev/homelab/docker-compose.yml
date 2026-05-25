@@ -150,6 +150,7 @@ services:
       GF_AUTH_GENERIC_OAUTH_TOKEN_URL: "https://auth.caboose-ai.io/application/o/token/"
       GF_AUTH_GENERIC_OAUTH_API_URL: "https://auth.caboose-ai.io/application/o/userinfo/"
       GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH: "contains(groups[*], 'homelab-admins') && 'Admin' || 'Viewer'"
+      GF_AUTH_OAUTH_ALLOW_INSECURE_EMAIL_LOOKUP: "true"
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: "Viewer"
       GF_SECURITY_ALLOW_EMBEDDING: "true"

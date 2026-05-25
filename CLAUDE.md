@@ -96,6 +96,9 @@ container recreation.
   handoffs, including Portainer's OAuth button, Mattermost's browser handoff and
   local admin login, Homarr native Authentik/OIDC, and proxy-gated landing
   checks for Woodpecker, OpenClaw, and Paperclip.
+- Grafana sets `GF_AUTH_OAUTH_ALLOW_INSECURE_EMAIL_LOOKUP=true` so the managed
+  `auth-admin` account can re-link by email after Authentik recovery changes the
+  upstream OAuth subject.
 - `homelab service <slug> smoke` runs the manifest-owned `smoke_flow`; do not
   declare a `smoke_flow` unless `internal/smoketest` has an executable flow with
   that exact name.
