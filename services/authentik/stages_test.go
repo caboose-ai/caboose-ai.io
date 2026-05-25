@@ -161,6 +161,110 @@ func TestCreateCaptchaStage(t *testing.T) {
 	}
 }
 
+func TestRedirectStageLifecycle(t *testing.T) {
+	var patchBody map[string]any
+	client := &Client{
+		BaseURL: "http://localhost",
+		Token:   "test-token",
+		HTTP: &mockHTTPClient{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				switch {
+				case req.Method == http.MethodGet:
+					if !strings.Contains(req.URL.String(), "name=google-account-logout-redirect") {
+						t.Fatalf("unexpected redirect stage lookup URL: %s", req.URL.String())
+					}
+					return mockResponse(200, `{"results":[{"pk":"redirect-1","name":"google-account-logout-redirect","keep_context":false,"mode":"static","target_static":"https://accounts.google.com/Logout"}]}`), nil
+				case req.Method == http.MethodPost:
+					return mockResponse(201, `{"pk":"redirect-2","name":"google-account-logout-redirect","keep_context":false,"mode":"static","target_static":"https://accounts.google.com/Logout"}`), nil
+				case req.Method == http.MethodPatch:
+					data, err := io.ReadAll(req.Body)
+					if err != nil {
+						t.Fatalf("reading request body: %v", err)
+					}
+					if err := json.Unmarshal(data, &patchBody); err != nil {
+						t.Fatalf("parsing request body: %v", err)
+					}
+					return mockResponse(200, `{}`), nil
+				default:
+					t.Fatalf("unexpected method: %s", req.Method)
+					return nil, nil
+				}
+			},
+		},
+	}
+
+	stage, err := client.GetRedirectStage(context.Background(), "google-account-logout-redirect")
+	if err != nil {
+		t.Fatalf("GetRedirectStage returned error: %v", err)
+	}
+	if stage == nil || stage.PK != "redirect-1" || stage.TargetStatic != "https://accounts.google.com/Logout" {
+		t.Fatalf("GetRedirectStage = %+v", stage)
+	}
+
+	created, err := client.CreateRedirectStage(context.Background(), RedirectStageParams{
+		Name:         "google-account-logout-redirect",
+		Mode:         "static",
+		TargetStatic: "https://accounts.google.com/Logout",
+	})
+	if err != nil {
+		t.Fatalf("CreateRedirectStage returned error: %v", err)
+	}
+	if created.PK != "redirect-2" {
+		t.Fatalf("created PK = %q, want redirect-2", created.PK)
+	}
+
+	err = client.PatchRedirectStage(context.Background(), "redirect-1", RedirectStageParams{
+		Name:         "google-account-logout-redirect",
+		Mode:         "static",
+		TargetStatic: "https://accounts.google.com/Logout",
+	})
+	if err != nil {
+		t.Fatalf("PatchRedirectStage returned error: %v", err)
+	}
+	if patchBody["target_static"] != "https://accounts.google.com/Logout" {
+		t.Fatalf("target_static = %#v", patchBody["target_static"])
+	}
+}
+
+func TestUserLogoutStageLifecycle(t *testing.T) {
+	client := &Client{
+		BaseURL: "http://localhost",
+		Token:   "test-token",
+		HTTP: &mockHTTPClient{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				switch req.Method {
+				case http.MethodGet:
+					if !strings.Contains(req.URL.String(), "name=default-invalidation-logout") {
+						t.Fatalf("unexpected user logout stage lookup URL: %s", req.URL.String())
+					}
+					return mockResponse(200, `{"results":[{"pk":"logout-1","name":"default-invalidation-logout"}]}`), nil
+				case http.MethodPost:
+					return mockResponse(201, `{"pk":"logout-2","name":"default-invalidation-logout"}`), nil
+				default:
+					t.Fatalf("unexpected method: %s", req.Method)
+					return nil, nil
+				}
+			},
+		},
+	}
+
+	stage, err := client.GetUserLogoutStage(context.Background(), "default-invalidation-logout")
+	if err != nil {
+		t.Fatalf("GetUserLogoutStage returned error: %v", err)
+	}
+	if stage == nil || stage.PK != "logout-1" {
+		t.Fatalf("GetUserLogoutStage = %+v", stage)
+	}
+
+	created, err := client.CreateUserLogoutStage(context.Background(), "default-invalidation-logout")
+	if err != nil {
+		t.Fatalf("CreateUserLogoutStage returned error: %v", err)
+	}
+	if created.PK != "logout-2" {
+		t.Fatalf("created PK = %q, want logout-2", created.PK)
+	}
+}
+
 func TestGetUserWriteStage(t *testing.T) {
 	tests := []struct {
 		name    string

@@ -30,6 +30,34 @@ type UserWriteStage struct {
 	CreateUsersAsInactive bool   `json:"create_users_as_inactive"`
 }
 
+type UserLogoutStage struct {
+	PK   string `json:"pk"`
+	Name string `json:"name"`
+}
+
+type userLogoutStageList struct {
+	Results []UserLogoutStage `json:"results"`
+}
+
+type RedirectStage struct {
+	PK           string `json:"pk"`
+	Name         string `json:"name"`
+	KeepContext  bool   `json:"keep_context"`
+	Mode         string `json:"mode"`
+	TargetStatic string `json:"target_static"`
+}
+
+type RedirectStageParams struct {
+	Name         string `json:"name"`
+	KeepContext  bool   `json:"keep_context"`
+	Mode         string `json:"mode"`
+	TargetStatic string `json:"target_static"`
+}
+
+type redirectStageList struct {
+	Results []RedirectStage `json:"results"`
+}
+
 func (c *Client) GetCaptchaStage(ctx context.Context, name string) (*CaptchaStage, error) {
 	data, err := c.Get(ctx, fmt.Sprintf("/api/v3/stages/captcha/?name=%s", url.QueryEscape(name)))
 	if err != nil {
@@ -44,6 +72,72 @@ func (c *Client) GetCaptchaStage(ctx context.Context, name string) (*CaptchaStag
 		return nil, nil
 	}
 	return &list.Results[0], nil
+}
+
+func (c *Client) GetRedirectStage(ctx context.Context, name string) (*RedirectStage, error) {
+	data, err := c.Get(ctx, fmt.Sprintf("/api/v3/stages/redirect/?name=%s", url.QueryEscape(name)))
+	if err != nil {
+		return nil, err
+	}
+
+	var list redirectStageList
+	if err := json.Unmarshal(data, &list); err != nil {
+		return nil, fmt.Errorf("parsing redirect stage response: %w", err)
+	}
+	if len(list.Results) == 0 {
+		return nil, nil
+	}
+	return &list.Results[0], nil
+}
+
+func (c *Client) CreateRedirectStage(ctx context.Context, params RedirectStageParams) (*RedirectStage, error) {
+	data, err := c.Post(ctx, "/api/v3/stages/redirect/", params)
+	if err != nil {
+		return nil, fmt.Errorf("creating redirect stage %q: %w", params.Name, err)
+	}
+
+	var stage RedirectStage
+	if err := json.Unmarshal(data, &stage); err != nil {
+		return nil, fmt.Errorf("parsing created redirect stage: %w", err)
+	}
+	return &stage, nil
+}
+
+func (c *Client) PatchRedirectStage(ctx context.Context, pk string, params RedirectStageParams) error {
+	_, err := c.Patch(ctx, fmt.Sprintf("/api/v3/stages/redirect/%s/", pk), params)
+	if err != nil {
+		return fmt.Errorf("patching redirect stage %q: %w", pk, err)
+	}
+	return nil
+}
+
+func (c *Client) GetUserLogoutStage(ctx context.Context, name string) (*UserLogoutStage, error) {
+	data, err := c.Get(ctx, fmt.Sprintf("/api/v3/stages/user_logout/?name=%s", url.QueryEscape(name)))
+	if err != nil {
+		return nil, err
+	}
+
+	var list userLogoutStageList
+	if err := json.Unmarshal(data, &list); err != nil {
+		return nil, fmt.Errorf("parsing user logout stage response: %w", err)
+	}
+	if len(list.Results) == 0 {
+		return nil, nil
+	}
+	return &list.Results[0], nil
+}
+
+func (c *Client) CreateUserLogoutStage(ctx context.Context, name string) (*UserLogoutStage, error) {
+	data, err := c.Post(ctx, "/api/v3/stages/user_logout/", map[string]string{"name": name})
+	if err != nil {
+		return nil, fmt.Errorf("creating user logout stage %q: %w", name, err)
+	}
+
+	var stage UserLogoutStage
+	if err := json.Unmarshal(data, &stage); err != nil {
+		return nil, fmt.Errorf("parsing created user logout stage: %w", err)
+	}
+	return &stage, nil
 }
 
 func (c *Client) CreateCaptchaStage(ctx context.Context, params CreateCaptchaStageParams) (*CaptchaStage, error) {

@@ -117,6 +117,37 @@ func TestSSO_Config(t *testing.T) {
 		t.Logf("brand %q: uuid=%s, recovery flow pk=%s", brand.Domain, brand.BrandUUID, flow.PK)
 	})
 
+	t.Run("LogoutFlows", func(t *testing.T) {
+		redirect, err := s.AK.GetRedirectStage(ctx, "google-account-logout-redirect")
+		if err != nil {
+			t.Fatalf("GetRedirectStage: %v", err)
+		}
+		if redirect == nil {
+			t.Fatal("google-account-logout-redirect stage not found")
+		}
+		if redirect.Mode != "static" {
+			t.Fatalf("google-account-logout-redirect mode=%q, want static", redirect.Mode)
+		}
+		if redirect.TargetStatic != "https://accounts.google.com/Logout" {
+			t.Fatalf("google-account-logout-redirect target_static=%q, want Google logout", redirect.TargetStatic)
+		}
+
+		logout, err := s.AK.GetUserLogoutStage(ctx, "default-invalidation-logout")
+		if err != nil {
+			t.Fatalf("GetUserLogoutStage: %v", err)
+		}
+		if logout == nil {
+			t.Fatal("default-invalidation-logout stage not found")
+		}
+
+		for _, flowSlug := range []string{"default-invalidation-flow", "default-provider-invalidation-flow"} {
+			t.Run(flowSlug, func(t *testing.T) {
+				assertFlowStageBinding(t, s.AK, ctx, flowSlug, logout.PK, "user logout")
+				assertFlowStageBinding(t, s.AK, ctx, flowSlug, redirect.PK, "Google logout redirect")
+			})
+		}
+	})
+
 	t.Run("SocialSources", func(t *testing.T) {
 		stage, err := s.AK.GetIdentificationStage(ctx, "default-authentication-flow")
 		if err != nil {
@@ -228,4 +259,15 @@ func TestSSO_Config(t *testing.T) {
 			t.Error("user-write stage does not have create_users_as_inactive=true")
 		}
 	})
+}
+
+func assertFlowStageBinding(t *testing.T, client *authentik.Client, ctx context.Context, flowSlug, stagePK, label string) {
+	t.Helper()
+	binding, err := client.GetFlowStageBinding(ctx, flowSlug, stagePK)
+	if err != nil {
+		t.Fatalf("GetFlowStageBinding(%s, %s): %v", flowSlug, label, err)
+	}
+	if binding == nil {
+		t.Fatalf("%s stage is not bound to %s", label, flowSlug)
+	}
 }

@@ -198,6 +198,23 @@ func RunInstall(ctx context.Context, inst *install.Installer) int {
 	}
 	console.Success("brand recovery flow ready")
 
+	console.Run("configuring Authentik logout flow")
+	if err := inst.ConfigureLogoutFlows(ctx); err != nil {
+		if install.IsAuthentikTokenError(err) {
+			console.Warn("Authentik bootstrap token is invalid; recovering from running container")
+			if recoverErr := inst.RecoverAuthentikBootstrapToken(ctx); recoverErr != nil {
+				console.Error("admin token recovery failed", "error", recoverErr)
+				return 3
+			}
+			err = inst.ConfigureLogoutFlows(ctx)
+		}
+		if err != nil {
+			console.Error("logout flow setup failed", "error", err)
+			return 3
+		}
+	}
+	console.Success("logout flow ready")
+
 	console.Run("generating admin recovery link")
 	recoveryLink, err := inst.GenerateAdminRecoveryLink(ctx, nil)
 	if err != nil {
