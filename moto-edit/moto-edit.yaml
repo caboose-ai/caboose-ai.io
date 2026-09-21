@@ -170,7 +170,7 @@ spec:
           # summary.compact. Gate: 222 PASS / 2 SKIP / 0 FAIL.
           # Roll back with :v1.5.0-go (the HUD as it was, GPS-only speed),
           # :v1.4.0-go (dash reader still present), or :v0.22.0 (Node).
-          image: localhost:5000/moto-edit:v1.25.0-go
+          image: localhost:5000/moto-edit:v1.26.0-go
           imagePullPolicy: IfNotPresent
           # NOT privileged. It was, for a hardware encoder that has never
           # recorded a use (0 of 92 records mention vaapi; every export used
@@ -212,6 +212,13 @@ spec:
               value: "8080"
             - name: DATA_DIR
               value: /data
+            # v1.26.0-go: the public, read-only gallery at /gallery — every ready
+            # video, no login, 720p preview streams only, no downloads, no GPS
+            # tracks or metadata (internal/gallery). The owner chose to publish
+            # the whole library, raw uploads included, on 2026-09-21. To take it
+            # offline, delete these two lines and apply; /gallery then 404s.
+            - name: PUBLIC_GALLERY
+              value: "on"
             # SPEC19 (v0.13.0). The zone the RIDE happened in — NOT a display
             # preference. The helmet camera writes LOCAL wall-clock time into
             # creation_time with a spurious `Z`, so `recordedAt` is local time
