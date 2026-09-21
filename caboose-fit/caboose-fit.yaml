@@ -67,7 +67,7 @@ spec:
           # `kubectl -n caboose-fit set image` do NOT write back here, so this line
           # goes stale silently and a later `kubectl apply -f` would roll
           # production back to whatever it says.
-          image: localhost:5000/caboose-fit:v0.3.2
+          image: localhost:5000/caboose-fit:v0.3.3
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
