@@ -1,0 +1,73 @@
+# Landing page for the apex (caboose-ai.io).
+# The HTML lives in index.html next to this file; deploy/update with:
+#   kubectl create configmap landing-html --from-file=index.html --from-file=moto-edit.html --from-file=privacy.html --from-file=tos.html -o yaml --dry-run=client | kubectl apply -f -
+#   (list EVERY html file: recreating from a partial list deletes the rest)
+#   kubectl create configmap landing-nginx --from-file=default.conf=nginx-default.conf -o yaml --dry-run=client | kubectl apply -f -
+#   kubectl apply -f landing.yaml
+#   kubectl rollout restart deploy/landing   # after HTML-only changes
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: landing
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: landing
+  template:
+    metadata:
+      labels:
+        app: landing
+    spec:
+      containers:
+        - name: nginx
+          image: nginxinc/nginx-unprivileged@sha256:6320020c7da8714feab524e02c08c5a1958675c4e68700e93a2fd8970b065786
+          ports:
+            - containerPort: 8080
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 100m, memory: 64Mi }
+          volumeMounts:
+            - name: html
+              mountPath: /usr/share/nginx/html
+            - name: nginx-conf
+              mountPath: /etc/nginx/conf.d
+      volumes:
+        - name: html
+          configMap:
+            name: landing-html
+        - name: nginx-conf
+          configMap:
+            name: landing-nginx
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: landing
+  namespace: default
+spec:
+  selector:
+    app: landing
+  ports:
+    - port: 80
+      targetPort: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: landing
+  namespace: default
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: caboose-ai.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: landing
+                port:
+                  number: 80

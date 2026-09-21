@@ -1,0 +1,133 @@
+# Palworld dedicated server (thijsvanloef/palworld-server-docker).
+#
+# One-time setup (secrets are never stored in this file):
+#   kubectl create namespace palworld
+#   kubectl -n palworld create secret generic palworld-passwords \
+#     --from-literal=SERVER_PASSWORD="..." --from-literal=ADMIN_PASSWORD="..."
+#   (both also stored in the 1Password item "palworld.caboose-ai.io")
+# Deploy / update:
+#   kubectl apply -f palworld.yaml
+#
+# How players connect (game password required):
+#   LAN:      192.168.50.42:8211 (klipper-lb binds the node port, UDP)
+#   Internet: pw.caboose-ai.io:58417 — DNS-only Cloudflare CNAME to
+#             hill-separation.gl.at.ply.gg, a playit.gg raw UDP tunnel ->
+#             this service's ClusterIP:8211 (created via api.playit.gg, same
+#             agent as minecraft — see ../minecraft/playit.yaml for API
+#             notes). Palworld has no SRV support, so the port is required;
+#             it changes if the playit tunnel is ever recreated.
+#
+# Backups: the image's built-in cron (BACKUP_CRON_EXPRESSION) tars the save
+# to /palworld/backups on the same PVC nightly at 4:45am ET, 14-day prune.
+# First boot downloads ~8GB via steamcmd — startupProbe allows ~30 min.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: palworld-data
+  namespace: palworld
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 40Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: palworld
+  namespace: palworld
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate   # single save on a RWO volume
+  selector:
+    matchLabels:
+      app: palworld
+  template:
+    metadata:
+      labels:
+        app: palworld
+    spec:
+      enableServiceLinks: false   # same injected-env hazard as the minecraft ns
+      containers:
+        - name: palworld
+          image: thijsvanloef/palworld-server-docker:latest
+          env:
+            - { name: PUID, value: "1000" }
+            - { name: PGID, value: "1000" }
+            - { name: PORT, value: "8211" }
+            - { name: PLAYERS, value: "16" }
+            - { name: SERVER_NAME, value: "caboose-ai.io — pals at the end of the train" }
+            - { name: COMMUNITY, value: "false" }   # keep off the public server list
+            - { name: MULTITHREADING, value: "true" }
+            - { name: UPDATE_ON_BOOT, value: "true" }
+            - { name: RCON_ENABLED, value: "true" }
+            - { name: RCON_PORT, value: "25575" }
+            # -- chill-friends preset (2026-07-24): QoL over grind, not 10x-everything --
+            - { name: EXP_RATE, value: "2" }
+            - { name: PAL_CAPTURE_RATE, value: "2" }
+            - { name: PAL_EGG_DEFAULT_HATCHING_TIME, value: "2" }   # hours; default 72
+            - { name: ITEM_WEIGHT_RATE, value: "0.5" }
+            - { name: ENEMY_DROP_ITEM_RATE, value: "2" }
+            - { name: COLLECTION_DROP_RATE, value: "2" }
+            - { name: WORK_SPEED_RATE, value: "1.5" }
+            - { name: PAL_STOMACH_DECREASE_RATE, value: "0.5" }
+            - { name: PAL_STAMINA_DECREASE_RATE, value: "0.5" }
+            - { name: PAL_SPAWN_NUM_RATE, value: "1.5" }
+            - { name: BUILD_OBJECT_DETERIORATION_DAMAGE_RATE, value: "0" }   # no structure decay
+            - { name: DEATH_PENALTY, value: "ItemAndEquipment" }   # default All also drops your pals
+            - { name: BASE_CAMP_WORKER_MAX_NUM, value: "20" }
+            - { name: BASE_CAMP_MAX_NUM_IN_GUILD, value: "8" }
+            - { name: BACKUP_ENABLED, value: "true" }
+            - { name: BACKUP_CRON_EXPRESSION, value: "45 4 * * *" }
+            - { name: DELETE_OLD_BACKUPS, value: "true" }
+            - { name: OLD_BACKUP_DAYS, value: "14" }
+            - { name: TZ, value: "America/New_York" }
+            - name: SERVER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: palworld-passwords
+                  key: SERVER_PASSWORD
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: palworld-passwords
+                  key: ADMIN_PASSWORD
+          ports:
+            - { containerPort: 8211, protocol: UDP, name: game }
+            - { containerPort: 25575, name: rcon }
+          startupProbe:
+            tcpSocket: { port: 25575 }   # rcon comes up once the server is running
+            periodSeconds: 15
+            failureThreshold: 120   # first boot: steamcmd downloads the server
+          livenessProbe:
+            tcpSocket: { port: 25575 }
+            periodSeconds: 30
+            failureThreshold: 4
+          resources:
+            requests: { cpu: "2", memory: 10Gi }
+            limits: { memory: 16Gi }   # no cpu limit, same reasoning as minecraft
+          volumeMounts:
+            - name: data
+              mountPath: /palworld
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: palworld-data
+---
+# LoadBalancer so klipper-lb binds UDP 8211 on the node IP for LAN players;
+# the playit tunnel reaches the same service via its ClusterIP.
+apiVersion: v1
+kind: Service
+metadata:
+  name: palworld
+  namespace: palworld
+spec:
+  type: LoadBalancer
+  selector:
+    app: palworld
+  ports:
+    - port: 8211
+      targetPort: 8211
+      protocol: UDP
+      name: game

@@ -1,18 +1,11 @@
-bin/
-.claude/
+# Image tarballs staged by each app's deploy/build.sh. Hundreds of MB, and
+# rebuildable from the app repo at the tagged version.
+*.tar
+
+# Secrets never live here — every manifest reads them from a Secret created
+# out-of-band with kubectl. This is a backstop, not the mechanism.
 .env
-.playwright-mcp/
-.remember/
-.superpowers/
-docs/superpowers/
-docs/evidence/
-/homelab
-mcp-request*.json
-mcp-release*.json
-tmp-comment.json
-dev/homelab/caddy.paperclip.example
-*.png
-__pycache__/
-*.pyc
-internal/smoketest/testdata/failures/
-internal/smoketest/testdata/evidence/
+*.env
+*-secret.yaml
+*.key
+*.pem

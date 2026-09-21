@@ -1,0 +1,50 @@
+# playit.gg agent — public Minecraft access without cloudflared on the client.
+#
+# One-time setup (secret key lives in 1Password item "mc.caboose-ai.io"):
+#   kubectl -n minecraft create secret generic playit-agent \
+#     --from-literal=SECRET_KEY=<key>
+# Deploy / update:
+#   kubectl apply -f playit.yaml
+#
+# Tunnels live in the playit.gg account, created via POST
+# api.playit.gg/tunnels/create with "Authorization: agent-key <key>"
+# (schema: playit-cloud/playit-minecraft-plugin agentkey_schema.ts).
+# Both origin at 10.43.170.23:25565 — the mc Service ClusterIP; playit local
+# addresses must be IPs, so update the tunnels if the Service is recreated:
+#   mc-custom-domain  raw TCP  -> window-yeast.gl.at.ply.gg:59119
+#     Player address: mc.caboose-ai.io via Cloudflare SRV record
+#     _minecraft._tcp.mc.caboose-ai.io -> 1 1 59119 window-yeast.gl.at.ply.gg
+#     (raw TCP because minecraft-java tunnels reject handshakes whose
+#     hostname isn't a playit domain — custom domains are premium-only)
+#   mc-k3s  minecraft-java -> hill-separation.gl.joinmc.link (fallback)
+# LAN players keep using 192.168.50.42:25565.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: playit
+  namespace: minecraft
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate   # one agent per secret key; two would fight over the session
+  selector:
+    matchLabels:
+      app: playit
+  template:
+    metadata:
+      labels:
+        app: playit
+    spec:
+      enableServiceLinks: false   # same MC_PORT=tcp://... env hazard as the other pods
+      containers:
+        - name: playit
+          image: ghcr.io/playit-cloud/playit-agent:0.17
+          env:
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: playit-agent
+                  key: SECRET_KEY
+          resources:
+            requests: { cpu: 25m, memory: 32Mi }
+            limits: { cpu: 500m, memory: 128Mi }

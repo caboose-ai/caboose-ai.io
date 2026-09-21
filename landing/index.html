@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>caboose-ai.io — the lab at the end of the train</title>
+<meta name="description" content="A self-hosted homelab running on k3s behind a Cloudflare Tunnel. Live status included.">
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --border: #2d333b;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #f0883e;
+    --green: #3fb950;
+    --red: #f85149;
+    --link: #58a6ff;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f6f8fa;
+      --panel: #ffffff;
+      --border: #d0d7de;
+      --text: #1f2328;
+      --muted: #656d76;
+      --accent: #bc4c00;
+      --green: #1a7f37;
+      --red: #cf222e;
+      --link: #0969da;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 3rem 1.25rem 4rem;
+  }
+  main { max-width: 46rem; width: 100%; }
+  .train {
+    font-size: 1.6rem;
+    letter-spacing: .12em;
+    margin-bottom: 1.5rem;
+    user-select: none;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .train .caboose { text-shadow: 0 0 14px var(--accent); }
+  h1 { font-size: 2.1rem; line-height: 1.2; margin-bottom: .6rem; }
+  h1 .dot { color: var(--accent); }
+  .tagline { color: var(--muted); margin-bottom: 2.5rem; font-size: 1.05rem; }
+  h2 {
+    font-size: 1.05rem;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--accent);
+    margin: 2.4rem 0 .9rem;
+    display: flex;
+    align-items: baseline;
+    gap: .8rem;
+  }
+  p { margin-bottom: 1rem; }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.1rem 1.3rem;
+    margin-bottom: .8rem;
+  }
+  .flow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+    align-items: center;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: .85rem;
+  }
+  .flow .hop {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: .45rem .8rem;
+  }
+  .flow .arrow { color: var(--accent); }
+  ul.labs { list-style: none; }
+  ul.labs li {
+    display: flex;
+    align-items: baseline;
+    gap: .7rem;
+    padding: .55rem 0;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  ul.labs li:last-child { border-bottom: none; }
+  .status {
+    font-size: .72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    padding: .15rem .55rem;
+    border-radius: 999px;
+    white-space: nowrap;
+    min-width: 4.6rem;
+    text-align: center;
+  }
+  .live { color: var(--green); border: 1px solid var(--green); }
+  .down { color: var(--red); border: 1px solid var(--red); }
+  .soon { color: var(--muted); border: 1px solid var(--border); }
+  /* Deliberately stopped, not broken — the game servers idle at zero replicas
+     until someone asks for one. A red "down" pill would be a lie. */
+  .off { color: var(--muted); border: 1px dashed var(--border); }
+  .checking {
+    color: var(--muted);
+    border: 1px solid var(--border);
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes pulse { 50% { opacity: .35; } }
+  .labname { font-weight: 600; }
+  .labdesc { color: var(--muted); font-size: .92rem; }
+  .ms { color: var(--muted); font-size: .8rem; font-family: ui-monospace, Menlo, Consolas, monospace; margin-left: auto; }
+  .meta {
+    color: var(--muted);
+    font-size: .78rem;
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+    margin-left: auto;
+  }
+  .meta button {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--muted);
+    font: inherit;
+    padding: .1rem .5rem;
+    cursor: pointer;
+    margin-left: .5rem;
+  }
+  .meta button:hover { color: var(--text); border-color: var(--muted); }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: .85em;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: .05rem .35rem;
+  }
+  .panel pre {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: .8rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: .6rem .8rem;
+    overflow-x: auto;
+    margin-bottom: .6rem;
+  }
+  .muted-note { color: var(--muted); font-size: .85rem; margin: .1rem 0 0 .2rem; }
+  footer { margin-top: 3rem; color: var(--muted); font-size: .85rem; text-align: center; }
+</style>
+</head>
+<body>
+<main>
+  <div class="train" aria-hidden="true">🚂&hairsp;━&hairsp;🚃&hairsp;━&hairsp;🚃&hairsp;━&hairsp;🚃&hairsp;━&hairsp;<span class="caboose">🚋</span></div>
+
+  <h1>caboose-ai<span class="dot">.io</span></h1>
+  <p class="tagline">The lab at the end of the train — a self-hosted playground for things that probably shouldn't be on the internet, carefully put on the internet.</p>
+
+  <h2>What is this?</h2>
+  <p>A single machine in a home office, rebuilt from a clean slate into a small Kubernetes lab. Everything you can reach under this domain runs there — no cloud compute, no rented servers.</p>
+
+  <h2>How traffic gets here</h2>
+  <div class="panel">
+    <div class="flow">
+      <span class="hop">you</span><span class="arrow">→</span>
+      <span class="hop">Cloudflare edge</span><span class="arrow">→</span>
+      <span class="hop">tunnel</span><span class="arrow">→</span>
+      <span class="hop">traefik</span><span class="arrow">→</span>
+      <span class="hop">k3s pod</span>
+    </div>
+  </div>
+  <p>The box dials <em>out</em> to Cloudflare and keeps that tunnel open; requests ride back down it. There are no forwarded ports, no inbound firewall holes, and the origin IP isn't in DNS. The only thing listening on the machine's network edge is SSH, from the LAN.</p>
+
+  <h2>The stack</h2>
+  <div class="panel">
+    <p style="margin:0"><strong>k3s</strong> (single-node Kubernetes) · <strong>traefik</strong> ingress · <strong>cloudflared</strong> tunnel connectors · plain YAML manifests, no Helm charts in anger yet. Deployed and wired up with <a href="https://claude.com/claude-code">Claude Code</a>.</p>
+  </div>
+
+  <h2>Projects <span class="meta"><span id="stamp">checking…</span><button id="refresh" type="button">↻ refresh</button></span></h2>
+  <div class="panel">
+    <ul class="labs" id="statusList">
+      <li data-check="self">
+        <span class="status checking">checking</span>
+        <span class="labname">platform</span>
+        <span class="labdesc">edge → tunnel → traefik → this page</span>
+        <span class="ms"></span>
+      </li>
+      <li data-check="https://edit.caboose-ai.io/healthz">
+        <span class="status checking">checking</span>
+        <span class="labname"><a href="https://edit.caboose-ai.io">moto&#8209;edit</a></span>
+        <span class="labdesc">motorcycle ride-video editor — trims, GPS overlays and a highlight reel, all on this box</span>
+        <span class="ms"></span>
+      </li>
+      <li data-check="mc" data-offlabel="paused">
+        <span class="status checking">checking</span>
+        <span class="labname"><a href="#games">minecraft</a></span>
+        <span class="labdesc">Fabric survival on mc.caboose-ai.io — whitelisted, started on request, how to join below</span>
+        <span class="ms"></span>
+      </li>
+      <li>
+        <span class="status off">paused</span>
+        <span class="labname"><a href="#games">palworld</a></span>
+        <span class="labdesc">dedicated server on pw.caboose-ai.io — password-gated, started on request, how to join below</span>
+        <span class="ms"></span>
+      </li>
+      <li data-check="https://labs.caboose-ai.io/whoami">
+        <span class="status checking">checking</span>
+        <span class="labname"><a href="https://labs.caboose-ai.io/whoami">whoami</a></span>
+        <span class="labdesc">the classic ingress smoke test — echoes what the cluster sees</span>
+        <span class="ms"></span>
+      </li>
+      <li>
+        <span class="status soon">building</span>
+        <span class="labname">caboose&#8209;fi</span>
+        <span class="labdesc">personal finance and financial-independence tracker — landing at cab-fi.caboose-ai.io</span>
+        <span class="ms"></span>
+      </li>
+      <li>
+        <span class="status soon">building</span>
+        <span class="labname">caboose&#8209;fit</span>
+        <span class="labdesc">self-hosted fitness tracker: workouts, lifts and bodyweight — landing at fit.caboose-ai.io</span>
+        <span class="ms"></span>
+      </li>
+      <li>
+        <span class="status soon">rebuilding</span>
+        <span class="labname">moto&#8209;safety&#8209;router</span>
+        <span class="labdesc">motorcycle route planner comparing candidate routes on relative estimated risk (Rochester, NY)</span>
+        <span class="ms"></span>
+      </li>
+    </ul>
+  </div>
+  <p class="muted-note">Behind these sit the unglamorous ones: Prometheus, Loki and Grafana for metrics and logs, an MCP bridge, and a health endpoint the whole thing is watched through.</p>
+
+  <h2 id="games">Game servers</h2>
+  <div class="panel">
+    <p style="margin-bottom:.9rem">Both of these sit at zero replicas when nobody is playing — a game server idling all week is the one workload on this box that would actually be expensive. Ask and it's up in about a minute.</p>
+    <p style="margin-bottom:.4rem"><strong>Minecraft — mc.caboose-ai.io</strong>. Fabric survival on the current release, whitelist only. Ask for a spot, then add a server with the address <code>mc.caboose-ai.io</code> and join; an SRV record carries the port, so there is nothing to append and nothing to install. On the home LAN, use <code>192.168.50.42</code> instead.</p>
+    <p style="margin:0"><strong>Palworld — pw.caboose-ai.io:58417</strong>. Password-gated; ask for the password. Join from the in-game <em>Join Multiplayer Game</em> box by IP, address and port together. On the home LAN, <code>192.168.50.42:8211</code>.</p>
+  </div>
+  <p class="muted-note">Unlike this page, the game traffic doesn't ride the Cloudflare tunnel — Cloudflare's free plan won't proxy arbitrary TCP or UDP, so both run through a <a href="https://playit.gg">playit.gg</a> relay instead. Still no forwarded ports, still no origin IP in DNS.</p>
+
+  <footer>
+    caboose <em>(n.)</em> — the last car of a freight train, from which the crew kept watch over everything ahead.
+    <div style="margin-top:1rem"><a href="/moto-edit">Moto Edit</a> · <a href="/privacy">Privacy</a> · <a href="/tos">Terms</a></div>
+  </footer>
+</main>
+
+<script>
+(() => {
+  "use strict";
+  const rows = document.querySelectorAll("li[data-check]");
+  const stamp = document.getElementById("stamp");
+
+  async function ping(target) {
+    if (target === "mc") {
+      // same-origin JSON from the in-cluster status prober (see /mc/status)
+      const t0 = performance.now();
+      try {
+        const res = await fetch("/mc/status?t=" + Date.now(), { cache: "no-store", signal: AbortSignal.timeout(8000) });
+        const data = await res.json();
+        if (!res.ok || !data.online) return { ok: false };
+        return {
+          ok: true,
+          ms: Math.round(performance.now() - t0),
+          note: data.players.online + "/" + data.players.max + " playing · ",
+        };
+      } catch {
+        return { ok: false };
+      }
+    }
+    const opts = { cache: "no-store", signal: AbortSignal.timeout(8000) };
+    // Cross-origin labs don't send CORS headers; an opaque no-cors response
+    // still proves the endpoint answered. Same-origin ("self") is readable.
+    if (target !== "self") opts.mode = "no-cors";
+    const url = target === "self" ? "/?ping=" + Date.now() : target;
+    const t0 = performance.now();
+    try {
+      const res = await fetch(url, opts);
+      if (target === "self" && !res.ok) return { ok: false };
+      return { ok: true, ms: Math.round(performance.now() - t0) };
+    } catch {
+      return { ok: false };
+    }
+  }
+
+  function paint(row, result) {
+    const pill = row.querySelector(".status");
+    const ms = row.querySelector(".ms");
+    // A row with data-offlabel is something that is switched off on purpose
+    // (the game servers idle at zero replicas). Not answering is its normal
+    // resting state, so it gets a muted label instead of a red "down".
+    const offLabel = row.dataset.offlabel;
+    pill.classList.remove("checking", "live", "down", "off");
+    pill.classList.add(result.ok ? "live" : offLabel ? "off" : "down");
+    pill.textContent = result.ok ? "live" : offLabel || "down";
+    ms.textContent = result.ok ? (result.note || "") + result.ms + " ms" : "";
+  }
+
+  async function run() {
+    stamp.textContent = "checking…";
+    await Promise.all([...rows].map(async row => {
+      const pill = row.querySelector(".status");
+      pill.classList.remove("live", "down");
+      pill.classList.add("checking");
+      pill.textContent = "checking";
+      paint(row, await ping(row.dataset.check));
+    }));
+    stamp.textContent = "checked " + new Date().toLocaleTimeString();
+  }
+
+  document.getElementById("refresh").addEventListener("click", run);
+  setInterval(run, 60000);
+  run();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,172 @@
+# caboose-fit: namespace, PVC, deployment, services, ingress.
+#
+# NOTE: the secret `caboose-fit-secrets` is intentionally NOT defined here. Create
+# it out-of-band (same pattern as moto-edit and the cluster's tunnel token):
+#
+#   kubectl -n caboose-fit create secret generic caboose-fit-secrets \
+#     --from-literal=APP_PASSWORD='<password>' \
+#     --from-literal=SESSION_SECRET="$(openssl rand -hex 32)"
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: caboose-fit
+---
+# /data holds state.json — every record the app has. It is a real volume, not
+# an emptyDir: an emptyDir here means a pod restart silently loses everything.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: caboose-fit-data
+  namespace: caboose-fit
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: caboose-fit
+  namespace: caboose-fit
+spec:
+  replicas: 1
+  # Recreate, not RollingUpdate: the PVC is ReadWriteOnce, and two pods would
+  # also mean two writers racing on the same state.json.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: caboose-fit
+  template:
+    metadata:
+      labels:
+        app: caboose-fit
+      # The cluster's Prometheus has a generic `kubernetes-pods` job that keeps
+      # any pod carrying these annotations, so this needs no scrape-config
+      # change of its own. Metrics are on 9090, a port no Service or Ingress
+      # exposes — the Ingress fronts every path on 8080, so they cannot live
+      # there.
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: /metrics
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: caboose-fit
+          # Pulled from the node's local registry, NOT a containerd-imported
+          # tag. A bare `caboose-fit:vX` here makes k3s try Docker Hub and fail with
+          # ImagePullBackOff -- the mistake that took moto-edit down twice.
+          #
+          # KEEP THIS IN SYNC WITH WHAT IS DEPLOYED. Releases shipped with
+          # `kubectl -n caboose-fit set image` do NOT write back here, so this line
+          # goes stale silently and a later `kubectl apply -f` would roll
+          # production back to whatever it says.
+          image: localhost:5000/caboose-fit:v0.1.1
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          ports:
+            - containerPort: 8080
+              name: http
+            - containerPort: 9090
+              name: metrics
+          env:
+            - name: PORT
+              value: "8080"
+            - name: DATA_DIR
+              value: /data
+            - name: PUBLIC_DIR
+              value: /app/public
+            - name: TZ
+              value: America/New_York
+            - name: BASE_URL
+              value: https://fit.caboose-ai.io
+            - name: APP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: caboose-fit-secrets
+                  key: APP_PASSWORD
+            - name: SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: caboose-fit-secrets
+                  key: SESSION_SECRET
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 20
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: caboose-fit-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: caboose-fit
+  namespace: caboose-fit
+spec:
+  selector:
+    app: caboose-fit
+  ports:
+    - port: 80
+      targetPort: 8080
+---
+# LAN access without going out through Cloudflare and back.
+apiVersion: v1
+kind: Service
+metadata:
+  name: caboose-fit-lan
+  namespace: caboose-fit
+spec:
+  type: NodePort
+  selector:
+    app: caboose-fit
+  ports:
+    - port: 8080
+      targetPort: 8080
+      nodePort: 30083
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: caboose-fit
+  namespace: caboose-fit
+spec:
+  ingressClassName: traefik
+  rules:
+    # Single-level hostname, per the cluster's Cloudflare Tunnel rule:
+    # anything deeper than one label is not covered by the edge certificate.
+    - host: fit.caboose-ai.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: caboose-fit
+                port:
+                  number: 80

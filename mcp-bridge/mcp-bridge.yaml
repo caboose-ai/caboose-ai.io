@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-bridge
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp-bridge
+  template:
+    metadata:
+      labels:
+        app: mcp-bridge
+    spec:
+      containers:
+        # Demo gRPC backend (reflection enabled), pod-local only.
+        - name: demo-server
+          image: mcp-grpc-bridge:0.1.0
+          imagePullPolicy: IfNotPresent
+          command: ["/demo-server", "--listen", "127.0.0.1:50051"]
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 200m, memory: 64Mi }
+        # The bridge: discovers the demo backend, serves MCP over HTTP.
+        - name: bridge
+          image: mcp-grpc-bridge:0.1.0
+          imagePullPolicy: IfNotPresent
+          command:
+            - /mcp-grpc-bridge
+            - --target
+            - localhost:50051
+            - --transport
+            - http
+            - --listen
+            - :8080
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { cpu: 500m, memory: 128Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-bridge
+  namespace: default
+spec:
+  selector:
+    app: mcp-bridge
+  ports:
+    - port: 80
+      targetPort: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mcp-bridge
+  namespace: default
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: mcp.caboose-ai.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: mcp-bridge
+                port:
+                  number: 80

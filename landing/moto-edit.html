@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Moto Edit — motorcycle ride video editor</title>
+<meta name="description" content="Moto Edit is a self-hosted web application for uploading, editing, and publishing motorcycle ride footage: trimming, condensed timelapse edits, automatic license-plate blurring, and publishing to YouTube.">
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --border: #2d333b; --text: #e6edf3;
+    --muted: #8b949e; --accent: #f0883e; --link: #58a6ff;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f6f8fa; --panel: #ffffff; --border: #d0d7de; --text: #1f2328;
+      --muted: #656d76; --accent: #bc4c00; --link: #0969da;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+    padding: 3rem 1.25rem 4rem;
+  }
+  main { max-width: 46rem; width: 100%; }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .back { color: var(--muted); font-size: .85rem; display: inline-block; margin-bottom: 1.6rem; }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: .5rem; }
+  h1 .dot { color: var(--accent); }
+  .eff { color: var(--muted); font-size: .88rem; margin-bottom: 2rem; }
+  h2 {
+    font-size: 1rem; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--accent); margin: 2.2rem 0 .8rem;
+  }
+  h3 { font-size: .95rem; margin: 1.3rem 0 .5rem; }
+  p { margin-bottom: 1rem; }
+  ul { margin: 0 0 1rem 1.2rem; }
+  li { margin-bottom: .5rem; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: .87em; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 5px; padding: .08rem .35rem;
+  }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 1.1rem 1.3rem; margin-bottom: 1rem;
+  }
+  .panel p:last-child { margin-bottom: 0; }
+  footer {
+    margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: .85rem; text-align: center;
+  }
+  footer a { margin: 0 .5rem; }
+  .hero { border-bottom: 1px solid var(--border); padding-bottom: 2rem; margin-bottom: .5rem; }
+  .lede { font-size: 1.1rem; color: var(--muted); margin-bottom: 0; }
+  .feat { display: grid; gap: .8rem; margin-bottom: 1rem; }
+  .feat .item { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: .9rem 1.1rem; }
+  .feat .item strong { display: block; margin-bottom: .2rem; }
+  .feat .item span { color: var(--muted); font-size: .93rem; }
+  .callout { border-left: 3px solid var(--accent); padding-left: 1rem; margin-bottom: 1rem; }
+</style>
+</head>
+<body>
+<main>
+  <a class="back" href="/">← caboose-ai.io</a>
+
+  <div class="hero">
+    <h1>Moto Edit<span class="dot">.</span></h1>
+    <p class="lede">A self-hosted web application for turning raw motorcycle dashcam
+    footage into finished, shareable ride videos — and publishing them to YouTube.</p>
+  </div>
+
+  <h2>What the application does</h2>
+  <p>Motorcycle helmet and dashcam recordings arrive as many large files — often several
+  gigabytes each, at 4K — containing long stretches of uneventful riding. Moto Edit is the
+  tool its operator uses to turn that raw footage into something watchable, entirely on
+  hardware they own.</p>
+
+  <div class="feat">
+    <div class="item">
+      <strong>Upload and organize</strong>
+      <span>Resumable, chunked uploads of multi-gigabyte video files, including whole SD-card
+      folders. Clips are grouped by the date they were recorded.</span>
+    </div>
+    <div class="item">
+      <strong>Trim and cut</strong>
+      <span>A timeline editor for splitting a ride into segments and removing the parts that
+      do not belong in the final video.</span>
+    </div>
+    <div class="item">
+      <strong>Condensed ride edits</strong>
+      <span>Long rides are compressed into short videos: interesting moments play at normal
+      speed while the rest is sped up as timelapse, and stops are cut out entirely.</span>
+    </div>
+    <div class="item">
+      <strong>Automatic highlight detection</strong>
+      <span>The application analyzes motion, camera movement, and engine audio to find the
+      moments worth keeping, and can be steered with a written description of what the rider
+      is looking for.</span>
+    </div>
+    <div class="item">
+      <strong>Privacy blurring</strong>
+      <span>License plates and bystanders in the footage are detected and blurred before a
+      video is shared publicly.</span>
+    </div>
+    <div class="item">
+      <strong>Music and finishing</strong>
+      <span>An optional music track is mixed underneath the ride audio, with color and fade
+      adjustments applied to the finished edit.</span>
+    </div>
+    <div class="item">
+      <strong>Publish to YouTube</strong>
+      <span>A finished video can be uploaded directly to the operator's own YouTube channel
+      from within the application, instead of being downloaded and re-uploaded by hand.</span>
+    </div>
+  </div>
+
+  <h2>Why the application requests YouTube access</h2>
+  <div class="callout">
+    <p>Moto Edit requests <code>https://www.googleapis.com/auth/youtube.upload</code> for
+    exactly one purpose: <strong>to upload a video the user has produced in the application
+    to the user's own YouTube channel, when the user explicitly clicks Publish.</strong></p>
+    <p style="margin-bottom:0">Separately and only if the user chooses it, the application
+    can request <code>https://www.googleapis.com/auth/youtube</code> so that an uploaded
+    video can be added to one of the user's own playlists. This is an opt-in second
+    authorization with its own consent screen; the application never requests it as part of
+    normal sign-in, and every feature works without it.</p>
+  </div>
+  <p>The user chooses the title, description, tags, and privacy setting in the application,
+  then confirms the upload. Only that video file and those details are sent to YouTube.</p>
+  <p>The upload scope does not grant, and the application does not request, access to watch
+  history, subscriptions, comments, analytics, or any other Google account data. Nothing is
+  read from the user's account beyond the name of the channel being published to, which is
+  displayed in the application so the user can confirm the correct account is connected.</p>
+  <p>When the optional playlist authorization is granted, the application additionally reads
+  the titles of the user's own playlists in order to show a chooser, and adds an uploaded
+  video to the playlist the user selects. It is not used for anything else: no playlist is
+  created, renamed, reordered or deleted, and no video other than one the user has just
+  published is ever touched.</p>
+  <p>The connection is optional — every other feature works without it. It can be revoked at
+  any time from the application's Unlink button, which deletes the stored authorization, or
+  from the
+  <a href="https://myaccount.google.com/permissions" rel="noopener">Google account permissions page</a>.</p>
+  <p>Moto Edit's use and transfer of information received from Google APIs to any other app
+  adheres to the
+  <a href="https://developers.google.com/terms/api-services-user-data-policy" rel="noopener">Google API Services User Data Policy</a>,
+  including the Limited Use requirements. Full details are in the
+  <a href="/privacy">privacy policy</a>.</p>
+
+  <h2>How data is handled</h2>
+  <p>Moto Edit runs on a single computer owned and operated by an individual in Rochester,
+  New York. Uploaded video never leaves that machine except when the user explicitly
+  publishes it to their own YouTube channel. All video analysis — highlight detection,
+  license-plate and bystander blurring, and matching footage against a written description —
+  runs locally on that machine using models stored on it. No video is sent to any external
+  analysis service, and no uploaded content is used to train any model. There is no
+  advertising, no analytics, and no tracking.</p>
+
+  <h2>Who can use it</h2>
+  <p>Moto Edit is a private, single-operator application. The application itself is
+  password-protected at
+  <a href="https://edit.caboose-ai.io">edit.caboose-ai.io</a> and there is no public sign-up;
+  this page describes the application publicly for transparency and for API review. It is
+  operated as a non-commercial personal project.</p>
+
+  <h2>Contact</h2>
+  <p><a href="mailto:cxm6467@gmail.com">cxm6467@gmail.com</a></p>
+
+  <footer>
+    <a href="/">Home</a> · <a href="/moto-edit">Moto Edit</a> · <a href="/privacy">Privacy</a> · <a href="/tos">Terms</a>
+  </footer>
+</main>
+</body>
+</html>

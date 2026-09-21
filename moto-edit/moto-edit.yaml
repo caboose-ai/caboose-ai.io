@@ -1,0 +1,424 @@
+# moto-edit: namespace, deployment, service, ingress.
+#
+# NOTE: the secret `moto-edit-secrets` is intentionally NOT defined here.
+# Create it out-of-band (same pattern as the cluster's tunnel token secret):
+#
+#   kubectl -n moto-edit create secret generic moto-edit-secrets \
+#     --from-literal=APP_PASSWORD='<password>' \
+#     --from-literal=SESSION_SECRET="$(openssl rand -hex 32)"
+#
+# SPEC8 (v0.6.0) adds two OPTIONAL keys to that same secret. Add them with:
+#
+#   kubectl -n moto-edit patch secret moto-edit-secrets --type=merge -p \
+#     "{\"stringData\":{\"YOUTUBE_CLIENT_ID\":\"<id>\",\"YOUTUBE_CLIENT_SECRET\":\"<secret>\"}}"
+#   kubectl -n moto-edit rollout restart deployment/moto-edit
+#
+# Both are marked `optional: true` below, so the pod starts whether or not the
+# keys exist. Without them the app reports `configured: false` and hides every
+# YouTube affordance; nothing else changes.
+#
+#
+# NOTE: the playlist scope widening in this release makes the public pages at
+# ~/apps/k3s/landing (moto-edit.html, privacy.html) FALSE — they still state the
+# app requests exactly one scope and cannot see playlists. Update them with the
+# landing configmap before or with this deploy.
+#
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: moto-edit
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: moto-edit
+  namespace: moto-edit
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: moto-edit
+  template:
+    metadata:
+      labels:
+        app: moto-edit
+      # Scraped by the cluster's generic kubernetes-pods job. These were
+      # patched onto the live Deployment by hand and never written here, so
+      # this file silently disagreed with the cluster; now they are.
+      #
+      # Port 9090, NOT 8080: the Ingress forwards every path on 8080, so
+      # /metrics there was public. The metrics listener is in no Service.
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: /metrics
+    spec:
+      containers:
+        - name: moto-edit
+          # Pulled from the local registry (scripts/setup-registry.sh), NOT from a
+          # containerd-imported tag. A bare `moto-edit:vX` here makes k3s try Docker
+          # Hub and fail with ImagePullBackOff — that took the site down twice.
+          #
+          # KEEP THIS IN SYNC WITH WHAT IS DEPLOYED. Releases ship with
+          # `kubectl -n moto-edit set image deployment/moto-edit moto-edit=<tag>`,
+          # which does NOT write back here, so this line silently goes stale and a
+          # later `kubectl apply -f` would roll production back to whatever it says.
+          # It sat at v0.13.1 — a pre-Go-port Node image — for the whole port.
+          # After every `set image`, update this line to match.
+          #
+          # v1.21.0-go (2026-09-20): the Highlights dialog offers to EXCLUDE the
+          # clips that block the speed gauge and the route map -- "Exclude those
+          # N clips from the reel" unticks them in the clip picker, so the
+          # narrowed videoIds is what the request carries and the server's gates
+          # pass over what is left. The blocks also now judge the PICKED clips
+          # rather than every clip of the selected days, so unticking one by hand
+          # finally changes the verdict. SPA-only; asset stamps and the shell
+          # cache go to 1.5.0. Roll back with :v1.20.0-go.
+          #
+          # v1.10.0-go (git f0fb1f4, 2026-09-19): the GPS sync offset is SEEDED
+          # from agreement between a camera session's clips, not from a
+          # correlation peak. The peak was measurably ANTI-correlated with truth
+          # -- against 13 hand-set offsets it was the peak 0 times, best rank
+          # 108 of 181, mean percentile 0.177 where chance is 0.50 -- because
+          # optical flow is angular, so flow at a standstill (2.514) beats flow
+          # at 43 mph (2.014). Wrong-track peaks also outscored right-track
+          # ones, so no threshold could separate them. |flowx| argmins voted
+          # across a session, accepted only on a 3 s cluster, seed the SLIDER;
+          # they never set high confidence and the gauge will not draw on them
+          # unconfirmed. Evidence: docs/SYNC-SEED-BY-AGREEMENT.md.
+          # Roll back with :v1.9.0-go.
+          #
+          # v1.9.0-go (git abacc5d, 2026-09-18): the ride summary card HOLDS AT
+          # THE ENDS of each ride's stretch (first and last 6 s) instead of
+          # sitting in a corner for the whole clip. It is a still -- everything
+          # it says is true for the whole ride -- and at 4K it was 27% of the
+          # frame's width and 64% of its height for every second. Applies to the
+          # single-ride and combined cards too, which is a deliberate break with
+          # the old byte-identical single-card filter string: without it the
+          # hold would have reached multi-ride reels and nowhere else. A stretch
+          # under 18 s stays whole. Measured in e2e: card up 0-6 s (12.997 dB),
+          # BARE 12-18 s (48.403 dB vs a 47.946 dB clean control).
+          # Roll back with :v1.8.0-go.
+          #
+          # v1.8.0-go (git 0960e1c, 2026-09-18): the ride-day automation engine,
+          # the mailer, b-roll and the CLAP audio model are gone. -52,208 lines
+          # and 1.2 GB off the image (3.61 -> 2.41 GB). None had ever run: no
+          # automation.json was ever written, no entry of kind broll ever
+          # existed, and CLAP produced one match record whose similarity was
+          # noise. MUSIC SURVIVES IN FULL -- two live CC-licensed tracks make
+          # attribution a legal obligation, so AttributionLine, BuildAttribution
+          # and GET /api/music/attribution stay, verified against the real
+          # records. CLIP is a DIFFERENT model and stays: it powers the prompt.
+          # Gate: 183 PASS / 2 SKIP / 0 FAIL (183 not 222 because the removed
+          # features' own e2e sections went with them).
+          # Roll back with :v1.7.1-go; /data is compatible (the orphaned
+          # /data/broll and /data/music-match are simply unread).
+          #
+          # v1.7.1-go (2026-09-18): privacy blur DEFAULTS TO PLATES, and its group
+          # opens rather than hiding behind a disclosure triangle. This is a
+          # default about other people: four of five surviving exports carried no
+          # blur, including the one on YouTube, and a legible New York plate is
+          # readable at preview scale. "Off" is still one click away and still
+          # sends nothing.
+          #
+          # v1.7.0-go (2026-09-18): the highlight picker no longer lingers on red
+          # lights. WeightFlowx is the heaviest term and flowx is |mean HORIZONTAL
+          # optical flow|, whose biggest city event is a car crossing your view
+          # WHILE STOPPED -- measured across 28 archived reels, the 1x bucket ran
+          # to a median 3.2 mph while the 16x bucket sat at 24.5. Seconds under
+          # 3 mph are now GRADED DOWN (x0.35 at a dead stop, ramping to 1), never
+          # vetoed. Library median 1.9 -> 21.1 mph, under-3mph 53% -> 8%, with 3%
+          # still under 1 mph surviving on merit. A video with no usable GPS is
+          # byte-for-byte unaffected -- only 28 of 90 have any.
+          #
+          # v1.6.3-go (git 7a1b8e4, 2026-09-17): the summary card's "Time" is the
+          # RIDE, not the GPS logger's run. durationSeconds is the 1 Hz sample
+          # count, so it counted the logger idling before you set off and after
+          # you parked -- 17m30s of a 2:28:00 "ride" on Sep 4. RideSeconds trims
+          # only the ENDS, so a stop mid-ride stays in. Coarse breadcrumb tracks
+          # are untouched. Also fixes a card that read 22.4 mi beside 1:50:10
+          # (= 12 mph) next to an Avg of 26 mph: Avg is over MOVING time.
+          #
+          # v1.6.2-go (git b2cfa12, 2026-09-17): gear outside 1..7 is treated as
+          # unread rather than drawn. One reel renders "GEAR 21" on a six-speed
+          # bike -- a dash-OCR misread, still in the legacy telemetry.json that
+          # reader wrote before v1.5.0-go retired it, drawn with the confidence
+          # of a real reading. Not a regression; the published version has it too.
+          #
+          # v1.6.1-go (git 516f587, 2026-09-17): the gauge no longer renders
+          # underneath the summary card. Both defaulted to corner "br" and the
+          # card is composited last, so a render asking for both and naming
+          # neither corner hid the gauge entirely. The three-overlay default is
+          # now card "br", gauge "bl", map "tl". An explicitly named corner is
+          # always honoured, so nothing already saved moves.
+          #
+          # v1.6.0-go (git 2cf26b5, 2026-09-17): the burned-in HUD, cleaned up
+          # and widened. Four of the six visual fixes are one compositing bug --
+          # cv2 REPLACES pixels rather than blending, so every stroke drawn on
+          # the overlay panel below the panel's own alpha (the ghost route, the
+          # border, the card divider, both pin shadows) was punching a hole in
+          # it instead of laying down ink; the ghost route was invisible over
+          # bright footage for that reason. Also: the gauge's needle deleted (it
+          # drew the arc's own reading a second time), the face recentred, the
+          # summary card down from 75% to 64% of frame height, and text keylines
+          # that actually render -- cv2.putText caps thickness at 2 in this
+          # OpenCV build, so the old fatter-second-putText outline drew nothing
+          # and the minimal style has never had one. New options, all defaulting
+          # to today's render: telemetry.size, telemetry.dialMax,
+          # summary.compact. Gate: 222 PASS / 2 SKIP / 0 FAIL.
+          # Roll back with :v1.5.0-go (the HUD as it was, GPS-only speed),
+          # :v1.4.0-go (dash reader still present), or :v0.22.0 (Node).
+          image: localhost:5000/moto-edit:v1.25.0-go
+          imagePullPolicy: IfNotPresent
+          # NOT privileged. It was, for a hardware encoder that has never
+          # recorded a use (0 of 92 records mention vaapi; every export used
+          # libx264). privileged gave an internet-facing root container the whole
+          # host: it could mount the host filesystem, read /dev/mem and reach the
+          # k3s token, every namespace's secrets and the B2 credentials. Now root
+          # inside the container but with no capabilities and no privilege
+          # escalation. Root still owns everything under /data, which is all the
+          # app writes. Verified by running the full e2e suite with
+          # `--cap-drop ALL --cap-add DAC_OVERRIDE --security-opt no-new-privileges`
+          # on every container.
+          #
+          # The GPU draft encoder is therefore OFF (HWACCEL=off below) and its
+          # export-dialog option reports itself disabled with that reason. To
+          # bring it back safely when a 1080p draft mode ships, use a device
+          # plugin (smarter-device-manager) rather than privileged: true.
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            # DAC_OVERRIDE is the one capability kept, and it is load-bearing:
+            # /home/caboose/apps/data/moto-edit is owned caboose:caboose mode 775
+            # while every file inside it is root-owned, so a root process without
+            # DAC_OVERRIDE cannot create library.json.tmp or uploads/ in it and the
+            # pod dies at boot with "mkdir /data/uploads: permission denied". That
+            # was found by running the e2e suite under `--cap-drop ALL` before
+            # applying this. Harmless here: /data is the only thing mounted.
+            capabilities:
+              drop: ["ALL"]
+              add: ["DAC_OVERRIDE"]
+          ports:
+            - containerPort: 8080
+              name: http
+            # Metrics only (METRICS_PORT). In no Service and no Ingress: that
+            # is what keeps /metrics off the internet.
+            - containerPort: 9090
+              name: metrics
+          env:
+            - name: PORT
+              value: "8080"
+            - name: DATA_DIR
+              value: /data
+            # SPEC19 (v0.13.0). The zone the RIDE happened in — NOT a display
+            # preference. The helmet camera writes LOCAL wall-clock time into
+            # creation_time with a spurious `Z`, so `recordedAt` is local time
+            # wearing a UTC costume; the GPS track from the phone is genuine
+            # UTC. Placing one against the other needs this zone, and getting
+            # it wrong shifts every video by the offset between the two —
+            # four hours here, which puts the footage outside the track
+            # entirely and reports "no overlap" rather than a wrong gauge.
+            #
+            # Set EXPLICITLY rather than left to the system zone: the image has
+            # no TZ configured, so the pod's own zone is UTC, and a default of
+            # UTC would silently be the failing case. Change it if the operator
+            # rides somewhere else; the app falls back to the system zone when
+            # this is unset, which is what the local dev box already wants.
+            - name: RIDE_TZ
+              value: America/New_York
+            - name: APP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: moto-edit-secrets
+                  key: APP_PASSWORD
+            - name: SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: moto-edit-secrets
+                  key: SESSION_SECRET
+            # SPEC8 YouTube publishing. Used to build the OAuth redirect URI,
+            # which must be registered in the Google console verbatim as
+            # <PUBLIC_ORIGIN>/api/youtube/callback.
+            # SPEC10 (v0.8.0) reuses it for share links: every /s/<token> URL
+            # handed out, and every absolute og:/twitter: unfurl URL on the
+            # share page, is built from this. Change it and links already sent
+            # keep working (they are paths, not stored URLs) but newly minted
+            # ones point at the new origin.
+            - name: PUBLIC_ORIGIN
+              value: https://edit.caboose-ai.io
+            # Both optional: absent keys leave the feature off rather than
+            # blocking the pod from starting.
+            # The copied/emailed share link uses the short host; the page is
+            # still served at /s/<token> on every host (Traefik rewrites
+            # s.caboose-ai.io/<token> onto it), so old links keep working.
+            - name: SHARE_ORIGIN
+              value: "https://s.caboose-ai.io"
+            - name: SHARE_PATH
+              value: "/"
+            - name: YOUTUBE_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: moto-edit-secrets
+                  key: YOUTUBE_CLIENT_ID
+                  optional: true
+            - name: YOUTUBE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: moto-edit-secrets
+                  key: YOUTUBE_CLIENT_SECRET
+                  optional: true
+            # SPEC17 (v0.12.0) hardware encoding on the Radeon 780M.
+            #
+            # HWACCEL controls only whether the hardware path is AVAILABLE, never
+            # whether it is CHOSEN. Every export, reel and reprocess render uses
+            # libx264 unless the request explicitly asks for the draft encoder —
+            # see the decision record in SPEC17. Set HWACCEL=off to take the GPU
+            # out of play entirely (the probe is skipped and the draft option is
+            # reported disabled with "HWACCEL=off" as its reason).
+            - name: HWACCEL
+              value: "off"
+            # SPEC17 Part 2: how many condensed-edit pieces encode at once,
+            # clamped 1..6 by the server.
+            #
+            # 1, NOT the 3 SPEC17 proposed, because SPEC17 asked for the number
+            # to be measured and the measurement said no. On this box, with real
+            # 4K footage and this pod's 12-CPU quota: 65.4s sequential vs 66.1s
+            # three-wide (0.99x), because a single 4K libx264 encode already
+            # keeps 11.2 of the 12 cores busy. Peak resident memory over the
+            # same pair went from 2.9 GiB to 8.2 GiB and hit this container's
+            # 8 GiB ceiling hundreds of times per run — before counting the
+            # app's own ~1.2 GiB. Three-wide would buy nothing and risk an OOM
+            # kill on the operator's actual workload.
+            #
+            # It is left as a knob rather than deleted: on smaller frames with
+            # many short pieces (40 x 1.5s at 1080p) it did measure 1.21x, so a
+            # future box with more cores or smaller sources can be re-measured
+            # by changing this line. Anything above 1 costs roughly 0.9 GiB per
+            # extra worker at 1080p and 2.9 GiB at 4K.
+            - name: PIECE_CONCURRENCY
+              value: "1"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          resources:
+            # SPEC17 Part 2 is explicit that the memory LIMIT is not the first
+            # thing to move, and the measurement agrees — but not for the reason
+            # it expected. Measured on real 4K footage: ONE libx264 piece encode
+            # holds ~2.9 GiB resident. At PIECE_CONCURRENCY=1 (the shipped
+            # default, see above) a 4K render therefore peaks around 2.9 GiB of
+            # encoder plus the app's ~1.2 GiB baseline — comfortably inside 8Gi,
+            # which is why the ceiling does not move. At 3 it peaked at 8.2 GiB
+            # and pressed the ceiling continuously, which is the other half of
+            # why the default is 1.
+            #
+            # The REQUEST is what was actually wrong: 256Mi told the scheduler
+            # this pod needs a quarter of a gigabyte when a render has never
+            # needed less than four. 2Gi is SPEC17's number and a large
+            # improvement; the measurement would support 4Gi, but the game
+            # servers may be scaled back up at any time and a request that large
+            # could stop this pod scheduling at all — so 2Gi, and the real
+            # figure is written here for whoever revisits it.
+            requests: { cpu: 250m, memory: 2Gi }
+            limits: { cpu: "12", memory: 8Gi }
+      volumes:
+        - name: data
+          hostPath:
+            path: /home/caboose/apps/data/moto-edit
+            type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: moto-edit
+  namespace: moto-edit
+spec:
+  selector:
+    app: moto-edit
+  ports:
+    - port: 80
+      targetPort: 8080
+---
+# LAN fast path: http://192.168.50.42:30080 skips Cloudflare entirely for
+# uploads/streaming at home. Cookies are per-origin, so log in separately.
+apiVersion: v1
+kind: Service
+metadata:
+  name: moto-edit-lan
+  namespace: moto-edit
+spec:
+  type: NodePort
+  selector:
+    app: moto-edit
+  ports:
+    - port: 8080
+      targetPort: 8080
+      nodePort: 30080
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: moto-edit
+  namespace: moto-edit
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: edit.caboose-ai.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: moto-edit
+                port:
+                  number: 80
+---
+# Short share links: s.caboose-ai.io/<token> is rewritten onto the app's own
+# /s/<token> page, so the Go server needs no host knowledge. Only a bare path
+# that IS a token is rewritten; everything else (/s/..., /stream, /poster.jpg,
+# /download, assets) passes through untouched. Both token shapes are matched:
+# the legacy 64-hex one and the short 16-character one.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: share-short
+  namespace: moto-edit
+spec:
+  replacePathRegex:
+    regex: "^/([0-9a-f]{64}|[0-9a-zA-Z]{16})$"
+    replacement: "/s/$1"
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: moto-edit-share
+  namespace: moto-edit
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: moto-edit-share-short@kubernetescrd
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: s.caboose-ai.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: moto-edit
+                port:
+                  number: 80

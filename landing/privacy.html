@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy — caboose-ai.io</title>
+<meta name="description" content="Privacy policy for caboose-ai.io and its services.">
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --border: #2d333b; --text: #e6edf3;
+    --muted: #8b949e; --accent: #f0883e; --link: #58a6ff;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f6f8fa; --panel: #ffffff; --border: #d0d7de; --text: #1f2328;
+      --muted: #656d76; --accent: #bc4c00; --link: #0969da;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+    padding: 3rem 1.25rem 4rem;
+  }
+  main { max-width: 46rem; width: 100%; }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .back { color: var(--muted); font-size: .85rem; display: inline-block; margin-bottom: 1.6rem; }
+  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: .5rem; }
+  h1 .dot { color: var(--accent); }
+  .eff { color: var(--muted); font-size: .88rem; margin-bottom: 2rem; }
+  h2 {
+    font-size: 1rem; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--accent); margin: 2.2rem 0 .8rem;
+  }
+  h3 { font-size: .95rem; margin: 1.3rem 0 .5rem; }
+  p { margin-bottom: 1rem; }
+  ul { margin: 0 0 1rem 1.2rem; }
+  li { margin-bottom: .5rem; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: .87em; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 5px; padding: .08rem .35rem;
+  }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 1.1rem 1.3rem; margin-bottom: 1rem;
+  }
+  .panel p:last-child { margin-bottom: 0; }
+  footer {
+    margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: .85rem; text-align: center;
+  }
+  footer a { margin: 0 .5rem; }
+</style>
+</head>
+<body>
+<main>
+  <a class="back" href="/">← caboose-ai.io</a>
+  <h1>Privacy Policy<span class="dot">.</span></h1>
+  <p class="eff">Effective 31 August 2026 · Last updated 31 August 2026</p>
+
+  <div class="panel">
+    <p><strong>The short version.</strong> caboose-ai.io is a personal homelab run by one
+    person on a single computer in Rochester, New York. There are no ads, no trackers, no
+    analytics, and no third-party marketing tools. Nothing here is sold, rented, or shared
+    for advertising. Most of the services are private and password-protected, used only by
+    the operator.</p>
+  </div>
+
+  <h2>Who runs this</h2>
+  <p>caboose-ai.io and its subdomains are operated by an individual ("the operator", "we",
+  "I") as a non-commercial hobby project. Contact: <a href="mailto:cxm6467@gmail.com">cxm6467@gmail.com</a>.</p>
+
+  <h2>What this policy covers</h2>
+  <ul>
+    <li><code>caboose-ai.io</code> — the public landing page and its live status checks.</li>
+    <li><code>edit.caboose-ai.io</code> — Moto Edit, a private, password-protected video
+    editing tool used by the operator.</li>
+    <li><code>grafana.caboose-ai.io</code>, <code>labs.caboose-ai.io</code>,
+    <code>machine.caboose-ai.io</code>, <code>mcp.caboose-ai.io</code> — private monitoring
+    and experimental endpoints.</li>
+    <li><code>mc.caboose-ai.io</code>, <code>pw.caboose-ai.io</code> — Minecraft and Palworld
+    game servers for the operator and invited friends.</li>
+  </ul>
+
+  <h2>What is collected</h2>
+
+  <h3>Public landing page</h3>
+  <p>No cookies, no analytics, no tracking scripts. The page runs status checks from your
+  browser directly against the listed services; those checks are not recorded.</p>
+
+  <h3>Network and server logs</h3>
+  <p>All traffic reaches this site through Cloudflare, which processes connection metadata
+  including your IP address under
+  <a href="https://www.cloudflare.com/privacypolicy/" rel="noopener">Cloudflare's privacy policy</a>.
+  On the server, ordinary web-server logs and metrics (timestamp, requested path, response
+  code, response time, and IP address) are retained for roughly two weeks for troubleshooting
+  and capacity planning, then automatically deleted.</p>
+
+  <h3>Moto Edit (edit.caboose-ai.io)</h3>
+  <p>Access requires a password. There is no sign-up, no public account creation, and no
+  invitation flow — it is a single-operator tool. It stores:</p>
+  <ul>
+    <li><strong>Video and audio files</strong> uploaded by the operator, stored on local
+    disk on the operator's own hardware.</li>
+    <li><strong>Derived data</strong> — thumbnails, low-resolution previews, and numerical
+    analysis of motion and audio used to pick highlights.</li>
+    <li><strong>One authentication cookie</strong> (<code>moto_edit_session</code>) so the
+    session persists. It contains an expiry timestamp and a signature — no personal
+    information — and is not used for tracking.</li>
+  </ul>
+  <p>Video analysis, license-plate and face blurring, and prompt matching all run
+  <strong>locally on the operator's machine</strong> using models stored on that machine.
+  Video content is not sent to any external AI service, is not used to train any model, and
+  is not shared with anyone.</p>
+
+  <h3>Game servers</h3>
+  <p>Minecraft and Palworld servers record standard gameplay data — usernames, player
+  identifiers, in-game chat, and connecting IP addresses — in server logs and world save
+  files, for server administration and moderation.</p>
+
+  <h2>Google and YouTube data</h2>
+  <p>Moto Edit can optionally publish the operator's own finished videos to the operator's
+  own YouTube channel. If that feature is connected:</p>
+  <ul>
+    <li>Authorization uses Google OAuth with the scope <code>youtube.upload</code>, which
+    permits uploading videos. It does not grant access to watch history, subscriptions,
+    comments, analytics, or personal Google account data.</li>
+    <li>Optionally, and only if the operator explicitly chooses to re-authorize for it, the
+    scope <code>youtube</code> is also requested so an uploaded video can be added to one of
+    the operator's own playlists. It is used solely to list playlist titles for a chooser and
+    to add a just-published video to the selected playlist. Publishing works without it.</li>
+    <li>A refresh token and the channel's public name are stored in a permission-restricted
+    file on the operator's own server. Tokens are never displayed, logged, or transmitted
+    anywhere except to Google when uploading.</li>
+    <li>The connection is used only to upload videos the operator explicitly chooses.</li>
+  </ul>
+  <p>Moto Edit's use and transfer of information received from Google APIs to any other app
+  adheres to the
+  <a href="https://developers.google.com/terms/api-services-user-data-policy" rel="noopener">Google API Services User Data Policy</a>,
+  including the Limited Use requirements.</p>
+  <p>Access can be revoked at any time from
+  <a href="https://myaccount.google.com/permissions" rel="noopener">your Google account permissions page</a>,
+  or by using the Unlink button in the application, which deletes the stored token
+  immediately.</p>
+
+  <h2>What is never done</h2>
+  <ul>
+    <li>No selling, renting, or sharing of personal information.</li>
+    <li>No advertising networks, no behavioral profiling, no cross-site tracking.</li>
+    <li>No third-party analytics.</li>
+    <li>No use of uploaded content to train machine-learning models.</li>
+  </ul>
+
+  <h2>Service providers</h2>
+  <p>Two third parties necessarily handle traffic: <strong>Cloudflare</strong>, which
+  provides DNS and the tunnel carrying traffic to the server, and <strong>Google/YouTube</strong>,
+  only when the optional publishing feature is used and only for that purpose. No other
+  processors are involved. Everything else is stored on hardware the operator physically owns.</p>
+
+  <h2>Security</h2>
+  <p>Private services are password-protected and served over HTTPS. Credentials and tokens
+  are stored outside the codebase with restricted file permissions. That said, this is a
+  hobby system run by one person: it carries no security guarantee, and you should not send
+  it anything sensitive.</p>
+
+  <h2>Children</h2>
+  <p>These services are not directed to children under 13, and no information is knowingly
+  collected from them.</p>
+
+  <h2>Your choices</h2>
+  <p>To ask what data relating to you exists here, or to request its deletion, email
+  <a href="mailto:cxm6467@gmail.com">cxm6467@gmail.com</a>. Because this is a small personal
+  system, such requests are handled manually and honored wherever technically possible.</p>
+
+  <h2>Changes</h2>
+  <p>This policy may change as the services change. The effective date at the top will be
+  updated when it does.</p>
+
+  <footer>
+    <a href="/">Home</a> · <a href="/moto-edit">Moto Edit</a> · <a href="/privacy">Privacy</a> · <a href="/tos">Terms</a>
+  </footer>
+</main>
+</body>
+</html>

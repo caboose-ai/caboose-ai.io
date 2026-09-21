@@ -1,0 +1,268 @@
+# Minecraft (Fabric) server + status API.
+#
+# One-time setup (secret is never stored in this file):
+#   kubectl create namespace minecraft
+#   kubectl -n minecraft create secret generic mc-rcon --from-literal=password="$(openssl rand -hex 16)"
+#   kubectl -n minecraft create configmap mc-status-py --from-file=mc-status.py
+# Deploy / update:
+#   kubectl apply -f minecraft.yaml
+#   kubectl -n minecraft rollout restart deploy/mc-status   # after mc-status.py changes
+#                                                            # (recreate the configmap first)
+# Server console:
+#   kubectl -n minecraft exec deploy/mc -- rcon-cli whitelist add <username>
+#   kubectl -n minecraft exec deploy/mc -- rcon-cli op <username>
+# Backups: nightly 4:30am ET CronJob (save-off -> tar -> save-on), kept 14 days
+# on the mc-backups PVC. Run one on demand:
+#   kubectl -n minecraft create job --from=cronjob/mc-backup mc-backup-manual
+# Restore: scale deploy/mc to 0, untar the chosen archive over the PVC contents
+# (mount both volumes in a throwaway pod), scale back up.
+#
+# How players connect:
+#   LAN:      192.168.50.42:25565 (klipper-lb binds the node port)
+#   Internet: mc.caboose-ai.io via the playit.gg agent (see playit.yaml;
+#             SRV record -> raw TCP tunnel) — no client software needed.
+#             Fallback address: hill-separation.gl.joinmc.link
+#   Legacy:   the Cloudflare tunnel path still exists —
+#             cloudflared access tcp --hostname mc.caboose-ai.io --url localhost:25565
+#             then join "localhost" in Minecraft. The tunnel ingress rule for
+#             mc.caboose-ai.io -> tcp://mc.minecraft.svc.cluster.local:25565 is
+#             remotely managed (Cloudflare API), not in this file.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mc-data
+  namespace: minecraft
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mc
+  namespace: minecraft
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate   # single world on a RWO volume; never run two servers on it
+  selector:
+    matchLabels:
+      app: mc
+  template:
+    metadata:
+      labels:
+        app: mc
+    spec:
+      # without this, the "mc" Service injects MC_PORT=tcp://... which breaks
+      # the image's mc-health probe (it parses MC_PORT as a number)
+      enableServiceLinks: false
+      containers:
+        - name: mc
+          # tag (not digest) on purpose: tracks current Java 25 server builds
+          image: itzg/minecraft-server:java25
+          env:
+            - { name: EULA, value: "TRUE" }
+            - { name: TYPE, value: "FABRIC" }
+            - { name: VERSION, value: "26.2" }
+            - { name: MODRINTH_PROJECTS, value: "lithium,ferrite-core" }
+            - { name: MODRINTH_DOWNLOAD_DEPENDENCIES, value: "required" }
+            - { name: MEMORY, value: "6G" }
+            - { name: USE_AIKAR_FLAGS, value: "true" }
+            - { name: MOTD, value: "caboose-ai.io — the server at the end of the train" }
+            - { name: ENABLE_WHITELIST, value: "TRUE" }
+            - { name: ENFORCE_WHITELIST, value: "TRUE" }
+            - { name: TZ, value: "America/New_York" }
+            - name: RCON_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mc-rcon
+                  key: password
+          ports:
+            - { containerPort: 25565, name: minecraft }
+            - { containerPort: 25575, name: rcon }
+          startupProbe:
+            exec: { command: [mc-health] }
+            periodSeconds: 10
+            failureThreshold: 60   # first boot downloads server + mods
+          readinessProbe:
+            exec: { command: [mc-health] }
+            periodSeconds: 20
+          livenessProbe:
+            exec: { command: [mc-health] }
+            periodSeconds: 30
+            failureThreshold: 4
+          resources:
+            requests: { cpu: "1", memory: 6656Mi }
+            limits: { memory: 8Gi }   # no cpu limit: avoid throttling tick processing
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: mc-data
+---
+# LoadBalancer so klipper-lb also binds 25565 on the node IP for LAN players;
+# the tunnel reaches the same service via its cluster DNS name.
+apiVersion: v1
+kind: Service
+metadata:
+  name: mc
+  namespace: minecraft
+spec:
+  type: LoadBalancer
+  selector:
+    app: mc
+  ports:
+    - port: 25565
+      targetPort: 25565
+      name: minecraft
+---
+# RCON for in-cluster tooling (backup job). Deliberately its own ClusterIP
+# service so the LoadBalancer above never exposes 25575 to the LAN.
+apiVersion: v1
+kind: Service
+metadata:
+  name: mc-rcon
+  namespace: minecraft
+spec:
+  selector:
+    app: mc
+  ports:
+    - port: 25575
+      targetPort: 25575
+      name: rcon
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mc-backups
+  namespace: minecraft
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 50Gi
+---
+# Nightly world backup: rcon save-off, save-all, tar /data -> /backups, save-on.
+# Same-node RWO mounts are fine on a single-node cluster. No offsite copy yet.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: mc-backup
+  namespace: minecraft
+spec:
+  schedule: "30 4 * * *"
+  timeZone: America/New_York
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 1800
+      template:
+        metadata:
+          labels:
+            app: mc-backup
+        spec:
+          restartPolicy: Never
+          enableServiceLinks: false   # same MC_PORT=tcp://... parsing hazard
+          containers:
+            - name: backup
+              image: itzg/mc-backup
+              args: [now]   # entrypoint is the backup script; mode arg only
+              env:
+                - { name: INITIAL_DELAY, value: "0" }
+                - { name: BACKUP_NAME, value: "world" }
+                - { name: PRUNE_BACKUPS_DAYS, value: "14" }
+                - { name: RCON_HOST, value: "mc-rcon.minecraft.svc.cluster.local" }
+                - { name: TZ, value: "America/New_York" }
+                - name: RCON_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: mc-rcon
+                      key: password
+              resources:
+                requests: { cpu: 100m, memory: 128Mi }
+                limits: { cpu: "1", memory: 512Mi }
+              volumeMounts:
+                - name: data
+                  mountPath: /data
+                  readOnly: true
+                - name: backups
+                  mountPath: /backups
+          volumes:
+            - name: data
+              persistentVolumeClaim:
+                claimName: mc-data
+            - name: backups
+              persistentVolumeClaim:
+                claimName: mc-backups
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mc-status
+  namespace: minecraft
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mc-status
+  template:
+    metadata:
+      labels:
+        app: mc-status
+    spec:
+      enableServiceLinks: false   # the injected MC_PORT=tcp://... breaks the script's env parsing
+      containers:
+        - name: mc-status
+          image: python@sha256:399babc8b49529dabfd9c922f2b5eea81d611e4512e3ed250d75bd2e7683f4b0 # 3.13-alpine
+          command: [python, /app/mc-status.py]
+          ports:
+            - containerPort: 8080
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { cpu: 100m, memory: 64Mi }
+          volumeMounts:
+            - name: app
+              mountPath: /app
+      volumes:
+        - name: app
+          configMap:
+            name: mc-status-py
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mc-status
+  namespace: minecraft
+spec:
+  selector:
+    app: mc-status
+  ports:
+    - port: 80
+      targetPort: 8080
+---
+# Served under the apex so the landing page can fetch it same-origin.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mc-status
+  namespace: minecraft
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: caboose-ai.io
+      http:
+        paths:
+          - path: /mc/status
+            pathType: Prefix
+            backend:
+              service:
+                name: mc-status
+                port:
+                  number: 80

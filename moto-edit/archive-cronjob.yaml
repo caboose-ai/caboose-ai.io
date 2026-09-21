@@ -1,0 +1,97 @@
+# The recurring backup of the LIVE moto-edit data dir.
+#
+# jobs.yaml holds one-shot Jobs that pushed a frozen snapshot to B2 on
+# 2026-09-14 and then verified it. That snapshot's source directory
+# (/home/caboose/apps/data/moto-edit/archive) has since been removed, so those
+# Jobs cannot even schedule any more — their hostPath has `type: Directory`.
+#
+# WHY THIS EXISTS AT ALL, established by probing the bucket on 2026-09-18: the
+# snapshot in B2 holds 294 video directories and the live data dir holds 91, and
+# the two sets do not share a single id. They are the same rides re-ingested
+# under new ids (the bucket's library.json has a 568.034125 s clip created
+# 2026-09-05; the live one has the same duration created 2026-09-15). So the
+# archive protects a superseded library and NOTHING on disk today was backed up.
+# The first run of this CronJob therefore moves ~133 GiB; every run after it is
+# incremental, because --checksum skips what already matches.
+#
+# The old snapshot is deliberately left in place. It costs roughly a dollar a
+# month, and deleting a backup to save that is not a trade worth making.
+#
+# NOT the only copy of the pre-re-ingest library index, however. That index
+# (2026-09-14, 294 records) lived on as a HIDDEN B2 version of library.json on
+# a 30-day delete clock, and was copied to archive/index/ on 2026-09-19 before
+# the clock ran out. backup.sh now also writes a dated copy of the index there
+# every night, so no version of it depends on that clock again.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: moto-edit-archive-nightly
+  namespace: moto-edit
+spec:
+  # 03:30 local. Named zone rather than a UTC offset so it does not drift an
+  # hour when the clocks change.
+  schedule: "30 3 * * *"
+  timeZone: "America/New_York"
+  # A run that overruns its window must not have a second one started on top of
+  # it: two rclone copies over the same prefix would fight for bandwidth and
+  # double the API calls for no benefit.
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  # A missed window (box asleep, cluster down) is caught up to 2 h late; past
+  # that the nightly run is simply skipped and tomorrow's covers it, because
+  # --checksum makes a late run and an on-time run identical in effect.
+  startingDeadlineSeconds: 7200
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      # Four hours is well past the ~21 minutes the first full 133 GiB push
+      # needs at the 110 MiB/s cap, and far past any incremental night.
+      activeDeadlineSeconds: 14400
+      template:
+        spec:
+          restartPolicy: Never
+          # The same hardening as the one-shot Jobs in jobs.yaml. It matters more
+          # here than it looks: youtube.json (a live OAuth grant) is 0600 root,
+          # and the only thing keeping it out of the bucket was the --exclude in
+          # backup.sh. As uid 65534 the kernel enforces it too; every other file
+          # in the data dir is world-readable, so nothing else is lost.
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            runAsGroup: 65534
+            seccompProfile: { type: RuntimeDefault }
+          containers:
+            - name: rclone
+              image: localhost:5000/rclone:v1.75.1@sha256:4055fb65b7a975caf3cb54a94bf12713e81947d6f3d0bb221907a05b0f6ab390
+              imagePullPolicy: IfNotPresent
+              command: ["sh", "/scripts/backup.sh"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: { drop: ["ALL"] }
+              resources:
+                # 4 transfers x 4 upload streams x 96 MiB chunks is ~1.5 GiB of
+                # buffers; the cap is what stops this starving moto-edit itself
+                # on the same box.
+                requests: { cpu: "200m", memory: "512Mi" }
+                limits: { memory: "3Gi" }
+              env:
+                - { name: HOME, value: /tmp }
+                - { name: RCLONE_CONFIG, value: /tmp/rclone.conf }
+                - { name: RCLONE_CONFIG_B2_TYPE, value: b2 }
+                - name: RCLONE_CONFIG_B2_ACCOUNT
+                  valueFrom: { secretKeyRef: { name: moto-edit-archive-b2, key: key-id } }
+                - name: RCLONE_CONFIG_B2_KEY
+                  valueFrom: { secretKeyRef: { name: moto-edit-archive-b2, key: app-key } }
+              volumeMounts:
+                - { name: scripts, mountPath: /scripts, readOnly: true }
+                - { name: tmp, mountPath: /tmp }
+                # readOnly is the real safety belt here, not a nicety: it means a
+                # bug in the script cannot touch the library it is protecting.
+                - { name: data, mountPath: /data, readOnly: true }
+          volumes:
+            - { name: scripts, configMap: { name: moto-edit-archive-scripts, defaultMode: 0555 } }
+            - { name: tmp, emptyDir: {} }
+            - { name: data, hostPath: { path: /home/caboose/apps/data/moto-edit, type: Directory } }

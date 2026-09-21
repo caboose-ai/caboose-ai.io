@@ -1,0 +1,154 @@
+# moto-edit observability alerts (SPEC22 §4).
+#
+# Provisioned Grafana unified-alerting rules. This is the alert that would have
+# caught the 25-minute moto-edit outage nobody noticed: two rules, one folder,
+# evaluated every minute against the datasources the cluster already runs
+# (Prometheus via kube-state-metrics, and Loki via the moto-edit pod logs Alloy
+# already tails).
+#
+# Delivery is deliberately NOT re-invented here: no contact point or
+# notification policy is provisioned, so both rules route through Grafana's
+# existing default notification policy to the default contact point (and to
+# email if/when SMTP is configured on the Grafana deployment). Every firing is
+# also recorded as a Grafana alert-state annotation, visible on the dashboards
+# in monitoring/dashboards.yaml.
+#
+# Mounted into the Grafana pod at /etc/grafana/provisioning/alerting by the
+# volume added to monitoring/grafana.yaml. Apply with:
+#   kubectl apply -f alerts.yaml -f grafana.yaml
+#   kubectl -n monitoring rollout restart deployment/grafana
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-alerting
+  namespace: monitoring
+data:
+  moto-edit.yaml: |
+    apiVersion: 1
+    groups:
+      - orgId: 1
+        name: moto-edit
+        folder: moto-edit
+        interval: 1m
+        rules:
+          # ---------------------------------------------------------------
+          # 1. healthz down > 2 min. The pod's readiness AND liveness probes
+          #    both hit GET /healthz (deploy/moto-edit.yaml), so when healthz
+          #    stops answering the pod goes NotReady and kube-state-metrics
+          #    reports zero available replicas for the deployment. A real
+          #    outage yields DATA (the value 0) and fires; NoData means
+          #    kube-state-metrics or Prometheus themselves are down — a
+          #    different problem, so it stays OK rather than false-paging.
+          # ---------------------------------------------------------------
+          - uid: moto-edit-healthz-down
+            title: moto-edit healthz down
+            condition: C
+            for: 2m
+            noDataState: OK
+            execErrState: OK
+            labels:
+              severity: critical
+              service: moto-edit
+            annotations:
+              summary: moto-edit is not serving /healthz
+              description: >
+                moto-edit has had 0 ready replicas for over 2 minutes — the
+                readiness probe on GET /healthz is failing, so the app is not
+                serving. This is the 25-minute-outage alert. Check
+                `kubectl -n moto-edit get pods` and the pod logs in Loki
+                (Service Logs dashboard, service=moto-edit).
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 600
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  datasource:
+                    type: prometheus
+                    uid: prometheus
+                  editorMode: code
+                  expr: sum(kube_deployment_status_replicas_available{namespace="moto-edit", deployment="moto-edit"})
+                  instant: true
+                  range: false
+                  intervalMs: 30000
+                  maxDataPoints: 43200
+                  refId: A
+              - refId: B
+                datasourceUid: __expr__
+                model:
+                  type: reduce
+                  datasource:
+                    type: __expr__
+                    uid: __expr__
+                  expression: A
+                  reducer: last
+                  refId: B
+              - refId: C
+                datasourceUid: __expr__
+                model:
+                  type: math
+                  datasource:
+                    type: __expr__
+                    uid: __expr__
+                  expression: $B < 1
+                  refId: C
+          # ---------------------------------------------------------------
+          # 2. 5xx rate high over 5 min. Counts moto-edit responses with a
+          #    >=500 status from Fastify's own "request completed" log lines
+          #    (res.statusCode), which Alloy already ships to Loki. Fires when
+          #    more than 5 land inside a 5-minute window. No matching lines is
+          #    NoData (= no 5xx = healthy), so it stays OK. Tune the `> 5` in
+          #    refId C for this deployment's traffic.
+          # ---------------------------------------------------------------
+          - uid: moto-edit-5xx-rate-high
+            title: moto-edit 5xx rate high
+            condition: C
+            for: 0m
+            noDataState: OK
+            execErrState: OK
+            labels:
+              severity: warning
+              service: moto-edit
+            annotations:
+              summary: moto-edit is returning 5xx responses
+              description: >
+                moto-edit returned more than 5 responses with a 5xx status in
+                the last 5 minutes. Look at the structured error lines in Loki:
+                {service="moto-edit"} | json | level="50" — they carry reqId
+                and route (credentials already redacted).
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 600
+                  to: 0
+                datasourceUid: loki
+                model:
+                  datasource:
+                    type: loki
+                    uid: loki
+                  editorMode: code
+                  expr: 'sum(count_over_time({service="moto-edit"} |= "statusCode" | json | res_statusCode >= 500 [5m]))'
+                  queryType: instant
+                  intervalMs: 30000
+                  maxDataPoints: 43200
+                  refId: A
+              - refId: B
+                datasourceUid: __expr__
+                model:
+                  type: reduce
+                  datasource:
+                    type: __expr__
+                    uid: __expr__
+                  expression: A
+                  reducer: last
+                  refId: B
+              - refId: C
+                datasourceUid: __expr__
+                model:
+                  type: math
+                  datasource:
+                    type: __expr__
+                    uid: __expr__
+                  expression: $B > 5
+                  refId: C
