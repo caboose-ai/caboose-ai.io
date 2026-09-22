@@ -170,7 +170,7 @@ spec:
           # summary.compact. Gate: 222 PASS / 2 SKIP / 0 FAIL.
           # Roll back with :v1.5.0-go (the HUD as it was, GPS-only speed),
           # :v1.4.0-go (dash reader still present), or :v0.22.0 (Node).
-          image: localhost:5000/moto-edit:v1.28.2-go
+          image: localhost:5000/moto-edit:v1.29.0-go
           imagePullPolicy: IfNotPresent
           # NOT privileged. It was, for a hardware encoder that has never
           # recorded a use (0 of 92 records mention vaapi; every export used
