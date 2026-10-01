@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>rng — a new site every 3 minutes</title>
+<meta name="description" content="rng rolls a random design, theme and category every three minutes. Everyone sees the same roll. The countdown shows when the next one lands.">
+<meta name="color-scheme" content="light dark">
+<style>
+  :root {
+    /* Filled in by the roll. These are only the pre-roll defaults. */
+    --bg: #0d1117;
+    --surface: #161b22;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #f0883e;
+    --accent-ink: #0d1117;
+    --border: #2d333b;
+    --radius: 12px;
+    --font-display: system-ui, sans-serif;
+    --font-body: system-ui, sans-serif;
+    --shadow: none;
+    --border-w: 1px;
+    --text-transform: none;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { min-height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 17px/1.6 var(--font-body);
+    transition: background-color .6s ease, color .6s ease;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 24px 16px 96px; }
+
+  /* ---------- countdown pill (always visible) ---------- */
+  #clock {
+    position: fixed; top: 16px; right: 16px; z-index: 100;
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 14px;
+    background: var(--surface); color: var(--text);
+    border: var(--border-w) solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    font-family: var(--font-body);
+    font-variant-numeric: tabular-nums;
+    transition: background-color .6s, color .6s, border-color .6s;
+  }
+  #clock .label { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  #clock .time { font-size: 24px; font-weight: 700; line-height: 1; font-family: var(--font-display); }
+  #clock .ring { width: 34px; height: 34px; flex: none; }
+  #clock .ring circle { fill: none; stroke-width: 3; }
+  #clock .ring .track { stroke: var(--border); }
+  #clock .ring .fill  { stroke: var(--accent); stroke-linecap: round; transform: rotate(-90deg); transform-origin: 50% 50%; transition: stroke-dashoffset 1s linear; }
+  #clock.hot .time { color: var(--accent); }
+
+  /* ---------- header ---------- */
+  header { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; margin: 8px 0 40px; padding-right: 180px; }
+  header .brand { font-family: var(--font-display); font-weight: 800; font-size: 28px; letter-spacing: -.02em; text-transform: var(--text-transform); }
+  header .brand span { color: var(--accent); }
+  header .roll { color: var(--muted); font-size: 14px; }
+  header .roll b { color: var(--text); font-weight: 600; }
+
+  /* ---------- hero ---------- */
+  .hero { margin-bottom: 48px; }
+  .eyebrow { display: inline-block; font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--accent); margin-bottom: 14px; font-weight: 700; }
+  h1 { font-family: var(--font-display); font-size: clamp(36px, 7vw, 76px); line-height: 1.02; letter-spacing: -.03em; text-transform: var(--text-transform); max-width: 18ch; }
+  .lede { margin-top: 18px; font-size: clamp(17px, 2vw, 21px); color: var(--muted); max-width: 56ch; }
+  .cta { display: inline-flex; gap: 12px; margin-top: 28px; flex-wrap: wrap; }
+  .btn { display: inline-block; padding: 12px 20px; border-radius: var(--radius); font-weight: 700; text-decoration: none; border: var(--border-w) solid var(--accent); background: var(--accent); color: var(--accent-ink); box-shadow: var(--shadow); cursor: pointer; font: inherit; font-weight: 700; }
+  .btn.ghost { background: transparent; color: var(--text); border-color: var(--border); }
+
+  /* ---------- cards ---------- */
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .card { background: var(--surface); border: var(--border-w) solid var(--border); border-radius: var(--radius); padding: 22px; box-shadow: var(--shadow); transition: background-color .6s, border-color .6s; }
+  .card h3 { font-family: var(--font-display); font-size: 20px; margin-bottom: 8px; letter-spacing: -.01em; text-transform: var(--text-transform); }
+  .card p { color: var(--muted); font-size: 15px; }
+  .card .num { font-family: var(--font-display); font-size: 40px; font-weight: 800; color: var(--accent); line-height: 1; margin-bottom: 10px; }
+
+  /* ---------- layout variants ---------- */
+  body[data-layout="centered"] .hero { text-align: center; }
+  body[data-layout="centered"] h1, body[data-layout="centered"] .lede { margin-left: auto; margin-right: auto; }
+  body[data-layout="centered"] .cta { justify-content: center; display: flex; }
+  body[data-layout="split"] .hero { display: grid; grid-template-columns: 1.2fr 1fr; gap: 32px; align-items: end; }
+  body[data-layout="split"] .hero .lede { margin-top: 0; }
+  @media (max-width: 760px) { body[data-layout="split"] .hero { grid-template-columns: 1fr; } header { padding-right: 0; margin-top: 64px; } }
+  body[data-layout="poster"] h1 { font-size: clamp(44px, 11vw, 128px); max-width: none; }
+  body[data-layout="poster"] .card { border-width: 0; border-left: 6px solid var(--accent); border-radius: 0; }
+  body[data-layout="terminal"] .card, body[data-layout="terminal"] #clock { border-radius: 0; }
+  body[data-layout="terminal"] .eyebrow::before { content: "> "; }
+  body[data-layout="terminal"] .card h3::before { content: "$ "; color: var(--accent); }
+
+  /* ---------- footer ---------- */
+  footer { margin-top: 56px; padding-top: 20px; border-top: var(--border-w) solid var(--border); color: var(--muted); font-size: 13px; display: flex; gap: 16px; flex-wrap: wrap; justify-content: space-between; }
+  footer code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; background: var(--surface); padding: 2px 6px; border-radius: 4px; }
+
+  /* ---------- roll transition ---------- */
+  .wrap { animation: rollin .5s ease both; }
+  @keyframes rollin { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .wrap { animation: none; } * { transition: none !important; } }
+</style>
+</head>
+<body data-layout="left">
+
+<div id="clock" aria-live="polite" title="Time until the next roll">
+  <svg class="ring" viewBox="0 0 36 36" aria-hidden="true">
+    <circle class="track" cx="18" cy="18" r="15"></circle>
+    <circle class="fill"  cx="18" cy="18" r="15" stroke-dasharray="94.25" stroke-dashoffset="0"></circle>
+  </svg>
+  <div>
+    <div class="label">next roll in</div>
+    <div class="time" id="time">3:00</div>
+  </div>
+</div>
+
+<div class="wrap" id="wrap">
+  <header>
+    <div class="brand">rng<span>.</span></div>
+    <div class="roll">roll <b id="rollno">#0</b> · <b id="meta">rolling…</b></div>
+  </header>
+
+  <section class="hero">
+    <div>
+      <div class="eyebrow" id="eyebrow">—</div>
+      <h1 id="headline">—</h1>
+    </div>
+    <div>
+      <p class="lede" id="lede">—</p>
+      <div class="cta">
+        <button class="btn" id="cta1" type="button">—</button>
+        <button class="btn ghost" id="cta2" type="button">how this works</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="grid" id="cards"></section>
+
+  <footer>
+    <div>Everyone sees the same roll at the same time. Reload all you like; it won't change until the clock hits zero.</div>
+    <div>seed <code id="seed">0</code> · <a href="https://caboose-ai.io">caboose-ai.io</a></div>
+  </footer>
+</div>
+
+<script>
+(() => {
+  const PERIOD_MS = 3 * 60 * 1000;
+
+  // ---------- pools ----------
+  const THEMES = [
+    { name: "Midnight",    bg: "#0d1117", surface: "#161b22", text: "#e6edf3", muted: "#8b949e", accent: "#f0883e", ink: "#0d1117", border: "#2d333b" },
+    { name: "Paper",       bg: "#faf7f0", surface: "#ffffff", text: "#1d1d1b", muted: "#6b6b66", accent: "#b3261e", ink: "#ffffff", border: "#e3dfd4" },
+    { name: "Mint",        bg: "#e9f7ef", surface: "#ffffff", text: "#0f3d2e", muted: "#4f7a69", accent: "#0f9d58", ink: "#ffffff", border: "#cbe8d8" },
+    { name: "Neon",        bg: "#05010f", surface: "#120a24", text: "#f4f0ff", muted: "#a596c8", accent: "#39ff14", ink: "#05010f", border: "#2a1b4d" },
+    { name: "Sand",        bg: "#f3e9d7", surface: "#fbf5ea", text: "#3a2d1c", muted: "#8a7656", accent: "#c0732b", ink: "#ffffff", border: "#e0d2b8" },
+    { name: "Ocean",       bg: "#07233b", surface: "#0e3353", text: "#e8f3ff", muted: "#9ab8d4", accent: "#4cc9f0", ink: "#07233b", border: "#1b4b73" },
+    { name: "Rose",        bg: "#fff1f4", surface: "#ffffff", text: "#3b0a1a", muted: "#8c4a5e", accent: "#e0266e", ink: "#ffffff", border: "#f6cfd9" },
+    { name: "Slate",       bg: "#1f2933", surface: "#2b3846", text: "#f0f4f8", muted: "#9fb3c8", accent: "#f9c74f", ink: "#1f2933", border: "#3e4c59" },
+    { name: "Lemon",       bg: "#fffbe6", surface: "#ffffff", text: "#2b2600", muted: "#7a7030", accent: "#1d4ed8", ink: "#ffffff", border: "#f1e7a8" },
+    { name: "Forest",      bg: "#0f1f14", surface: "#18301f", text: "#e8f5ea", muted: "#93b39b", accent: "#a3e635", ink: "#0f1f14", border: "#274a33" },
+    { name: "Grape",       bg: "#2a0a3d", surface: "#3b1455", text: "#f7eefc", muted: "#c3a7d8", accent: "#ffb703", ink: "#2a0a3d", border: "#562b78" },
+    { name: "Concrete",    bg: "#e5e5e5", surface: "#f4f4f4", text: "#111111", muted: "#555555", accent: "#000000", ink: "#ffffff", border: "#bdbdbd" },
+  ];
+  const FONTS = [
+    { name: "Grotesk",  display: "'Helvetica Neue', Helvetica, Arial, sans-serif", body: "'Helvetica Neue', Helvetica, Arial, sans-serif" },
+    { name: "Serif",    display: "Georgia, 'Times New Roman', serif", body: "Georgia, 'Times New Roman', serif" },
+    { name: "Mono",     display: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace", body: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" },
+    { name: "Mixed",    display: "Georgia, 'Times New Roman', serif", body: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" },
+    { name: "Rounded",  display: "'Avenir Next', 'Trebuchet MS', Verdana, sans-serif", body: "'Avenir Next', 'Trebuchet MS', Verdana, sans-serif" },
+    { name: "System",   display: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif", body: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" },
+  ];
+  const SHAPES = [
+    { name: "soft",    radius: "16px", borderW: "1px", shadow: "none", upper: false },
+    { name: "pill",    radius: "28px", borderW: "1px", shadow: "0 10px 30px rgba(0,0,0,.12)", upper: false },
+    { name: "sharp",   radius: "0px",  borderW: "2px", shadow: "none", upper: true },
+    { name: "brutal",  radius: "2px",  borderW: "3px", shadow: "6px 6px 0 var(--border)", upper: true },
+    { name: "float",   radius: "10px", borderW: "0px", shadow: "0 1px 2px rgba(0,0,0,.08), 0 12px 32px rgba(0,0,0,.10)", upper: false },
+  ];
+  const LAYOUTS = ["left", "centered", "split", "poster", "terminal"];
+
+  const CATEGORIES = [
+    { name: "Coffee roaster", eyebrow: "small batch, big opinions", headline: ["Beans with a backstory.", "Roasted this morning. Gone by noon.", "The cup you'll think about later."], lede: "Single-origin lots roasted in a converted garage, shipped the day they cool. We write the tasting notes ourselves and we mean them.", cta: "Shop the roast", cards: [["48h", "From roast to your door"], ["7", "Farms we buy from directly"], ["0", "Blends. Only single origins"]] },
+    { name: "Indie game studio", eyebrow: "now in early access", headline: ["A city that remembers what you did.", "Build. Betray. Begin again.", "Twelve hours in, it finally clicks."], lede: "Three people, one engine we probably shouldn't have written ourselves, and a strategy game that treats your mistakes as content.", cta: "Wishlist it", cards: [["3", "Developers, all of them tired"], ["1.2M", "Lines of hand-rolled C++"], ["∞", "Ways to lose the capital"]] },
+    { name: "Weather station", eyebrow: "live from the back garden", headline: ["Mostly cloudy, aggressively local.", "Your forecast, measured 30 metres away.", "The app knows. The roof knows better."], lede: "A Raspberry Pi, an anemometer and a rain gauge publishing every minute. More accurate than the national service for exactly one postcode.", cta: "See the readings", cards: [["14°", "Right now, in the shade"], ["62%", "Chance of a lecture about pressure"], ["3.1m", "Rainfall this year"]] },
+    { name: "Bike repair co-op", eyebrow: "tools, stands, and someone who knows", headline: ["Fix it yourself. We'll hover helpfully.", "Your bike, our bench, no judgement.", "True your wheel. Find your people."], lede: "A volunteer-run workshop with every tool you don't own. Pay what you can, learn what you want, leave with a bike that stops when you ask it to.", cta: "Book a bench", cards: [["£5", "Suggested donation per visit"], ["40+", "Volunteers who'll fix your derailleur"], ["Tue–Sat", "Doors open at ten"]] },
+    { name: "Synthesizer maker", eyebrow: "analog, mostly", headline: ["Oscillators with character flaws.", "Sounds you can't quite dial in again.", "Warm. Unstable. Yours."], lede: "Hand-soldered desktop synths built around circuits from 1978 and a microcontroller from last Tuesday. Each one drifts a little differently.", cta: "Hear the demo", cards: [["3", "Voices of dubious tuning"], ["24", "Knobs. No menus"], ["#0412", "Next serial number up"]] },
+    { name: "Astronomy club", eyebrow: "clear skies permitting", headline: ["Come stand in a field and look up.", "Saturn is out tonight. So are we.", "Dark skies, warm thermos, cold toes."], lede: "Monthly observing sessions on the hill, a borrowed 10-inch Dobsonian, and a mailing list that is 90% weather complaints.", cta: "Next session", cards: [["10\"", "Aperture of the club scope"], ["-2°", "Expected temperature. Bring layers"], ["2,000", "Years of looking at the same stars"]] },
+    { name: "Sourdough bakery", eyebrow: "open until it's gone", headline: ["Bread that argues back.", "A crust you'll hear from the next room.", "Fermented slowly. Sold quickly."], lede: "A 48-hour cold proof, a wood-fired oven, and a starter older than our lease. We bake 120 loaves and then we go home.", cta: "Reserve a loaf", cards: [["48h", "Cold proof, every loaf"], ["120", "Loaves per day, no more"], ["2014", "The year the starter was born"]] },
+    { name: "Model railway", eyebrow: "OO gauge, HO heart", headline: ["A branch line that never closed.", "Timetabled. Signalled. Tiny.", "Eleven metres of 1962."], lede: "A loft layout recreating a Somerset junction in its last summer of steam, built over nineteen years by one person and a lot of balsa.", cta: "Tour the layout", cards: [["11m", "Of mainline track"], ["1:76", "Scale, and the hours it took"], ["0", "Trains on time. Historically accurate"]] },
+    { name: "Houseplant nursery", eyebrow: "mostly alive", headline: ["Plants that forgive you.", "Green things for dim rooms.", "Propagated, potted, and prepared for neglect."], lede: "Cuttings from our own mother plants, potted in soil we mix in a shed. Every plant ships with a note on how much you can ignore it.", cta: "Browse the shelves", cards: [["60+", "Species in the greenhouse"], ["1", "Watering per fortnight, honestly"], ["100%", "Pet-safe section clearly labelled"]] },
+    { name: "Retro computing", eyebrow: "8 bits, 64 kilobytes, no regrets", headline: ["Machines that boot in under a second.", "Load \"*\",8,1 and wait.", "The future, as of 1985."], lede: "Repairs, recapping and restorations for home computers that outlived their makers. We also run the swap meet in the church hall.", cta: "See the bench", cards: [["1MHz", "And it was enough"], ["38,911", "BASIC bytes free"], ["4th Sat", "Swap meet, every month"]] },
+    { name: "Marathon training", eyebrow: "week 11 of 16", headline: ["Long run Sunday. Long nap Monday.", "Running slowly, on purpose.", "The wall is at mile 20. We'll meet it together."], lede: "A free group plan for first-time marathoners with a coach who has run thirty of them and still hates the taper.", cta: "Join the plan", cards: [["16", "Weeks from couch to start line"], ["32km", "Longest run before race day"], ["4:30", "Everyone's secret goal"]] },
+    { name: "Tide pool guide", eyebrow: "low tide at 06:41", headline: ["Everything here is holding on.", "Look closer. Then closer again.", "The ocean leaves. These stay."], lede: "A field guide to the rocky shore, written by someone who has been pinched by most of it. Spring tides, best spots, and what not to step on.", cta: "Check the tides", cards: [["0.3m", "Tomorrow's low water"], ["140", "Species in the guide"], ["2", "Hours before it all comes back"]] },
+    { name: "Type foundry", eyebrow: "new release: Ferrule Grotesk", headline: ["Letters with somewhere to be.", "Set in a face that knows its weight.", "Kerned by hand. Argued over by email."], lede: "A two-person foundry drawing typefaces for signage, screens and the occasional cheese label. Trial fonts are free and fully functional.", cta: "Try the fonts", cards: [["9", "Weights in the new family"], ["2,400", "Glyphs per weight"], ["0", "Fonts named after cities"]] },
+    { name: "Ham radio club", eyebrow: "CQ CQ CQ", headline: ["Talking to strangers since 1927.", "No internet required. No internet, actually.", "73 from the hilltop."], lede: "Licence classes, antenna build days, and a repeater on the water tower. We will absolutely help you put a wire up in your attic.", cta: "Get licensed", cards: [["146.52", "Simplex calling frequency"], ["80m", "Of wire in the field day antenna"], ["1927", "Club founded. Some members present"]] },
+    { name: "Ceramics studio", eyebrow: "kiln opens thursday", headline: ["Mud, fire, and a bit of luck.", "Thrown, trimmed, glazed, hoped for.", "Every bowl a small argument with gravity."], lede: "Open-studio memberships, beginner wheel courses, and a reduction kiln that occasionally does what we ask of it.", cta: "Book a wheel", cards: [["1,280°", "Peak kiln temperature"], ["12", "Wheels in the main room"], ["~30%", "Pieces that survive the first firing"]] },
+    { name: "Board game café", eyebrow: "600 games, one rule: have fun", headline: ["Roll for initiative. Order the fries.", "Tables for two to twelve.", "Rules explained. Dice provided. Grudges optional."], lede: "A café with a library of six hundred games and staff who will teach any of them. Table fee covers the whole evening.", cta: "Reserve a table", cards: [["600+", "Games on the shelves"], ["£6", "Table fee, all evening"], ["4h", "Average game of Twilight Imperium"]] },
+  ];
+
+  // ---------- deterministic PRNG (mulberry32) ----------
+  function rng(seed) {
+    let a = seed >>> 0;
+    return () => {
+      a = (a + 0x6D2B79F5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  const pick = (r, arr) => arr[Math.floor(r() * arr.length)];
+
+  // ---------- roll ----------
+  const $ = id => document.getElementById(id);
+  let currentWindow = -1;
+
+  function roll(win) {
+    currentWindow = win;
+    const r = rng(win);
+    const theme = pick(r, THEMES), font = pick(r, FONTS), shape = pick(r, SHAPES), layout = pick(r, LAYOUTS), cat = pick(r, CATEGORIES);
+    const headline = pick(r, cat.headline);
+
+    const s = document.documentElement.style;
+    s.setProperty("--bg", theme.bg); s.setProperty("--surface", theme.surface);
+    s.setProperty("--text", theme.text); s.setProperty("--muted", theme.muted);
+    s.setProperty("--accent", theme.accent); s.setProperty("--accent-ink", theme.ink);
+    s.setProperty("--border", theme.border);
+    s.setProperty("--font-display", font.display); s.setProperty("--font-body", font.body);
+    s.setProperty("--radius", shape.radius); s.setProperty("--border-w", shape.borderW);
+    s.setProperty("--shadow", shape.shadow);
+    s.setProperty("--text-transform", shape.upper ? "uppercase" : "none");
+    document.body.dataset.layout = layout;
+    document.querySelector('meta[name="theme-color"]')?.remove();
+    const mc = document.createElement("meta"); mc.name = "theme-color"; mc.content = theme.bg; document.head.appendChild(mc);
+
+    $("rollno").textContent = "#" + win.toString(36);
+    $("meta").textContent = `${cat.name} · ${theme.name} · ${font.name} · ${shape.name} · ${layout}`;
+    $("seed").textContent = win;
+    $("eyebrow").textContent = cat.eyebrow;
+    $("headline").textContent = headline;
+    $("lede").textContent = cat.lede;
+    $("cta1").textContent = cat.cta;
+    $("cards").innerHTML = cat.cards.map(([n, t]) => `<div class="card"><div class="num">${n}</div><h3>${t}</h3><p>${blurb(r)}</p></div>`).join("");
+    document.title = `rng — ${cat.name} (${theme.name})`;
+
+    const wrap = $("wrap"); wrap.style.animation = "none"; void wrap.offsetWidth; wrap.style.animation = "";
+  }
+
+  const BLURBS = ["Measured, not estimated.", "Updated more often than we'd like.", "Ask us about it; we won't stop talking.", "Subject to weather, mood and supply.", "A number we're a little proud of.", "Verified by at least one person.", "Rounded in our favour.", "True at time of writing."];
+  const blurb = r => pick(r, BLURBS);
+
+  // ---------- countdown ----------
+  const CIRC = 94.25;
+  function tick() {
+    const now = Date.now();
+    const win = Math.floor(now / PERIOD_MS);
+    if (win !== currentWindow) roll(win);
+    const remaining = (win + 1) * PERIOD_MS - now;
+    const secs = Math.ceil(remaining / 1000);
+    $("time").textContent = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
+    document.querySelector("#clock .fill").style.strokeDashoffset = (CIRC * (1 - remaining / PERIOD_MS)).toFixed(2);
+    $("clock").classList.toggle("hot", secs <= 10);
+  }
+  tick();
+  // align to the second boundary so the display flips cleanly
+  setTimeout(() => { tick(); setInterval(tick, 1000); }, 1000 - (Date.now() % 1000));
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) tick(); });
+
+  $("cta2").addEventListener("click", () => {
+    alert("Every 3 minutes, on the clock, rng picks a new theme, typeface, shape, layout and category from a seed derived from the current time.\n\nThe seed is shared, so everyone looking right now sees the same site. The countdown shows when the next roll lands.");
+  });
+  $("cta1").addEventListener("click", () => $("cards").scrollIntoView({ behavior: "smooth" }));
+})();
+</script>
+</body>
+</html>
