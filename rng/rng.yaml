@@ -1,0 +1,81 @@
+# rng.caboose-ai.io — a site that rolls a random design, theme and category
+# every 3 minutes, with a countdown to the next roll.
+#
+# Purely static: the roll is computed client-side from a seed derived from the
+# current 3-minute window, so every visitor sees the same roll at the same time
+# and the server needs no state. Same nginx-from-ConfigMap pattern as landing/.
+#
+# Deploy / update:
+#   cd rng
+#   kubectl create configmap rng-html --from-file=index.html -o yaml --dry-run=client | kubectl apply -f -
+#   kubectl create configmap rng-nginx --from-file=default.conf=nginx-default.conf -o yaml --dry-run=client | kubectl apply -f -
+#   kubectl apply -f rng.yaml
+#   kubectl rollout restart deploy/rng   # after HTML-only changes
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rng
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rng
+  template:
+    metadata:
+      labels:
+        app: rng
+    spec:
+      containers:
+        - name: nginx
+          image: nginxinc/nginx-unprivileged@sha256:6320020c7da8714feab524e02c08c5a1958675c4e68700e93a2fd8970b065786
+          ports:
+            - containerPort: 8080
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 100m, memory: 64Mi }
+          readinessProbe:
+            httpGet: { path: /, port: 8080 }
+          volumeMounts:
+            - name: html
+              mountPath: /usr/share/nginx/html
+            - name: nginx-conf
+              mountPath: /etc/nginx/conf.d
+      volumes:
+        - name: html
+          configMap:
+            name: rng-html
+        - name: nginx-conf
+          configMap:
+            name: rng-nginx
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rng
+  namespace: default
+spec:
+  selector:
+    app: rng
+  ports:
+    - port: 80
+      targetPort: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: rng
+  namespace: default
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: rng.caboose-ai.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: rng
+                port:
+                  number: 80
