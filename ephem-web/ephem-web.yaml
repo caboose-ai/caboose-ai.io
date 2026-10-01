@@ -1,0 +1,140 @@
+# web.caboose-ai.io — basic-auth gated, auto-expiring static previews.
+#
+# Caddy in k3s serving a hostPath that ephem.sh rsyncs into. The Cloudflare
+# Tunnel terminates TLS and Traefik passes the request through untouched, so
+# Caddy listens on plain HTTP and owns auth, the SPA rewrite and the .expires
+# 404 itself.
+#
+# NOT in this file: the bcrypt hash. It lives in Secret ephem-web-auth, created
+# out of band (see .claude/skills/ephemeral-web/references/server-setup.md).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ephem-web
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ephem-web-caddyfile
+  namespace: ephem-web
+data:
+  Caddyfile: |
+    {
+    	admin off
+    	auto_https off
+    }
+
+    :8080 {
+    	root * /srv/web
+    	encode zstd gzip
+
+    	basic_auth {
+    		caboose {$PASS_HASH}
+    	}
+
+    	# never serve the expiry stamps
+    	@hidden path */.expires
+    	respond @hidden 404
+
+    	# /feature -> /feature/  (so relative + base-path assets resolve)
+    	@noslash path_regexp ns ^/([a-z0-9][a-z0-9-]{0,40})$
+    	redir @noslash /{re.ns.1}/ 308
+
+    	# SPA fallback: any non-file path under /<feature>/ -> that feature's index.html
+    	@spa {
+    		not file
+    		path_regexp feat ^/([a-z0-9][a-z0-9-]{0,40})/
+    	}
+    	rewrite @spa /{re.feat.1}/index.html
+
+    	# "private", never "public": Cloudflare sits in front, and a public
+    	# response to an authenticated request may be cached at the edge and
+    	# then handed to someone who never sent the password.
+    	header Cache-Control "private, no-cache"
+    	header /*/assets/* Cache-Control "private, max-age=31536000, immutable"
+
+    	file_server
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ephem-web
+  namespace: ephem-web
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: ephem-web }
+  template:
+    metadata:
+      labels: { app: ephem-web }
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: caddy
+          image: localhost:5000/caddy:2
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          env:
+            - name: PASS_HASH
+              valueFrom:
+                secretKeyRef: { name: ephem-web-auth, key: hash }
+            - { name: XDG_DATA_HOME, value: /tmp/data }
+            - { name: XDG_CONFIG_HOME, value: /tmp/config }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            # The image's caddy binary carries a cap_net_bind_service file
+            # capability. With that cap dropped and no_new_privs set, the
+            # kernel refuses the exec outright ("operation not permitted").
+            capabilities: { drop: ["ALL"], add: ["NET_BIND_SERVICE"] }
+          resources:
+            requests: { cpu: "10m", memory: "32Mi" }
+            limits: { memory: "128Mi" }
+          volumeMounts:
+            - { name: caddyfile, mountPath: /etc/caddy/Caddyfile, subPath: Caddyfile, readOnly: true }
+            - { name: web, mountPath: /srv/web, readOnly: true }
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: caddyfile
+          configMap: { name: ephem-web-caddyfile }
+        - name: web
+          hostPath: { path: /home/caboose/apps/data/ephem-web, type: Directory }
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ephem-web
+  namespace: ephem-web
+spec:
+  selector: { app: ephem-web }
+  ports:
+    - port: 80
+      targetPort: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ephem-web
+  namespace: ephem-web
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: web.caboose-ai.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ephem-web
+                port:
+                  number: 80
