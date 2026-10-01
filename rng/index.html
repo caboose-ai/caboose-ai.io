@@ -24,6 +24,7 @@
     --text-transform: none;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   html, body { min-height: 100%; }
   body {
     background: var(--bg);
@@ -104,7 +105,7 @@
 </head>
 <body data-layout="left">
 
-<div id="clock" aria-live="polite" title="Time until the next roll">
+<div id="clock" title="Time until the next roll">
   <svg class="ring" viewBox="0 0 36 36" aria-hidden="true">
     <circle class="track" cx="18" cy="18" r="15"></circle>
     <circle class="fill"  cx="18" cy="18" r="15" stroke-dasharray="94.25" stroke-dashoffset="0"></circle>
@@ -114,6 +115,8 @@
     <div class="time" id="time">3:00</div>
   </div>
 </div>
+
+<div id="announce" class="sr-only" aria-live="polite"></div>
 
 <div class="wrap" id="wrap">
   <header>
@@ -151,11 +154,11 @@
   const THEMES = [
     { name: "Midnight",    bg: "#0d1117", surface: "#161b22", text: "#e6edf3", muted: "#8b949e", accent: "#f0883e", ink: "#0d1117", border: "#2d333b" },
     { name: "Paper",       bg: "#faf7f0", surface: "#ffffff", text: "#1d1d1b", muted: "#6b6b66", accent: "#b3261e", ink: "#ffffff", border: "#e3dfd4" },
-    { name: "Mint",        bg: "#e9f7ef", surface: "#ffffff", text: "#0f3d2e", muted: "#4f7a69", accent: "#0f9d58", ink: "#ffffff", border: "#cbe8d8" },
+    { name: "Mint",        bg: "#e9f7ef", surface: "#ffffff", text: "#0f3d2e", muted: "#43705e", accent: "#0b7a44", ink: "#ffffff", border: "#cbe8d8" },
     { name: "Neon",        bg: "#05010f", surface: "#120a24", text: "#f4f0ff", muted: "#a596c8", accent: "#39ff14", ink: "#05010f", border: "#2a1b4d" },
-    { name: "Sand",        bg: "#f3e9d7", surface: "#fbf5ea", text: "#3a2d1c", muted: "#8a7656", accent: "#c0732b", ink: "#ffffff", border: "#e0d2b8" },
+    { name: "Sand",        bg: "#f3e9d7", surface: "#fbf5ea", text: "#3a2d1c", muted: "#6a5838", accent: "#8f4f12", ink: "#ffffff", border: "#e0d2b8" },
     { name: "Ocean",       bg: "#07233b", surface: "#0e3353", text: "#e8f3ff", muted: "#9ab8d4", accent: "#4cc9f0", ink: "#07233b", border: "#1b4b73" },
-    { name: "Rose",        bg: "#fff1f4", surface: "#ffffff", text: "#3b0a1a", muted: "#8c4a5e", accent: "#e0266e", ink: "#ffffff", border: "#f6cfd9" },
+    { name: "Rose",        bg: "#fff1f4", surface: "#ffffff", text: "#3b0a1a", muted: "#8c4a5e", accent: "#c2185b", ink: "#ffffff", border: "#f6cfd9" },
     { name: "Slate",       bg: "#1f2933", surface: "#2b3846", text: "#f0f4f8", muted: "#9fb3c8", accent: "#f9c74f", ink: "#1f2933", border: "#3e4c59" },
     { name: "Lemon",       bg: "#fffbe6", surface: "#ffffff", text: "#2b2600", muted: "#7a7030", accent: "#1d4ed8", ink: "#ffffff", border: "#f1e7a8" },
     { name: "Forest",      bg: "#0f1f14", surface: "#18301f", text: "#e8f5ea", muted: "#93b39b", accent: "#a3e635", ink: "#0f1f14", border: "#274a33" },
@@ -243,6 +246,7 @@
     $("cta1").textContent = cat.cta;
     $("cards").innerHTML = cat.cards.map(([n, t]) => `<div class="card"><div class="num">${n}</div><h3>${t}</h3><p>${blurb(r)}</p></div>`).join("");
     document.title = `rng — ${cat.name} (${theme.name})`;
+    $("announce").textContent = `New roll: ${cat.name}, ${theme.name} theme.`;
 
     const wrap = $("wrap"); wrap.style.animation = "none"; void wrap.offsetWidth; wrap.style.animation = "";
   }
@@ -257,20 +261,21 @@
     const win = Math.floor(now / PERIOD_MS);
     if (win !== currentWindow) roll(win);
     const remaining = (win + 1) * PERIOD_MS - now;
-    const secs = Math.ceil(remaining / 1000);
+    const secs = Math.floor(remaining / 1000);
     $("time").textContent = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
     document.querySelector("#clock .fill").style.strokeDashoffset = (CIRC * (1 - remaining / PERIOD_MS)).toFixed(2);
     $("clock").classList.toggle("hot", secs <= 10);
   }
   tick();
-  // align to the second boundary so the display flips cleanly
-  setTimeout(() => { tick(); setInterval(tick, 1000); }, 1000 - (Date.now() % 1000));
+  // Tick on the half-second. The roll boundary is on a whole second, so the
+  // last tick before it reads 0:00 and the first tick after it reads 2:59.
+  setTimeout(() => { tick(); setInterval(tick, 1000); }, (1500 - (Date.now() % 1000)) % 1000);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) tick(); });
 
   $("cta2").addEventListener("click", () => {
     alert("Every 3 minutes, on the clock, rng picks a new theme, typeface, shape, layout and category from a seed derived from the current time.\n\nThe seed is shared, so everyone looking right now sees the same site. The countdown shows when the next roll lands.");
   });
-  $("cta1").addEventListener("click", () => $("cards").scrollIntoView({ behavior: "smooth" }));
+  $("cta1").addEventListener("click", () => $("cards").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }));
 })();
 </script>
 </body>
