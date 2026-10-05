@@ -8,7 +8,7 @@
 #   kubectl -n bubi create secret generic bubi-llm \
 #     --from-literal=api_key='<9router key>'
 #
-# v0.1.0 is stamped by deploy/build.sh when it stages this file to
+# v0.1.2 is stamped by deploy/build.sh when it stages this file to
 # ~/apps/k3s/bubi/bubi.yaml. Apply the STAGED copy, never this one: the
 # unresolved tag fails at image pull (loud, harmless) instead of silently
 # rolling production back.
@@ -16,6 +16,109 @@ apiVersion: v1
 kind: Namespace
 metadata:
   name: bubi
+  labels:
+    # The controller may create pods here. "restricted" Pod Security means
+    # even a compromised controller cannot create a privileged, hostNetwork
+    # or hostPath pod and climb onto the node.
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/audit: restricted
+---
+# Transcript storage. A hostPath volume in the pod spec is forbidden by the
+# restricted profile, so the host directory is wrapped in an admin-created
+# PersistentVolume; the controller's account cannot create PVs or PVCs.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: bubi-data
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes: [ReadWriteOnce]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: bubi-manual
+  claimRef:
+    namespace: bubi
+    name: bubi-data
+  hostPath:
+    path: /home/caboose/apps/data/bubi
+    type: Directory
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: bubi-data
+  namespace: bubi
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: bubi-manual
+  volumeName: bubi-data
+  resources:
+    requests:
+      storage: 1Gi
+---
+# The host CLI (`bubi new|stop|list`) uses this account instead of a
+# cluster-admin kubeconfig. It can find the controller pod and exec into it,
+# nothing else. The images have no shell, so exec can only run the controller
+# binary itself.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: bubi-operator
+  namespace: bubi
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: bubi-operator-token
+  namespace: bubi
+  annotations:
+    kubernetes.io/service-account.name: bubi-operator
+type: kubernetes.io/service-account-token
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: bubi-operator
+  namespace: bubi
+rules:
+  - apiGroups: [apps]
+    resources: [deployments]
+    resourceNames: [bubi-controller]
+    verbs: [get]
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list]
+  - apiGroups: [""]
+    resources: [pods/exec]
+    verbs: [create, get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: bubi-operator
+  namespace: bubi
+subjects:
+  - kind: ServiceAccount
+    name: bubi-operator
+    namespace: bubi
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: bubi-operator
+---
+# Nothing in this namespace talks to anything unless a policy below says so.
+# Without this, a pod created without the app=bubi-bot label would match no
+# policy and could reach every port on the node.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: bubi
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -138,7 +241,7 @@ spec:
   podSelector:
     matchLabels:
       app: bubi-controller
-  policyTypes: [Ingress]
+  policyTypes: [Ingress, Egress]
   ingress:
     - from:
         - podSelector:
@@ -147,11 +250,42 @@ spec:
       ports:
         - protocol: TCP
           port: 8081
-    - ports:
+    # Public HTTP only via Traefik (so CF-Connecting-IP cannot be spoofed by
+    # other pods), plus kubelet probes from the node's pod-network gateway.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
+        - ipBlock:
+            cidr: 10.42.0.1/32
+      ports:
         - protocol: TCP
           port: 8080
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
         - protocol: TCP
           port: 9090
+  # The controller only ever talks to the Kubernetes API (it uses
+  # KUBERNETES_SERVICE_HOST, so no DNS). The bots call the LLM, not it.
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 10.43.0.1/32
+      ports:
+        - protocol: TCP
+          port: 443
+    - to:
+        - ipBlock:
+            cidr: 192.168.50.42/32
+      ports:
+        - protocol: TCP
+          port: 6443
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -184,11 +318,13 @@ spec:
         # Matches the owner of the hostPath (id -u caboose = 1000).
         runAsUser: 1000
         runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: controller
           # Pulled from the node's local registry. Never re-push the same tag:
           # imagePullPolicy IfNotPresent would serve the stale image.
-          image: localhost:5000/bubi-controller:v0.1.0
+          image: localhost:5000/bubi-controller:v0.1.2
           imagePullPolicy: IfNotPresent
           args: ["serve"]
           securityContext:
@@ -211,16 +347,11 @@ spec:
             - name: BUBI_NAMESPACE
               value: bubi
             - name: BUBI_BOT_IMAGE
-              value: localhost:5000/bubi-bot:v0.1.0
+              value: localhost:5000/bubi-bot:v0.1.2
             - name: BUBI_LLM_BASE_URL
               value: http://192.168.50.42:20128
             - name: BUBI_LLM_MODEL
               value: fast
-            - name: BUBI_LLM_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: bubi-llm
-                  key: api_key
             - name: BUBI_LLM_SECRET_NAME
               value: bubi-llm
             - name: BUBI_INTERNAL_URL
@@ -261,7 +392,7 @@ spec:
             periodSeconds: 20
       volumes:
         - name: data
-          hostPath: { path: /home/caboose/apps/data/bubi, type: Directory }
+          persistentVolumeClaim: { claimName: bubi-data }
         - name: tmp
           emptyDir: { sizeLimit: 16Mi }
 ---
