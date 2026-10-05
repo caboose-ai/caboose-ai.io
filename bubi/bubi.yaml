@@ -1,0 +1,312 @@
+# bubi: namespace, RBAC, quota, network policies, controller Deployment,
+# services and ingress. The bot pods are NOT here; the controller creates them
+# per session.
+#
+# NOTE: the secret `bubi-llm` is intentionally NOT defined here. Create it
+# out-of-band (same pattern as caboose-fi):
+#
+#   kubectl -n bubi create secret generic bubi-llm \
+#     --from-literal=api_key='<9router key>'
+#
+# v0.1.0 is stamped by deploy/build.sh when it stages this file to
+# ~/apps/k3s/bubi/bubi.yaml. Apply the STAGED copy, never this one: the
+# unresolved tag fails at image pull (loud, harmless) instead of silently
+# rolling production back.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bubi
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: bubi-controller
+  namespace: bubi
+---
+# Exactly what the controller needs to run two bot pods per session. No
+# exec, no logs, no cluster-scoped rights, no RBAC rights.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: bubi-controller
+  namespace: bubi
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list, create, delete]
+  - apiGroups: [""]
+    resources: [services, secrets]
+    verbs: [get, list, create, delete]
+  # Live CPU/memory of the bot pods for the watch page.
+  - apiGroups: [metrics.k8s.io]
+    resources: [pods]
+    verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: bubi-controller
+  namespace: bubi
+subjects:
+  - kind: ServiceAccount
+    name: bubi-controller
+    namespace: bubi
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: bubi-controller
+---
+# A bug in the controller cannot fork-bomb the node: one controller plus two
+# bot pods per live session, with headroom.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: bubi
+  namespace: bubi
+spec:
+  hard:
+    pods: "6"
+    limits.cpu: "2"
+    limits.memory: 1Gi
+    secrets: "10"
+    services: "10"
+---
+# Bot pods: reachable only from the other bot (SSH 2222); may reach only the
+# other bot, the controller's event intake, the LLM gateway and cluster DNS.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: bubi-bot
+  namespace: bubi
+spec:
+  podSelector:
+    matchLabels:
+      app: bubi-bot
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: bubi-bot
+      ports:
+        - protocol: TCP
+          port: 2222
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: bubi-bot
+      ports:
+        - protocol: TCP
+          port: 2222
+    - to:
+        - podSelector:
+            matchLabels:
+              app: bubi-controller
+      ports:
+        - protocol: TCP
+          port: 8081
+    # 9router LLM gateway on the node.
+    - to:
+        - ipBlock:
+            cidr: 192.168.50.42/32
+      ports:
+        - protocol: TCP
+          port: 20128
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+# Controller: ingress only (egress stays unrestricted so it can reach the
+# Kubernetes API and the LLM gateway). 8081 (event intake) is limited to bot
+# pods; 8080 (Traefik, in kube-system) and 9090 (monitoring) stay open.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: bubi-controller-internal
+  namespace: bubi
+spec:
+  podSelector:
+    matchLabels:
+      app: bubi-controller
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: bubi-bot
+      ports:
+        - protocol: TCP
+          port: 8081
+    - ports:
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: 9090
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bubi-controller
+  namespace: bubi
+spec:
+  replicas: 1
+  # Recreate: one writer on the hostPath, and one controller owning the live
+  # session at a time.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: bubi-controller
+  template:
+    metadata:
+      labels:
+        app: bubi-controller
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: /metrics
+    spec:
+      # The controller reaches the Kubernetes API with this account's token,
+      # so the token must stay mounted (do not set automountServiceAccountToken: false).
+      serviceAccountName: bubi-controller
+      securityContext:
+        runAsNonRoot: true
+        # Matches the owner of the hostPath (id -u caboose = 1000).
+        runAsUser: 1000
+        runAsGroup: 1000
+      containers:
+        - name: controller
+          # Pulled from the node's local registry. Never re-push the same tag:
+          # imagePullPolicy IfNotPresent would serve the stale image.
+          image: localhost:5000/bubi-controller:v0.1.0
+          imagePullPolicy: IfNotPresent
+          args: ["serve"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          ports:
+            - containerPort: 8080
+              name: http
+            - containerPort: 8081
+              name: intake
+            - containerPort: 9090
+              name: metrics
+          env:
+            - name: BUBI_DATA_DIR
+              value: /data
+            - name: BUBI_PUBLIC_URL
+              value: https://bubi.caboose-ai.io
+            - name: BUBI_NAMESPACE
+              value: bubi
+            - name: BUBI_BOT_IMAGE
+              value: localhost:5000/bubi-bot:v0.1.0
+            - name: BUBI_LLM_BASE_URL
+              value: http://192.168.50.42:20128
+            - name: BUBI_LLM_MODEL
+              value: fast
+            - name: BUBI_LLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: bubi-llm
+                  key: api_key
+            - name: BUBI_LLM_SECRET_NAME
+              value: bubi-llm
+            - name: BUBI_INTERNAL_URL
+              value: http://bubi-controller-internal.bubi.svc:8081
+            - name: BUBI_RETENTION
+              value: 168h
+            - name: BUBI_MAX_MESSAGES
+              value: "40"
+            - name: BUBI_SESSION_TTL
+              value: 30m
+            - name: BUBI_ORCHESTRATOR
+              value: k8s
+            - name: BUBI_SSE_MAX_CLIENTS
+              value: "100"
+            - name: BUBI_SSE_MAX_PER_IP
+              value: "4"
+            - name: TZ
+              value: America/New_York
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 20
+      volumes:
+        - name: data
+          hostPath: { path: /home/caboose/apps/data/bubi, type: Directory }
+        - name: tmp
+          emptyDir: { sizeLimit: 16Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bubi-controller
+  namespace: bubi
+spec:
+  selector:
+    app: bubi-controller
+  ports:
+    - port: 80
+      targetPort: 8080
+---
+# Event intake for the bot pods. ClusterIP only; the NetworkPolicy limits it
+# to app=bubi-bot and no Ingress points at it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: bubi-controller-internal
+  namespace: bubi
+spec:
+  selector:
+    app: bubi-controller
+  ports:
+    - port: 8081
+      targetPort: 8081
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: bubi-controller
+  namespace: bubi
+spec:
+  ingressClassName: traefik
+  rules:
+    # Single-level hostname, per the cluster's Cloudflare Tunnel rule.
+    - host: bubi.caboose-ai.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: bubi-controller
+                port:
+                  number: 80
