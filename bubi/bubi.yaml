@@ -8,7 +8,7 @@
 #   kubectl -n bubi create secret generic bubi-llm \
 #     --from-literal=api_key='<9router key>'
 #
-# v0.1.3 is stamped by deploy/build.sh when it stages this file to
+# v0.1.4 is stamped by deploy/build.sh when it stages this file to
 # ~/apps/k3s/bubi/bubi.yaml. Apply the STAGED copy, never this one: the
 # unresolved tag fails at image pull (loud, harmless) instead of silently
 # rolling production back.
@@ -168,7 +168,7 @@ metadata:
   namespace: bubi
 spec:
   hard:
-    pods: "6"
+    pods: "10"
     limits.cpu: "2"
     limits.memory: 1Gi
     secrets: "10"
@@ -186,22 +186,9 @@ spec:
     matchLabels:
       app: bubi-bot
   policyTypes: [Ingress, Egress]
-  ingress:
-    - from:
-        - podSelector:
-            matchLabels:
-              app: bubi-bot
-      ports:
-        - protocol: TCP
-          port: 2222
+  # Bot-to-bot SSH is granted per slot below, so two matches running at once
+  # cannot reach each other's machines.
   egress:
-    - to:
-        - podSelector:
-            matchLabels:
-              app: bubi-bot
-      ports:
-        - protocol: TCP
-          port: 2222
     - to:
         - podSelector:
             matchLabels:
@@ -228,6 +215,70 @@ spec:
           port: 53
         - protocol: TCP
           port: 53
+---
+# Slot 1: the bots of the match in this slot may SSH to each other and to
+# nobody else. One policy per concurrency slot (proto.MaxLiveSessions).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: bubi-bot-slot-1
+  namespace: bubi
+spec:
+  podSelector:
+    matchLabels:
+      app: bubi-bot
+      bubi.caboose-ai.io/slot: "1"
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: bubi-bot
+              bubi.caboose-ai.io/slot: "1"
+      ports:
+        - protocol: TCP
+          port: 2222
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: bubi-bot
+              bubi.caboose-ai.io/slot: "1"
+      ports:
+        - protocol: TCP
+          port: 2222
+---
+# Slot 2: the bots of the match in this slot may SSH to each other and to
+# nobody else. One policy per concurrency slot (proto.MaxLiveSessions).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: bubi-bot-slot-2
+  namespace: bubi
+spec:
+  podSelector:
+    matchLabels:
+      app: bubi-bot
+      bubi.caboose-ai.io/slot: "2"
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: bubi-bot
+              bubi.caboose-ai.io/slot: "2"
+      ports:
+        - protocol: TCP
+          port: 2222
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: bubi-bot
+              bubi.caboose-ai.io/slot: "2"
+      ports:
+        - protocol: TCP
+          port: 2222
 ---
 # Controller: ingress only (egress stays unrestricted so it can reach the
 # Kubernetes API and the LLM gateway). 8081 (event intake) is limited to bot
@@ -324,7 +375,7 @@ spec:
         - name: controller
           # Pulled from the node's local registry. Never re-push the same tag:
           # imagePullPolicy IfNotPresent would serve the stale image.
-          image: localhost:5000/bubi-controller:v0.1.3
+          image: localhost:5000/bubi-controller:v0.1.4
           imagePullPolicy: IfNotPresent
           args: ["serve"]
           securityContext:
@@ -347,7 +398,7 @@ spec:
             - name: BUBI_NAMESPACE
               value: bubi
             - name: BUBI_BOT_IMAGE
-              value: localhost:5000/bubi-bot:v0.1.3
+              value: localhost:5000/bubi-bot:v0.1.4
             - name: BUBI_LLM_BASE_URL
               value: http://192.168.50.42:20128
             - name: BUBI_LLM_MODEL
