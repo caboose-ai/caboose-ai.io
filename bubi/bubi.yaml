@@ -168,11 +168,11 @@ metadata:
   namespace: bubi
 spec:
   hard:
-    pods: "10"
-    limits.cpu: "2"
-    limits.memory: 1Gi
-    secrets: "10"
-    services: "10"
+    pods: "14"
+    limits.cpu: "3"
+    limits.memory: 2Gi
+    secrets: "20"
+    services: "20"
 ---
 # Bot pods: reachable only from the other bot (SSH 2222); may reach only the
 # other bot, the controller's event intake, the LLM gateway and cluster DNS.
@@ -417,8 +417,10 @@ spec:
               value: k8s
             - name: BUBI_SSE_MAX_CLIENTS
               value: "100"
+            # Per visitor address. A household behind one address watching two
+            # matches on a few devices needs more than a handful.
             - name: BUBI_SSE_MAX_PER_IP
-              value: "4"
+              value: "12"
             - name: TZ
               value: America/New_York
           volumeMounts:
