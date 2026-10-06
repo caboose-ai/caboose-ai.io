@@ -8,7 +8,7 @@
 #   kubectl -n bubi create secret generic bubi-llm \
 #     --from-literal=api_key='<9router key>'
 #
-# v0.2.1 is stamped by deploy/build.sh when it stages this file to
+# v0.2.2 is stamped by deploy/build.sh when it stages this file to
 # ~/apps/k3s/bubi/bubi.yaml. Apply the STAGED copy, never this one: the
 # unresolved tag fails at image pull (loud, harmless) instead of silently
 # rolling production back.
@@ -375,7 +375,7 @@ spec:
         - name: controller
           # Pulled from the node's local registry. Never re-push the same tag:
           # imagePullPolicy IfNotPresent would serve the stale image.
-          image: localhost:5000/bubi-controller:v0.2.1
+          image: localhost:5000/bubi-controller:v0.2.2
           imagePullPolicy: IfNotPresent
           args: ["serve"]
           securityContext:
@@ -398,7 +398,7 @@ spec:
             - name: BUBI_NAMESPACE
               value: bubi
             - name: BUBI_BOT_IMAGE
-              value: localhost:5000/bubi-bot:v0.2.1
+              value: localhost:5000/bubi-bot:v0.2.2
             - name: BUBI_LLM_BASE_URL
               value: http://192.168.50.42:20128
             - name: BUBI_LLM_MODEL
