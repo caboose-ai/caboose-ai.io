@@ -34,6 +34,7 @@ relay (`minecraft/playit.yaml`) with DNS-only records.
 | Path | Host | Notes |
 |---|---|---|
 | `landing/` | `caboose-ai.io` | nginx serving static HTML from a ConfigMap |
+| `rng/` | `rng.caboose-ai.io` | random design/theme/category every 3 min; static, same pattern as landing |
 | `moto-edit/` | `edit.`, `s.caboose-ai.io` | app source: `caboose-ai/moto-edit` |
 | `caboose-fit/` | `fit.caboose-ai.io` | app source: `caboose-ai/caboose-fit` |
 | `minecraft/` | `mc.caboose-ai.io` (SRV) | Fabric; idles at 0 replicas |
