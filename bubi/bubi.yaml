@@ -8,7 +8,7 @@
 #   kubectl -n bubi create secret generic bubi-llm \
 #     --from-literal=api_key='<9router key>'
 #
-# v0.3.3 is stamped by deploy/build.sh when it stages this file to
+# v0.4.0 is stamped by deploy/build.sh when it stages this file to
 # ~/apps/k3s/bubi/bubi.yaml. Apply the STAGED copy, never this one: the
 # unresolved tag fails at image pull (loud, harmless) instead of silently
 # rolling production back.
@@ -280,9 +280,9 @@ spec:
         - protocol: TCP
           port: 2222
 ---
-# Controller: ingress only (egress stays unrestricted so it can reach the
-# Kubernetes API and the LLM gateway). 8081 (event intake) is limited to bot
-# pods; 8080 (Traefik, in kube-system) and 9090 (monitoring) stay open.
+# Controller. Ingress: 8081 (event intake) from bot pods only, 8080 from
+# Traefik and the kubelet, 9090 from monitoring. Egress: the Kubernetes API
+# and the LLM gateway (for the System's judging calls), nothing else.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -322,8 +322,8 @@ spec:
       ports:
         - protocol: TCP
           port: 9090
-  # The controller only ever talks to the Kubernetes API (it uses
-  # KUBERNETES_SERVICE_HOST, so no DNS). The bots call the LLM, not it.
+  # The controller talks to the Kubernetes API (it uses
+  # KUBERNETES_SERVICE_HOST, so no DNS) and to the LLM gateway for judging.
   egress:
     - to:
         - ipBlock:
@@ -337,6 +337,13 @@ spec:
       ports:
         - protocol: TCP
           port: 6443
+    # The LLM gateway on the node, for the System's judging calls.
+    - to:
+        - ipBlock:
+            cidr: 192.168.50.42/32
+      ports:
+        - protocol: TCP
+          port: 20128
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -375,7 +382,7 @@ spec:
         - name: controller
           # Pulled from the node's local registry. Never re-push the same tag:
           # imagePullPolicy IfNotPresent would serve the stale image.
-          image: localhost:5000/bubi-controller:v0.3.3
+          image: localhost:5000/bubi-controller:v0.4.0
           imagePullPolicy: IfNotPresent
           args: ["serve"]
           securityContext:
@@ -398,7 +405,7 @@ spec:
             - name: BUBI_NAMESPACE
               value: bubi
             - name: BUBI_BOT_IMAGE
-              value: localhost:5000/bubi-bot:v0.3.3
+              value: localhost:5000/bubi-bot:v0.4.0
             - name: BUBI_LLM_BASE_URL
               value: http://192.168.50.42:20128
             # Classic matches use bōba's own gateway combo (quick models first, the
@@ -411,6 +418,13 @@ spec:
             # same length and quality.
             - name: BUBI_CLASSIC_REASONING
               value: "off"
+            # The controller calls the model itself now: the System judges each
+            # act and the secret goals (a handful of calls per show).
+            - name: BUBI_LLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: bubi-llm
+                  key: api_key
             - name: BUBI_LLM_SECRET_NAME
               value: bubi-llm
             - name: BUBI_INTERNAL_URL
@@ -420,7 +434,7 @@ spec:
             - name: BUBI_MAX_MESSAGES
               value: "40"
             - name: BUBI_SESSION_TTL
-              value: 30m
+              value: 20m
             - name: BUBI_ORCHESTRATOR
               value: k8s
             - name: BUBI_SSE_MAX_CLIENTS
