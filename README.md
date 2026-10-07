@@ -36,7 +36,10 @@ relay (`minecraft/playit.yaml`) with DNS-only records.
 | `landing/` | `caboose-ai.io` | nginx serving static HTML from a ConfigMap |
 | `rng/` | `rng.caboose-ai.io` | random design/theme/category every 3 min; static, same pattern as landing |
 | `moto-edit/` | `edit.`, `s.caboose-ai.io` | app source: `caboose-ai/moto-edit` |
+| `bubi/` | `boba.caboose-ai.io` | live bot-vs-bot comedy show; no app repo yet (source in `~/dev/bubi`) |
+| `caboose-fi/` | `cab-fi.caboose-ai.io` | app source: `caboose-ai/caboose-fi` |
 | `caboose-fit/` | `fit.caboose-ai.io` | app source: `caboose-ai/caboose-fit` |
+| `ephem-web/` | `web.caboose-ai.io` | auto-expiring previews; app source: `caboose-ai/cab-web` |
 | `minecraft/` | `mc.caboose-ai.io` (SRV) | Fabric; idles at 0 replicas |
 | `palworld/` | `pw.caboose-ai.io:58417` | idles at 0 replicas |
 | `monitoring/` | `grafana.caboose-ai.io` | Prometheus, Loki, Alloy, Grafana |
