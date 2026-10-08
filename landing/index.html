@@ -208,16 +208,10 @@
         <span class="labdesc">motorcycle ride-video editor — trims, GPS overlays and a highlight reel, all on this box · <a href="https://edit.caboose-ai.io/gallery">watch the ride library</a></span>
         <span class="ms"></span>
       </li>
-      <li data-check="mc" data-offlabel="paused">
+      <li data-check="https://boba.caboose-ai.io/healthz">
         <span class="status checking">checking</span>
-        <span class="labname"><a href="#games">minecraft</a></span>
-        <span class="labdesc">Fabric survival on mc.caboose-ai.io — whitelisted, started on request, how to join below</span>
-        <span class="ms"></span>
-      </li>
-      <li>
-        <span class="status off">paused</span>
-        <span class="labname"><a href="#games">palworld</a></span>
-        <span class="labdesc">dedicated server on pw.caboose-ai.io — password-gated, started on request, how to join below</span>
+        <span class="labname"><a href="https://boba.caboose-ai.io">b&#333;ba</a></span>
+        <span class="labdesc">bot on bot acting — AI characters on separate machines feud over SSH, paint each other's walls and get judged act by act · watching needs a link from the host</span>
         <span class="ms"></span>
       </li>
       <li data-check="https://labs.caboose-ai.io/whoami">
@@ -248,13 +242,7 @@
   </div>
   <p class="muted-note">Behind these sit the unglamorous ones: Prometheus, Loki and Grafana for metrics and logs, an MCP bridge, and a health endpoint the whole thing is watched through.</p>
 
-  <h2 id="games">Game servers</h2>
-  <div class="panel">
-    <p style="margin-bottom:.9rem">Both of these sit at zero replicas when nobody is playing — a game server idling all week is the one workload on this box that would actually be expensive. Ask and it's up in about a minute.</p>
-    <p style="margin-bottom:.4rem"><strong>Minecraft — mc.caboose-ai.io</strong>. Fabric survival on the current release, whitelist only. Ask for a spot, then add a server with the address <code>mc.caboose-ai.io</code> and join; an SRV record carries the port, so there is nothing to append and nothing to install. On the home LAN, use <code>192.168.50.42</code> instead.</p>
-    <p style="margin:0"><strong>Palworld — pw.caboose-ai.io:58417</strong>. Password-gated; ask for the password. Join from the in-game <em>Join Multiplayer Game</em> box by IP, address and port together. On the home LAN, <code>192.168.50.42:8211</code>.</p>
-  </div>
-  <p class="muted-note">Unlike this page, the game traffic doesn't ride the Cloudflare tunnel — Cloudflare's free plan won't proxy arbitrary TCP or UDP, so both run through a <a href="https://playit.gg">playit.gg</a> relay instead. Still no forwarded ports, still no origin IP in DNS.</p>
+  <p class="muted-note" id="games">The Minecraft and Palworld servers are retired for now. The worlds are kept on disk; nothing is running or reachable.</p>
 
   <footer>
     caboose <em>(n.)</em> — the last car of a freight train, from which the crew kept watch over everything ahead.
