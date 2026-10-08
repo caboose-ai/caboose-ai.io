@@ -47,7 +47,7 @@ relay (`minecraft/playit.yaml`) with DNS-only records.
 | `mcp-bridge/` | `mcp.caboose-ai.io` | app source: `mcp-grpc-bridge` |
 | `caboose-health.yaml` | `health.caboose-ai.io` | host service fronted by an Ingress |
 | `whoami.yaml` | `labs.caboose-ai.io/whoami` | ingress smoke test |
-| `cloudflared.yaml` | — | tunnel connectors |
+| `cloudflared.yaml` | n/a | tunnel connectors |
 
 App manifests are **copied here** by each app repo's `deploy/build.sh`. The app
 repo is the source of truth for its own manifest; edit it there, rebuild, and
