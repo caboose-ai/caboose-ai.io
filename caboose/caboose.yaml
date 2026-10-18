@@ -61,7 +61,7 @@ spec:
         - name: caboose
           # KEEP THIS IN SYNC WITH WHAT IS DEPLOYED. Releases shipped with
           # `kubectl -n caboose set image` do NOT write back here.
-          image: localhost:5000/caboose:v0.4.0
+          image: localhost:5000/caboose:v0.5.0
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
@@ -165,6 +165,17 @@ spec:
   rules:
     # Single-level hostname: free Universal SSL does not cover x.y.caboose-ai.io.
     - host: caboose.caboose-ai.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: caboose
+                port:
+                  name: http
+    # External status page — same service, host-routed (MCP-first, skills, live probes).
+    - host: status.caboose-ai.io
       http:
         paths:
           - path: /
