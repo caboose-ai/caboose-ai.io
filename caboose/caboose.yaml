@@ -1,30 +1,23 @@
-# caboose: namespace, PVC, deployment, services, ingress.
+# caboose: namespace, deployment, service, ingress — STATELESS.
+#
+# The pod is a pure function of the `state` branch of caboose-ai/caboose:
+# at boot it fetches the published state tree into an ephemeral /tmp cache and
+# serves. No PVC, no hostPath mounts, no in-process sync. The state branch is
+# written exclusively by .github/workflows/refresh-brain.yml.
 #
 # NOTE: the secret `caboose-secrets` is intentionally NOT defined here. Create
-# it out-of-band (same pattern as caboose-fit and moto-edit):
+# it out-of-band:
 #
 #   kubectl -n caboose create secret generic caboose-secrets \
-#     --from-file=GH_TOKEN=<(gh auth token)
+#     --from-file=GH_TOKEN=<(gh auth token) \
+#     --from-file=PAPERCLIP_TOKEN=<(grep '^PAPERCLIP_TOKEN=' ~/dev/paperclip/.env | cut -d= -f2)
 #
-# GH_TOKEN is read-only here: caboose sync reads the GitHub API. It is marked
-# optional below so the pod still runs without it (public data only).
+# GH_TOKEN: fetches the (private) state branch and commits kb_update writes.
+# PAPERCLIP_TOKEN: brain_act -> the audited executor queue on the box.
 apiVersion: v1
 kind: Namespace
 metadata:
   name: caboose
----
-# /data holds the code cache and brain.json — the org brain's state. Regenerable
-# by `caboose sync`, but a real volume so restarts don't lose freshness.
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: caboose-data
-  namespace: caboose
-spec:
-  accessModes: [ReadWriteOnce]
-  resources:
-    requests:
-      storage: 2Gi
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -33,10 +26,8 @@ metadata:
   namespace: caboose
 spec:
   replicas: 1
-  # Recreate, not RollingUpdate: the PVC is ReadWriteOnce and one writer is
-  # all the snapshot store wants.
   strategy:
-    type: Recreate
+    type: RollingUpdate # stateless: any replica serves from git state
   selector:
     matchLabels:
       app: caboose
@@ -45,8 +36,7 @@ spec:
       labels:
         app: caboose
       # Generic kubernetes-pods scrape job picks these up. Metrics are on
-      # 9090, a port no Service or Ingress exposes — the Ingress fronts every
-      # path on 8123, so /metrics cannot live there.
+      # 9090, a port no Service or Ingress exposes.
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "9090"
@@ -59,9 +49,8 @@ spec:
         fsGroup: 10001
       containers:
         - name: caboose
-          # KEEP THIS IN SYNC WITH WHAT IS DEPLOYED. Releases shipped with
-          # `kubectl -n caboose set image` do NOT write back here.
-          image: localhost:5000/caboose:v0.5.0
+          # KEEP THIS IN SYNC WITH WHAT IS DEPLOYED.
+          image: localhost:5000/caboose:v0.7.3
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
@@ -79,11 +68,12 @@ spec:
             - --address=0.0.0.0:8123
             - --metrics-address=0.0.0.0:9090
             - --kb-dir=/app/kb
-            - --cache-dir=/data/cache
-            - --brain-dir=/data/cache
-            - --local-roots=/host-dev
-            - --sync-manifest-tree=/host-manifests
-            - --sync-interval=6h
+            - --cache-dir=/tmp/cache
+            - --brain-dir=/tmp/cache
+            - --state-git=https://github.com/caboose-ai/caboose.git
+            - --state-branch=state
+            - --state-refresh=30m
+            - --kb-repo=caboose-ai/caboose
           env:
             - name: TZ
               value: America/New_York
@@ -93,8 +83,6 @@ spec:
                   name: caboose-secrets
                   key: GH_TOKEN
                   optional: true
-            # Actor: paperclip queue on the host (LAN + bearer token; the
-            # token gates access and the queue is fail-closed without it).
             - name: PAPERCLIP_URL
               value: http://192.168.50.42:8787
             - name: PAPERCLIP_TOKEN
@@ -104,16 +92,8 @@ spec:
                   key: PAPERCLIP_TOKEN
                   optional: true
           volumeMounts:
-            - name: data
-              mountPath: /data
-            # Read-only windows onto the node's checkouts so sync prefers them
-            # over cloning (single-node homelab; hostPath is house style).
-            - name: host-dev
-              mountPath: /host-dev
-              readOnly: true
-            - name: host-manifests
-              mountPath: /host-manifests
-              readOnly: true
+            - name: tmp
+              mountPath: /tmp
           resources:
             requests: { cpu: 10m, memory: 64Mi }
             limits: { cpu: 500m, memory: 512Mi }
@@ -126,17 +106,10 @@ spec:
             initialDelaySeconds: 3
             periodSeconds: 10
       volumes:
-        - name: data
-          persistentVolumeClaim:
-            claimName: caboose-data
-        - name: host-dev
-          hostPath:
-            path: /home/caboose/dev
-            type: Directory
-        - name: host-manifests
-          hostPath:
-            path: /home/caboose/apps/k3s
-            type: Directory
+        # Ephemeral state cache: rebuilt from git on every boot. Losing it
+        # loses nothing — that is the point.
+        - name: tmp
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
@@ -156,14 +129,11 @@ kind: Ingress
 metadata:
   name: caboose
   namespace: caboose
-  # No traefik annotations: the Cloudflare Tunnel terminates TLS at the edge
-  # and enters traefik on the `web` entrypoint (port 80) — same as every app
-  # here. A `router.entrypoints: websecure` annotation serves locally on 443
-  # but is invisible through the tunnel.
+  # No traefik annotations: the Cloudflare Tunnel enters traefik on the `web`
+  # entrypoint (port 80), same as every app here.
 spec:
   ingressClassName: traefik
   rules:
-    # Single-level hostname: free Universal SSL does not cover x.y.caboose-ai.io.
     - host: caboose.caboose-ai.io
       http:
         paths:
@@ -174,7 +144,7 @@ spec:
                 name: caboose
                 port:
                   name: http
-    # External status page — same service, host-routed (MCP-first, skills, live probes).
+    # External status page — host-routed (MCP-first, skills, live probes).
     - host: status.caboose-ai.io
       http:
         paths:
