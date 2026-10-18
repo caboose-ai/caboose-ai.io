@@ -1,0 +1,166 @@
+# caboose: namespace, PVC, deployment, services, ingress.
+#
+# NOTE: the secret `caboose-secrets` is intentionally NOT defined here. Create
+# it out-of-band (same pattern as caboose-fit and moto-edit):
+#
+#   kubectl -n caboose create secret generic caboose-secrets \
+#     --from-file=GH_TOKEN=<(gh auth token)
+#
+# GH_TOKEN is read-only here: caboose sync reads the GitHub API. It is marked
+# optional below so the pod still runs without it (public data only).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: caboose
+---
+# /data holds the code cache and brain.json — the org brain's state. Regenerable
+# by `caboose sync`, but a real volume so restarts don't lose freshness.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: caboose-data
+  namespace: caboose
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: caboose
+  namespace: caboose
+spec:
+  replicas: 1
+  # Recreate, not RollingUpdate: the PVC is ReadWriteOnce and one writer is
+  # all the snapshot store wants.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: caboose
+  template:
+    metadata:
+      labels:
+        app: caboose
+      # Generic kubernetes-pods scrape job picks these up. Metrics are on
+      # 9090, a port no Service or Ingress exposes — the Ingress fronts every
+      # path on 8123, so /metrics cannot live there.
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: /metrics
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: caboose
+          # KEEP THIS IN SYNC WITH WHAT IS DEPLOYED. Releases shipped with
+          # `kubectl -n caboose set image` do NOT write back here.
+          image: localhost:5000/caboose:v0.1.2
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          ports:
+            - containerPort: 8123
+              name: http
+            - containerPort: 9090
+              name: metrics
+          args:
+            - serve
+            - --transport=http
+            - --address=0.0.0.0:8123
+            - --metrics-address=0.0.0.0:9090
+            - --kb-dir=/app/kb
+            - --cache-dir=/data/cache
+            - --brain-dir=/data/cache
+            - --local-roots=/host-dev
+            - --sync-manifest-tree=/host-manifests
+            - --sync-interval=6h
+          env:
+            - name: TZ
+              value: America/New_York
+            - name: CABOOSE_GITHUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: caboose-secrets
+                  key: GH_TOKEN
+                  optional: true
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            # Read-only windows onto the node's checkouts so sync prefers them
+            # over cloning (single-node homelab; hostPath is house style).
+            - name: host-dev
+              mountPath: /host-dev
+              readOnly: true
+            - name: host-manifests
+              mountPath: /host-manifests
+              readOnly: true
+          resources:
+            requests: { cpu: 10m, memory: 64Mi }
+            limits: { cpu: 500m, memory: 512Mi }
+          livenessProbe:
+            httpGet: { path: /healthz, port: 9090 }
+            initialDelaySeconds: 5
+            periodSeconds: 30
+          readinessProbe:
+            httpGet: { path: /healthz, port: 9090 }
+            initialDelaySeconds: 3
+            periodSeconds: 10
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: caboose-data
+        - name: host-dev
+          hostPath:
+            path: /home/caboose/dev
+            type: Directory
+        - name: host-manifests
+          hostPath:
+            path: /home/caboose/apps/k3s
+            type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: caboose
+  namespace: caboose
+spec:
+  selector:
+    app: caboose
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8123
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: caboose
+  namespace: caboose
+  # No traefik annotations: the Cloudflare Tunnel terminates TLS at the edge
+  # and enters traefik on the `web` entrypoint (port 80) — same as every app
+  # here. A `router.entrypoints: websecure` annotation serves locally on 443
+  # but is invisible through the tunnel.
+spec:
+  ingressClassName: traefik
+  rules:
+    # Single-level hostname: free Universal SSL does not cover x.y.caboose-ai.io.
+    - host: caboose.caboose-ai.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: caboose
+                port:
+                  name: http

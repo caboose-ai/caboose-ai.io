@@ -67,7 +67,7 @@ spec:
           # `kubectl -n caboose-fit set image` do NOT write back here, so this line
           # goes stale silently and a later `kubectl apply -f` would roll
           # production back to whatever it says.
-          image: localhost:5000/caboose-fit:v0.3.3
+          image: localhost:5000/caboose-fit:v0.4.0-rc2
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
@@ -100,6 +100,18 @@ spec:
                 secretKeyRef:
                   name: caboose-fit-secrets
                   key: SESSION_SECRET
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: caboose-fit-secrets
+                  key: ANTHROPIC_API_KEY
+                  optional: true
+            - name: CLAUDE_MODEL
+              value: claude-sonnet-5
+            - name: CLAUDE_EFFORT
+              value: medium
+            - name: OFF_BASE_URL
+              value: https://world.openfoodfacts.org
           volumeMounts:
             - name: data
               mountPath: /data

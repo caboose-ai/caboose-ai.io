@@ -5,14 +5,23 @@
 #
 #   kubectl -n caboose-fi create secret generic caboose-fi-secrets \
 #     --from-literal=APP_PASSWORD='<password>' \
-#     --from-literal=SESSION_SECRET="$(openssl rand -hex 32)"
+#     --from-literal=SESSION_SECRET="$(openssl rand -hex 32)" \
+#     --from-literal=SIMPLEFIN_ACCESS_URL='<claimed access url>'
+#
+# To ADD or ROTATE one key later, merge-patch it -- do NOT re-run the create
+# above piped into `kubectl apply`. Once the last-applied annotation exists,
+# an apply that omits the other keys deletes them:
+#
+#   kubectl -n caboose-fi patch secret caboose-fi-secrets --type merge \
+#     -p '{"stringData":{"APP_PASSWORD":"<new>"}}' 
 apiVersion: v1
 kind: Namespace
 metadata:
   name: caboose-fi
 ---
-# /data holds state.json — every record the app has. It is a real volume, not
-# an emptyDir: an emptyDir here means a pod restart silently loses everything.
+# /data holds registry.db and households/<id>.db — every record the app has.
+# It is a real volume, not an emptyDir: an emptyDir here means a pod restart
+# silently loses everything.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -67,7 +76,17 @@ spec:
           # `kubectl -n caboose-fi set image` do NOT write back here, so this line
           # goes stale silently and a later `kubectl apply -f` would roll
           # production back to whatever it says.
-          image: localhost:5000/caboose-fi:v0.1.3
+          # __VERSION__ is stamped by deploy/build.sh when it stages this
+          # file. It is left unresolved in the repository on purpose: a real
+          # tag here goes stale the moment anything ships, and applying the
+          # stale copy silently rolls production back. That happened -- an
+          # apply of this file took a running v0.10.3 down to v0.5.3, and the
+          # old binary, not knowing about per-household databases, created a
+          # fresh empty one beside the real data and served it.
+          #
+          # Unresolved, the same mistake fails at image pull: loud, and
+          # harmless. Apply the staged copy that build.sh writes, never this.
+          image: localhost:5000/caboose-fi:v0.52.2
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
@@ -88,6 +107,12 @@ spec:
               value: /app/public
             - name: TZ
               value: America/New_York
+            # readOnlyRootFilesystem is on, so anything that wants scratch
+            # space has to be pointed at the volume. SQLite spills large
+            # sorts and VACUUM output to a temp dir, and the default would
+            # be an unwritable /tmp.
+            - name: TMPDIR
+              value: /data
             - name: BASE_URL
               value: https://cab-fi.caboose-ai.io
             - name: APP_PASSWORD
@@ -100,6 +125,75 @@ spec:
                 secretKeyRef:
                   name: caboose-fi-secrets
                   key: SESSION_SECRET
+            # Optional: without it the app serves what it already has rather
+            # than refusing to start. A credential outage must not also be a
+            # history outage.
+            # Second factor. Optional: without it the app asks for a password
+            # only. Generate with `caboose-fi -totp-setup`, enrol the code in
+            # an authenticator FIRST, then set this -- the app demands a code
+            # the moment the key exists.
+            - name: TOTP_SECRET
+              valueFrom:
+                secretKeyRef: { name: caboose-fi-secrets, key: TOTP_SECRET, optional: true }
+            - name: GOOGLE_CLIENT_ID
+              valueFrom:
+                secretKeyRef: { name: caboose-fi-secrets, key: GOOGLE_CLIENT_ID, optional: true }
+            - name: GOOGLE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef: { name: caboose-fi-secrets, key: GOOGLE_CLIENT_SECRET, optional: true }
+            - name: SIMPLEFIN_ACCESS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: caboose-fi-secrets
+                  key: SIMPLEFIN_ACCESS_URL
+                  optional: true
+            # Ask (/ask). Optional: without the key the page does not exist.
+            # Added by deploy/setup-ask.sh from 1Password, never by hand. The
+            # model is the owner's pick from the askeval results.
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef: { name: caboose-fi-secrets, key: ANTHROPIC_API_KEY, optional: true }
+            - name: ASK_MODEL
+              value: claude-opus-5
+            - name: ASK_EFFORT
+              value: medium
+            # Nightly encrypted backup to Backblaze B2. All optional: without them the
+            # app runs and says on the dashboard that no backup has run, which
+            # is better than refusing to start.
+            #
+            # BACKUP_AGE_RECIPIENT is a PUBLIC key. The node can write backups
+            # and cannot read them back; the private key must live somewhere
+            # this cluster cannot reach, or the offsite copy protects nothing.
+            - name: BACKUP_AGE_RECIPIENT
+              valueFrom:
+                secretKeyRef: { name: caboose-fi-secrets, key: BACKUP_AGE_RECIPIENT, optional: true }
+            - name: BACKUP_S3_ENDPOINT
+              valueFrom:
+                secretKeyRef: { name: caboose-fi-secrets, key: BACKUP_S3_ENDPOINT, optional: true }
+            - name: BACKUP_S3_BUCKET
+              valueFrom:
+                secretKeyRef: { name: caboose-fi-secrets, key: BACKUP_S3_BUCKET, optional: true }
+            # Must match the endpoint's region. Cloudflare R2 uses "auto";
+            # Backblaze B2 and AWS want the real region (us-east-005 here,
+            # us-east-1, ...) because it is signed into every request, and a
+            # mismatch fails as SignatureDoesNotMatch rather than as a region
+            # error -- which sends you hunting for the wrong problem.
+            - name: BACKUP_S3_REGION
+              valueFrom:
+                secretKeyRef: { name: caboose-fi-secrets, key: BACKUP_S3_REGION, optional: true }
+            # Key prefix inside the bucket. It must satisfy any name-prefix
+            # restriction on the credential, or every upload fails as
+            # "not entitled" -- which reads like a permissions problem and
+            # sends you auditing capabilities that were fine all along.
+            - name: BACKUP_PREFIX
+              valueFrom:
+                secretKeyRef: { name: caboose-fi-secrets, key: BACKUP_PREFIX, optional: true }
+            - name: BACKUP_S3_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef: { name: caboose-fi-secrets, key: BACKUP_S3_ACCESS_KEY_ID, optional: true }
+            - name: BACKUP_S3_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef: { name: caboose-fi-secrets, key: BACKUP_S3_SECRET_ACCESS_KEY, optional: true }
           volumeMounts:
             - name: data
               mountPath: /data
