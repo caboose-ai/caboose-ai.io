@@ -61,7 +61,7 @@ spec:
         - name: caboose
           # KEEP THIS IN SYNC WITH WHAT IS DEPLOYED. Releases shipped with
           # `kubectl -n caboose set image` do NOT write back here.
-          image: localhost:5000/caboose:v0.2.0
+          image: localhost:5000/caboose:v0.3.0
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
@@ -92,6 +92,16 @@ spec:
                 secretKeyRef:
                   name: caboose-secrets
                   key: GH_TOKEN
+                  optional: true
+            # Actor: paperclip queue on the host (LAN + bearer token; the
+            # token gates access and the queue is fail-closed without it).
+            - name: PAPERCLIP_URL
+              value: http://192.168.50.42:8787
+            - name: PAPERCLIP_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: caboose-secrets
+                  key: PAPERCLIP_TOKEN
                   optional: true
           volumeMounts:
             - name: data
