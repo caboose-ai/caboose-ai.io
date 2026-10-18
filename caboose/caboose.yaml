@@ -61,7 +61,7 @@ spec:
         - name: caboose
           # KEEP THIS IN SYNC WITH WHAT IS DEPLOYED. Releases shipped with
           # `kubectl -n caboose set image` do NOT write back here.
-          image: localhost:5000/caboose:v0.3.0
+          image: localhost:5000/caboose:v0.4.0
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
