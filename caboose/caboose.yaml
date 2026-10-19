@@ -50,7 +50,7 @@ spec:
       containers:
         - name: caboose
           # KEEP THIS IN SYNC WITH WHAT IS DEPLOYED.
-          image: localhost:5000/caboose:v0.7.4
+          image: localhost:5000/caboose:v0.8.0
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
@@ -60,12 +60,15 @@ spec:
           ports:
             - containerPort: 8123
               name: http
+            - containerPort: 8124
+              name: internal
             - containerPort: 9090
               name: metrics
           args:
             - serve
             - --transport=http
             - --address=0.0.0.0:8123
+            - --internal-address=0.0.0.0:8124
             - --metrics-address=0.0.0.0:9090
             - --kb-dir=/app/kb
             - --cache-dir=/tmp/cache
@@ -111,18 +114,22 @@ spec:
         - name: tmp
           emptyDir: {}
 ---
+# LAN-only entry to the FULL brain (MCP + org page). NodePort + ufw rule
+# scoped to 192.168.50.0/24; the tunnel never routes here.
 apiVersion: v1
 kind: Service
 metadata:
-  name: caboose
+  name: caboose-internal
   namespace: caboose
 spec:
+  type: NodePort
   selector:
     app: caboose
   ports:
-    - name: http
+    - name: internal
       port: 80
-      targetPort: 8123
+      targetPort: 8124
+      nodePort: 30222
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -134,10 +141,11 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
+    # PUBLIC brain surface: only /skills. The org page and MCP are LAN-only.
     - host: caboose.caboose-ai.io
       http:
         paths:
-          - path: /
+          - path: /skills
             pathType: Prefix
             backend:
               service:

@@ -197,9 +197,10 @@
   <div class="panel">
     <p style="margin:0">The first-class consumers here are <strong>AI agents</strong>. The org brain speaks
     <a href="https://modelcontextprotocol.io">MCP</a> at
-    <code><a href="https://caboose.caboose-ai.io/mcp">caboose.caboose-ai.io/mcp</a></code> — 21 tools covering every
-    repository in the org, how they relate, what a change would impact, and audited write-actions. Machine health
-    lives at <a href="https://machine.caboose-ai.io">machine.caboose-ai.io</a>; anything gRPC can become a tool via
+    <code><a href="http://192.168.50.42:30222/mcp">192.168.50.42:30222/mcp</a></code> — 21 tools covering every
+    repository in the org, how they relate, what a change would impact, and audited write-actions. The brain itself
+    is LAN-only (nothing internal rides the public tunnel); machine health lives at
+    <a href="https://machine.caboose-ai.io">machine.caboose-ai.io</a> and anything gRPC can become a tool via
     <a href="https://mcp.caboose-ai.io">mcp.caboose-ai.io</a>.</p>
   </div>
 
@@ -238,10 +239,10 @@
         <span class="labdesc">the classic ingress smoke test: echoes what the cluster sees</span>
         <span class="ms"></span>
       </li>
-      <li data-check="https://caboose.caboose-ai.io/">
+      <li data-check="https://status.caboose-ai.io/">
         <span class="status checking">checking</span>
-        <span class="labname"><a href="https://caboose.caboose-ai.io">caboose</a></span>
-        <span class="labdesc">the org brain: registry, code knowledge and relationship map for everything in the org · <a href="https://caboose.caboose-ai.io/skills">browse the skills</a> · <a href="https://status.caboose-ai.io">status</a></span>
+        <span class="labname"><a href="https://status.caboose-ai.io">caboose</a></span>
+        <span class="labdesc">the org brain: registry, code knowledge and relationship map for everything in the org (MCP + org page are LAN-only at 192.168.50.42:30222) · <a href="https://caboose.caboose-ai.io/skills">browse the skills</a> · <a href="https://status.caboose-ai.io">status</a></span>
         <span class="ms"></span>
       </li>
       <li>
