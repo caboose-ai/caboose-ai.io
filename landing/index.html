@@ -193,6 +193,24 @@
     <p style="margin:0"><strong>k3s</strong> (single-node Kubernetes) · <strong>traefik</strong> ingress · <strong>cloudflared</strong> tunnel connectors · plain YAML manifests, no Helm charts in anger yet. Deployed and wired up with <a href="https://claude.com/claude-code">Claude Code</a>.</p>
   </div>
 
+  <h2>For agents: MCP</h2>
+  <div class="panel">
+    <p style="margin:0">The first-class consumers here are <strong>AI agents</strong>. The org brain speaks
+    <a href="https://modelcontextprotocol.io">MCP</a> at
+    <code><a href="https://caboose.caboose-ai.io/mcp">caboose.caboose-ai.io/mcp</a></code> — 21 tools covering every
+    repository in the org, how they relate, what a change would impact, and audited write-actions. Machine health
+    lives at <a href="https://machine.caboose-ai.io">machine.caboose-ai.io</a>; anything gRPC can become a tool via
+    <a href="https://mcp.caboose-ai.io">mcp.caboose-ai.io</a>.</p>
+  </div>
+
+  <h2>Skills</h2>
+  <div class="panel">
+    <p style="margin:0">25 engineering workflows — define, plan, build, verify, review, ship — served by the brain
+    and readable by humans and agents alike:
+    <a href="https://caboose.caboose-ai.io/skills"><strong>caboose.caboose-ai.io/skills</strong></a>. The brain also
+    holds the org's knowledge: portfolio intents, the deploy policy (human gate before production), and dev process.</p>
+  </div>
+
   <h2>Projects <span class="meta"><span id="stamp">checking…</span><button id="refresh" type="button">↻ refresh</button></span></h2>
   <div class="panel">
     <ul class="labs" id="statusList">
@@ -218,6 +236,12 @@
         <span class="status checking">checking</span>
         <span class="labname"><a href="https://labs.caboose-ai.io/whoami">whoami</a></span>
         <span class="labdesc">the classic ingress smoke test: echoes what the cluster sees</span>
+        <span class="ms"></span>
+      </li>
+      <li data-check="https://caboose.caboose-ai.io/">
+        <span class="status checking">checking</span>
+        <span class="labname"><a href="https://caboose.caboose-ai.io">caboose</a></span>
+        <span class="labdesc">the org brain: registry, code knowledge and relationship map for everything in the org · <a href="https://caboose.caboose-ai.io/skills">browse the skills</a> · <a href="https://status.caboose-ai.io">status</a></span>
         <span class="ms"></span>
       </li>
       <li>
