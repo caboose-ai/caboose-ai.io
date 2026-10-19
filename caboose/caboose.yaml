@@ -50,7 +50,7 @@ spec:
       containers:
         - name: caboose
           # KEEP THIS IN SYNC WITH WHAT IS DEPLOYED.
-          image: localhost:5000/caboose:v0.8.0
+          image: localhost:5000/caboose:v0.8.1
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
@@ -113,6 +113,23 @@ spec:
         # loses nothing — that is the point.
         - name: tmp
           emptyDir: {}
+---
+# PUBLIC entry: the ClusterIP both Ingress rules below back onto
+# (caboose.caboose-ai.io/skills and status.caboose-ai.io). Only the public
+# surface listens on 8123; MCP and the org page are on the internal port.
+apiVersion: v1
+kind: Service
+metadata:
+  name: caboose
+  namespace: caboose
+spec:
+  type: ClusterIP
+  selector:
+    app: caboose
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8123
 ---
 # LAN-only entry to the FULL brain (MCP + org page). NodePort + ufw rule
 # scoped to 192.168.50.0/24; the tunnel never routes here.
